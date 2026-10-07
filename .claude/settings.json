@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo check:*)",
+      "Bash(tmux new-session -d -s tallow:*)",
+      "Bash(tmux send-keys -t tallow:*)",
+      "Bash(tmux capture-pane -t tallow:*)",
+      "Bash(tmux kill-session -t tallow:*)"
+    ]
+  }
+}

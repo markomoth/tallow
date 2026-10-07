@@ -1,0 +1,11 @@
+[package]
+name = "tallow-core"
+description = "Pure, deterministic game logic for Tallow. No IO, no terminal."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

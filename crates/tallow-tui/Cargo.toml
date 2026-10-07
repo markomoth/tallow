@@ -1,0 +1,18 @@
+[package]
+name = "tallow-tui"
+description = "Terminal frontend for Tallow: rendering and input."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "tallow"
+path = "src/main.rs"
+
+[dependencies]
+tallow-core.workspace = true
+ratatui.workspace = true
+anyhow.workspace = true
+
+[lints]
+workspace = true
