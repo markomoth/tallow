@@ -43,6 +43,10 @@ pub enum Mode {
         aim: Aim,
         cursor: Point,
     },
+    /// A level-up draft is waiting. Pick 1, 2 or 3.
+    Draft,
+    /// The character sheet.
+    Sheet,
     /// The run is over; waiting for "again" or "quit".
     Dead,
 }
@@ -107,10 +111,18 @@ impl App {
     /// Handles a raw key. The pack screen reads letters; everything else goes
     /// through the key bindings.
     pub fn handle_key(&mut self, key: KeyEvent) {
-        if let Mode::Pack { purpose, selected } = self.mode {
-            self.handle_pack_key(key, purpose, selected);
-        } else if let Some(action) = map_key(key) {
-            self.handle(action);
+        match self.mode {
+            Mode::Pack { purpose, selected } => self.handle_pack_key(key, purpose, selected),
+            Mode::Draft => {
+                if let KeyCode::Char(c @ '1'..='3') = key.code {
+                    self.play(Command::ChooseBoon(c as usize - '1' as usize));
+                }
+            }
+            _ => {
+                if let Some(action) = map_key(key) {
+                    self.handle(action);
+                }
+            }
         }
     }
 
@@ -128,7 +140,15 @@ impl App {
                 }
             }
             Mode::Target { aim, cursor } => self.handle_target(action, aim, cursor),
-            Mode::Pack { .. } => {}
+            Mode::Pack { .. } | Mode::Draft => {}
+            Mode::Sheet => {
+                if matches!(
+                    action,
+                    Action::Cancel | Action::Sheet | Action::Quit | Action::Confirm
+                ) {
+                    self.mode = Mode::Play;
+                }
+            }
             Mode::Dead => match action {
                 Action::Confirm => self.restart = true,
                 Action::Quit => self.quit = true,
@@ -180,6 +200,10 @@ impl App {
                 self.mode = Mode::Look {
                     cursor: self.first_target(),
                 };
+                return;
+            }
+            Action::Sheet => {
+                self.mode = Mode::Sheet;
                 return;
             }
             Action::Quit => {
@@ -273,6 +297,10 @@ impl App {
         }
         if self.world.death().is_some() {
             self.mode = Mode::Dead;
+        } else if self.world.pending_draft().is_some() {
+            self.mode = Mode::Draft;
+        } else if self.mode == Mode::Draft {
+            self.mode = Mode::Play;
         }
     }
 
@@ -340,6 +368,15 @@ impl App {
     #[cfg(test)]
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
+    }
+
+    /// Grants Insight through the real level-up path, then refreshes the mode.
+    #[cfg(test)]
+    pub fn grant_insight_for_test(&mut self, amount: u32) {
+        self.world.grant_insight(amount);
+        if self.world.pending_draft().is_some() {
+            self.mode = Mode::Draft;
+        }
     }
 }
 
@@ -412,6 +449,28 @@ mod tests {
         let letter = (b'a' + app.world().player().inventory.len() as u8 - 1) as char;
         app.handle_key(key(letter));
         assert!(matches!(app.mode(), Mode::Target { .. }));
+        app.handle(Action::Cancel);
+        assert_eq!(app.mode(), Mode::Play);
+    }
+
+    #[test]
+    fn a_level_up_opens_the_draft_and_a_number_chooses() {
+        let mut app = App::new(3);
+        let needed = tallow_core::progress::insight_for_next(1);
+        app.grant_insight_for_test(needed);
+        assert_eq!(app.mode(), Mode::Draft);
+        app.handle(Action::Move(Direction::E)); // movement is ignored while choosing
+        assert_eq!(app.mode(), Mode::Draft);
+        app.handle_key(key('2'));
+        assert_eq!(app.mode(), Mode::Play);
+        assert_eq!(app.world().player().boons.len(), 1);
+    }
+
+    #[test]
+    fn the_sheet_opens_and_closes() {
+        let mut app = App::new(3);
+        app.handle(Action::Sheet);
+        assert_eq!(app.mode(), Mode::Sheet);
         app.handle(Action::Cancel);
         assert_eq!(app.mode(), Mode::Play);
     }

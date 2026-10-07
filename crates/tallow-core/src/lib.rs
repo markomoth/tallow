@@ -6,6 +6,7 @@
 pub mod actions;
 mod ai;
 pub mod biome;
+pub mod boons;
 pub mod candle;
 pub mod combat;
 pub mod content;
@@ -19,13 +20,16 @@ pub mod item;
 pub mod map;
 pub mod monster;
 mod nightmare;
+pub mod progress;
 pub mod rng;
+pub mod skills;
 pub mod spawn;
 pub mod time;
 pub mod world;
 
 pub use actions::Command;
 pub use biome::{Biome, MAX_DEPTH};
+pub use boons::{Boon, Passive, Reward, Trigger};
 pub use candle::{Candle, CandleState};
 pub use content::{Content, Faction, KindId, MonsterDef, Trait};
 pub use dread::{Dread, DreadBand};
@@ -39,4 +43,5 @@ pub use item::{
 pub use map::light::{Light, Rgb};
 pub use map::{Map, Tile};
 pub use monster::{Mind, Monster, MonsterId};
-pub use world::{Death, MonsterInfo, Player, World};
+pub use skills::{Skill, Technique};
+pub use world::{Death, MonsterInfo, Player, RunStats, World};

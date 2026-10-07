@@ -3,11 +3,13 @@
 //! The frontend turns events into log messages and animations.
 //! Logic code never builds display strings.
 
+use crate::boons::Boon;
 use crate::content::KindId;
 use crate::dread::DreadBand;
 use crate::geom::Point;
 use crate::item::{Burden, ItemKindId, Potency, SideEffect, TinctureEffect};
 use crate::map::Tile;
+use crate::skills::{Skill, Technique};
 
 /// Someone in a fight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,6 +175,34 @@ pub enum Event {
     },
     /// Too heavy to move. Costs no time.
     TooHeavy,
+
+    SkillRankUp {
+        skill: Skill,
+        rank: u32,
+    },
+    TechniqueLearned {
+        skill: Skill,
+        technique: Technique,
+    },
+    /// A new level. A boon draft is waiting.
+    LevelUp {
+        level: u32,
+    },
+    BoonTaken {
+        boon: Boon,
+    },
+    /// A creature missed you and you struck back at once.
+    Riposte {
+        kind: KindId,
+    },
+    /// A bludgeon blow cost a creature its next action.
+    Staggered {
+        kind: KindId,
+    },
+    /// A missile pinned a creature in place.
+    Pinned {
+        kind: KindId,
+    },
 
     /// The first time this run the player sees a kind of creature.
     FirstSighting {

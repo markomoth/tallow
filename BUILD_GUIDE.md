@@ -154,9 +154,18 @@ No attributes. No skill trees. No classes. Your build is what you do.
 | Warding | Casting protection / banishing rites |
 | Endurance | Taking hits while armored |
 
-- Ranks 0–10. Rank n needs roughly `n² × k` meaningful uses.
-- **Meaningful use only:** XP counts only against creatures that are a real threat (no grinding rats).
-- Ranks unlock fixed techniques (e.g. Blades 3: riposte; Reach 4: hit two tiles; Missiles 5: pin to wall). Hand-written, listed in data files.
+- Ranks 0–10. Rank n needs `k × n²` experience in total (`k` is 6–10 per skill, in `assets/skills.ron`).
+- **Meaningful use only:** experience is the damage you deal to real creatures, never more than they had left to lose. Monsters are finite and phantoms teach nothing, so there is nothing to grind. Endurance is damage taken while wearing a vestment.
+- Each rank: +2 accuracy with that skill (Endurance: +1 defense instead). The `@` sheet shows every skill's progress and what unlocks next.
+- Rite skills (Binding, Communion, Veil, Warding) arrive with rites in M6.
+
+| Technique | Rank 3 | Rank 6 |
+|---|---|---|
+| Blades: **Riposte** | When a creature misses you in melee, strike back at once (50%) | 100% |
+| Bludgeons: **Stagger** | A hit can cost the creature its next action (25%) | 40% |
+| Reach: **Long Reach** | Moving toward a visible creature two tiles away in a straight line strikes it instead | +10 accuracy |
+| Missiles: **Pin** | A hit can hold the creature in place for 2 actions (30%) | 50%, 3 actions |
+| Endurance: **Brace** | Heavy blows that land do 25% less | 40% less |
 
 ### Combat basics
 
@@ -170,13 +179,12 @@ No attributes. No skill trees. No classes. Your build is what you do.
 
 ### Character level
 
-- XP from: first-time discoveries (new monster, new rite, new floor), studying, defeating threats.
-- Each level: +health, then **pick 1 of 3 boons**. One keypress. No stat math shown.
-- Boons are procedural: `trigger × effect`, weighted toward skills you actually use.
-  - "When you snuff your candle, the nearest Dreaming loses track of you."
-  - "Leech also lowers your dread."
-  - "Thrown flasks shatter in a cross."
-- Draft never offers dead picks (boons for rites you don't know, etc.).
+- **Insight** (the in-game word for XP) comes from: first sight of a creature kind (8), each new floor (12), kills (6 × the creature's threat; a Manifestation 20), learning a tincture (5). Studying and rites add more in M6.
+- Level `L` → `L+1` at `15 × L × (L+1)` total Insight (30, 90, 180, 300, …). A diving bot ends runs around level 5–6.
+- Each level: +3 health, then a **draft of 3 boons** pops up. Press 1, 2 or 3. Choosing takes no time.
+- Boons are either **passive** (Steady Hand: +5 accuracy; Slow Wick: the candle burns a quarter slower; Night Eyes: feel two tiles in the dark; Hearth-Kin; Broad Back; …) or **trigger × reward** ("When you kill with bludgeons, gain 12 tallow"; "When you snuff your candle, the nearest hunter loses your trail"). Rare triggers pay more.
+- The draft is weighted toward skills you actually use, never repeats a unique boon, and never offers a dead pick: no blade boons before you've used a blade, no snuff boons before you've snuffed, and so on.
+- Later (with rites): "Leech also lowers your dread", "Thrown flasks shatter in a cross".
 
 ### Rites (magic)
 
@@ -346,6 +354,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `c` | Snuff / relight candle |
 | `R` | Rest until healed (or calm, by a brazier) |
 | `o` | Auto-explore |
+| `@` | Character sheet: skills, techniques, boons |
 | `J` | Journal |
 | `?` | Help |
 | `q` / Ctrl-C | Quit (saves the run once saves exist) |
@@ -459,7 +468,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | # | Milestone | Done when you can… | Est. |
 |---|---|---|---|
 | M4 ✅ | Items & weight | Pick up, equip, throw, get Burdened, learn a tincture by drinking it | 3–4 h |
-| M5 | Skills & levels | See Blades rank up from use, pick 1 of 3 boons on level up | 2–3 h |
+| M5 ✅ | Skills & levels | See Blades rank up from use, pick 1 of 3 boons on level up | 2–3 h |
 | M6 | Rites & study | Study a corpse, learn Compel from a page, mind-control a Proctor into a Taken | 3–4 h |
 | M7 | Factions & environment | Ring a bell to pull a swarm into a nightmare; set a library on fire | 4–5 h |
 
@@ -479,6 +488,6 @@ Total: roughly 40–55 hours of build + playtest time.
 ## 14. Open questions (decide when we get there)
 
 - Final names: town, church, Collegium, the Following.
-- In-game words for level and XP (candidates: "Vigil" / "Resolve").
+- ~~In-game words for level and XP~~ Decided in M5: "Level" and "Insight".
 - Exact numbers: tallow per floor, dread rates, skill XP curve. Tune with `tallow-sim` in M11.
 - Whether the ascent should show a turn counter for the Following or only audio-style log cues.

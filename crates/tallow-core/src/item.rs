@@ -208,10 +208,15 @@ pub enum Burden {
 }
 
 impl Burden {
+    /// Burden at the standard limits.
     pub const fn of(load: u32) -> Burden {
-        if load <= LIGHT_LOAD {
+        Burden::within(load, LIGHT_LOAD, MAX_LOAD)
+    }
+
+    pub const fn within(load: u32, light: u32, max: u32) -> Burden {
+        if load <= light {
             Burden::Light
-        } else if load <= MAX_LOAD {
+        } else if load <= max {
             Burden::Burdened
         } else {
             Burden::Overloaded

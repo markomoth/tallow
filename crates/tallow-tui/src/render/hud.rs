@@ -94,7 +94,10 @@ impl Widget for Hud<'_> {
                 palette::LOAD_EMPTY,
             ),
             conditions(world),
-            Line::styled(format!("Floor {depth} of {MAX_DEPTH}"), text()),
+            Line::styled(
+                format!("Floor {depth}/{MAX_DEPTH} · Level {}", player.level),
+                text(),
+            ),
             Line::styled(biome_name(Biome::for_depth(depth)), dim()),
             Line::default(),
         ];
@@ -103,7 +106,7 @@ impl Widget for Hud<'_> {
             Mode::Target { aim, cursor } => {
                 lines.extend(target_panel(world, aim, cursor, self.app.aim_path().len()));
             }
-            Mode::Play | Mode::Dead | Mode::Pack { .. } => {
+            Mode::Play | Mode::Dead | Mode::Pack { .. } | Mode::Draft | Mode::Sheet => {
                 lines.extend(in_view(world));
                 lines.extend(keys());
             }
@@ -236,7 +239,8 @@ fn keys() -> Vec<Line<'static>> {
         key("g i", "take, pack"),
         key("t f", "throw, fire"),
         key("c >", "candle, down"),
-        key("x q", "look, quit"),
+        key("x @", "look, self"),
+        key("q", "quit"),
     ]
 }
 

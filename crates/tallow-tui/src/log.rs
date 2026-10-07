@@ -7,7 +7,7 @@ use tallow_core::{
     TinctureEffect, Who, World,
 };
 
-use crate::names::{item_name, item_phrase};
+use crate::names::{boon_text, item_name, item_phrase, skill_name, technique_text};
 
 const CAPACITY: usize = 200;
 
@@ -259,6 +259,31 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             Burden::Burdened => ("You are burdened. Every step takes longer.".into(), Danger),
             Burden::Overloaded => ("You carry too much to move. Drop something.".into(), Danger),
         },
+        Event::SkillRankUp { skill, rank } => (
+            format!(
+                "Your skill with {} grows: rank {rank}.",
+                skill_name(skill).to_lowercase()
+            ),
+            Good,
+        ),
+        Event::TechniqueLearned { technique, .. } => {
+            let (name, what) = technique_text(technique);
+            (format!("You learn {name}. {what}"), Good)
+        }
+        Event::LevelUp { level } => (
+            format!("You have grown. Level {level}: choose a boon."),
+            Good,
+        ),
+        Event::BoonTaken { boon } => {
+            let (title, what) = boon_text(boon);
+            (format!("{title}: {what}"), Good)
+        }
+        Event::Riposte { kind } => (
+            format!("The {} misses, and you strike back!", name(kind)),
+            Normal,
+        ),
+        Event::Staggered { kind } => (format!("The {} staggers.", name(kind)), Normal),
+        Event::Pinned { kind } => (format!("The {} is pinned in place.", name(kind)), Normal),
         Event::TooHeavy => (
             "You can't move under this weight. Open your pack (i) and drop something.".into(),
             Danger,

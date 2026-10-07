@@ -35,4 +35,6 @@ pub enum Command {
     Fire {
         target: Point,
     },
+    /// Take one boon from the waiting level-up draft. Costs no time.
+    ChooseBoon(usize),
 }

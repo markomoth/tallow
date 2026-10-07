@@ -7,6 +7,7 @@ use crate::biome::MAX_DEPTH;
 use crate::candle::{self, Candle};
 use std::collections::HashMap;
 
+use crate::boons::{Boon, Passive, Trigger};
 use crate::combat::{self, PLAYER_HEALTH};
 use crate::content::{Content, Faction, KindId, Trait};
 use crate::dread::{self, Dread};
@@ -14,13 +15,16 @@ use crate::events::{Cause, Event, Who};
 use crate::floor::{Floor, FloorItem, Tallow};
 use crate::geom::{Direction, Point};
 use crate::inventory;
-use crate::item::{Burden, Equipment, Item, ItemKindId, TinctureLore};
+use crate::item::{Burden, Equipment, Family, Item, ItemKindId, TinctureLore};
 use crate::map::light::LightSource;
 use crate::map::{Map, Tile, generate};
 use crate::monster::{Mind, Monster, MonsterId};
+use crate::progress::Source;
 use crate::rng::{self, GameRng, Stream};
+use crate::skills::{Skill, Skills, Technique};
 use crate::spawn;
 use crate::time::{ACTION_COST, PLAYER_SPEED, TICKS_PER_TURN};
+use std::collections::VecDeque;
 
 /// Safety stop for runs across very long halls.
 const MAX_RUN_STEPS: u32 = 120;
@@ -38,7 +42,20 @@ pub struct Player {
     pub dread: Dread,
     pub inventory: Vec<Item>,
     pub equipment: Equipment,
+    pub level: u32,
+    /// Toward the next level.
+    pub insight: u32,
+    pub skills: Skills,
+    pub boons: Vec<Boon>,
     pub(crate) energy: i32,
+}
+
+/// Counts that decide which boons can be offered.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunStats {
+    pub snuffs: u32,
+    pub drinks: u32,
+    pub heavy_blows_seen: u32,
 }
 
 /// How and when a run ended in death.
@@ -86,6 +103,10 @@ pub struct World {
     /// This run's tincture strengths and side effects.
     pub(crate) tinctures: HashMap<ItemKindId, TinctureLore>,
     last_burden: Burden,
+    /// Level-up drafts waiting for a choice, oldest first.
+    pub(crate) drafts: VecDeque<Vec<Boon>>,
+    pub(crate) boon_rng: GameRng,
+    pub(crate) stats: RunStats,
     sighted: HashSet<KindId>,
     witnessed: HashSet<(KindId, Trait)>,
     death: Option<Death>,
@@ -122,6 +143,10 @@ impl World {
                 dread: Dread::default(),
                 inventory: Vec::new(),
                 equipment: Equipment::default(),
+                level: 1,
+                insight: 0,
+                skills: Skills::default(),
+                boons: Vec::new(),
                 energy: ACTION_COST,
             },
             floor,
@@ -134,6 +159,9 @@ impl World {
             next_item,
             tinctures: inventory::roll_tinctures(&mut rng::stream(seed, Stream::Loot), content),
             last_burden: Burden::Light,
+            drafts: VecDeque::new(),
+            boon_rng: rng::stream(seed, Stream::Boons),
+            stats: RunStats::default(),
             sighted: HashSet::new(),
             witnessed: HashSet::new(),
             death: None,
@@ -332,6 +360,7 @@ impl World {
             Command::Use(item) => self.use_item(item),
             Command::Throw { item, target } => self.throw(item, target),
             Command::Fire { target } => self.fire(target),
+            Command::ChooseBoon(index) => self.choose_boon(index),
             Command::Ascend => match self.map().tile(self.player.pos) {
                 Tile::StairsUp => vec![Event::StairsSealed { depth: self.depth }],
                 _ => vec![Event::NoStairsHere],
@@ -345,7 +374,9 @@ impl World {
         let mut events = Vec::new();
         let mut cost = ACTION_COST;
         if let Some(id) = self.floor.monster_at(target) {
-            self.player_attack(id, &mut events);
+            self.player_attack(id, 0, &mut events);
+        } else if let Some((id, bonus)) = self.reach_target(dir) {
+            self.player_attack(id, bonus, &mut events);
         } else {
             let tile = self.map().tile(target);
             if !tile.is_walkable() {
@@ -360,10 +391,13 @@ impl World {
             events.push(Event::PlayerMoved { to: target });
             if let Some(i) = self.floor.tallow.iter().position(|t| t.at == target) {
                 let found = self.floor.tallow.swap_remove(i);
-                self.player.candle.add(found.amount);
-                events.push(Event::TallowFound {
-                    amount: found.amount,
-                });
+                let amount = if self.has_passive(Passive::TallowThief) {
+                    found.amount * 5 / 4
+                } else {
+                    found.amount
+                };
+                self.player.candle.add(amount);
+                events.push(Event::TallowFound { amount });
             }
         }
         self.pass_time_costing(cost, &mut events);
@@ -375,6 +409,8 @@ impl World {
         if self.player.candle.is_lit() {
             self.player.candle.snuff();
             events.push(Event::CandleSnuffed);
+            self.stats.snuffs += 1;
+            self.trigger(Trigger::Snuff, &mut events);
         } else if self.player.candle.light() {
             events.push(Event::CandleLit);
         } else {
@@ -415,7 +451,29 @@ impl World {
             && (self.player.dread.value() == 0 || !by_brazier)
     }
 
-    fn player_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
+    /// A creature two tiles away in `dir` that a long-reach weapon can strike,
+    /// with the technique's accuracy bonus. The tile between must be open.
+    fn reach_target(&self, dir: Direction) -> Option<(MonsterId, i32)> {
+        if self.wielded_family() != Some(Family::Reach) {
+            return None;
+        }
+        let Some(Technique::LongReach { accuracy }) =
+            self.melee_technique(|t| matches!(t, Technique::LongReach { .. }))
+        else {
+            return None;
+        };
+        let between = self.player.pos + dir;
+        let far = between + dir;
+        let open = self.map().is_walkable(between) && self.floor.monster_at(between).is_none();
+        let id = self
+            .floor
+            .monster_at(far)
+            .filter(|_| self.floor.is_visible(far))?;
+        open.then_some((id, accuracy))
+    }
+
+    /// Strikes a monster with the wielded weapon. Also used for ripostes and reach strikes.
+    pub(crate) fn player_attack(&mut self, id: MonsterId, bonus: i32, events: &mut Vec<Event>) {
         let monster = &self.floor.monsters[id];
         let kind = monster.kind;
         if monster.phantom {
@@ -424,8 +482,10 @@ impl World {
             return;
         }
         let def = self.content.monster(kind);
-        let chance = combat::hit_chance(self.player_accuracy(), def.defense);
+        let chance = combat::hit_chance(self.player_accuracy() + bonus, def.defense);
         let weapon = self.player_damage();
+        let health_before = self.floor.monsters[id].health;
+        let family = self.wielded_family();
         let damage = combat::roll_attack(&mut self.combat_rng, chance, weapon);
         events.push(Event::Attack {
             attacker: Who::Player,
@@ -434,8 +494,20 @@ impl World {
         });
 
         self.wake(id);
-        if let Some(damage) = damage {
-            self.damage_monster(id, damage, events);
+        let Some(damage) = damage else { return };
+        if let Some(family) = family {
+            self.train(Skill::of_family(family), damage.min(health_before), events);
+        }
+        self.damage_monster(id, damage, Source::Melee(family), events);
+        if family == Some(Family::Bludgeon)
+            && let Some(Technique::Stagger { chance }) =
+                self.melee_technique(|t| matches!(t, Technique::Stagger { .. }))
+            && let Some(monster) = self.floor.monsters.get(id)
+            && rand::RngExt::random_range(&mut self.combat_rng, 0..100) < chance
+        {
+            let kind = monster.kind;
+            self.floor.monsters[id].energy -= ACTION_COST;
+            events.push(Event::Staggered { kind });
         }
     }
 
@@ -449,7 +521,13 @@ impl World {
         }
     }
 
-    pub(crate) fn damage_monster(&mut self, id: MonsterId, damage: u32, events: &mut Vec<Event>) {
+    pub(crate) fn damage_monster(
+        &mut self,
+        id: MonsterId,
+        damage: u32,
+        source: Source,
+        events: &mut Vec<Event>,
+    ) {
         let monster = &mut self.floor.monsters[id];
         monster.health = monster.health.saturating_sub(damage);
         if monster.health > 0 {
@@ -462,10 +540,15 @@ impl World {
             events.push(Event::ManifestationBanished);
             self.ease_dread(events);
         }
+        self.credit_kill(kind, source, events);
     }
 
     pub(crate) fn hurt_player(&mut self, damage: u32, cause: Cause, events: &mut Vec<Event>) {
+        let taken = damage.min(self.player.health);
         self.player.health = self.player.health.saturating_sub(damage);
+        if self.player.equipment.body.is_some() {
+            self.train(Skill::Endurance, taken, events);
+        }
         if self.player.health == 0 && self.death.is_none() {
             self.death = Some(Death {
                 cause,
@@ -620,19 +703,26 @@ impl World {
             events.push(Event::ManifestationEscaped);
             self.ease_dread(&mut events);
         }
+        self.trigger(Trigger::Descend, &mut events);
+        self.gain_insight(crate::progress::INSIGHT_NEW_FLOOR, &mut events);
         self.pass_time(&mut events);
         events
     }
 
     /// Recomputes light and sight. Returns newly spotted landmarks and, when
     /// time has passed, first sightings of creatures.
-    fn update_view(&mut self) -> Vec<Event> {
+    pub(crate) fn update_view(&mut self) -> Vec<Event> {
         let candle = self.player.candle.radius().map(|radius| LightSource {
             at: self.player.pos,
             radius,
             color: candle::COLOR,
         });
-        self.floor.update_view(self.player.pos, candle)
+        let feel = if self.has_passive(Passive::DarkSight) {
+            2
+        } else {
+            1
+        };
+        self.floor.update_view(self.player.pos, candle, feel)
     }
 
     /// First sightings of creature kinds now in view. Reported from actions only,
@@ -661,6 +751,7 @@ impl World {
             if kind != self.manifestation {
                 self.shift_dread(shock, &mut events);
             }
+            self.gain_insight(crate::progress::INSIGHT_FIRST_SIGHT, &mut events);
         }
         events
     }

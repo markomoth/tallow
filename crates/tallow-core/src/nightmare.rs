@@ -4,6 +4,7 @@
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 
+use crate::boons::Passive;
 use crate::candle::BurnWarning;
 use crate::dread::{self, DreadBand};
 use crate::events::Event;
@@ -11,6 +12,9 @@ use crate::geom::Point;
 use crate::map::path;
 use crate::monster::{Mind, Monster};
 use crate::time::REGEN_TURNS;
+
+/// Regeneration interval with the quick-mending boon.
+const QUICK_REGEN_TURNS: u64 = 8;
 use crate::world::World;
 
 /// One in this many turns, the uneasy hear something.
@@ -23,11 +27,22 @@ const LURK_DISTANCE: (u32, u32) = (6, 14);
 
 impl World {
     pub(crate) fn on_turn(&mut self, events: &mut Vec<Event>) {
-        if self.turn().is_multiple_of(REGEN_TURNS) {
+        let regen = if self.has_passive(Passive::QuickMending) {
+            QUICK_REGEN_TURNS
+        } else {
+            REGEN_TURNS
+        };
+        if self.turn().is_multiple_of(regen) {
             self.player.health = (self.player.health + 1).min(self.player.max_health);
         }
 
-        match self.player.candle.burn() {
+        // A thrifty candle skips every fourth turn of burning.
+        let thrifty = self.has_passive(Passive::CandleThrift) && self.turn().is_multiple_of(4);
+        match if thrifty {
+            None
+        } else {
+            self.player.candle.burn()
+        } {
             Some(BurnWarning::Low) => events.push(Event::CandleLow),
             Some(BurnWarning::Guttering) => events.push(Event::CandleGuttering),
             Some(BurnWarning::BurnedOut) => events.push(Event::CandleBurnedOut),
@@ -37,9 +52,18 @@ impl World {
         // While your dread walks the floor, it holds you at the top.
         if !self.manifestation_present() {
             let rate = if self.floor.ambient_light(self.player.pos).is_lit() {
-                dread::PER_TURN_BY_BRAZIER
+                let kin = if self.has_passive(Passive::BrazierKin) {
+                    2
+                } else {
+                    1
+                };
+                dread::PER_TURN_BY_BRAZIER * kin
             } else if self.player.candle.is_lit() {
-                dread::PER_TURN_IN_CANDLELIGHT
+                if self.has_passive(Passive::CalmInLight) {
+                    dread::PER_TURN_IN_CANDLELIGHT / 2
+                } else {
+                    dread::PER_TURN_IN_CANDLELIGHT
+                }
             } else {
                 dread::PER_TURN_IN_DARKNESS
             };

@@ -13,6 +13,8 @@ struct Stats {
     manifested: u32,
     peak_dread: u32,
     tallow_left_at_end: u32,
+    level: u32,
+    bludgeons: u32,
 }
 
 fn main() {
@@ -35,6 +37,8 @@ fn main() {
         totals.manifested += stats.manifested;
         totals.peak_dread += stats.peak_dread;
         totals.tallow_left_at_end += stats.tallow_left_at_end;
+        totals.level += stats.level;
+        totals.bludgeons += stats.bludgeons;
     }
     let n = runs as u32;
     println!("{runs} runs, average {} turns", turns / runs);
@@ -43,6 +47,11 @@ fn main() {
         f64::from(totals.manifested) / f64::from(n),
         totals.peak_dread / n,
         totals.tallow_left_at_end / n,
+    );
+    println!(
+        "average final level {:.1}; average Bludgeons rank {:.1}",
+        f64::from(totals.level) / f64::from(n),
+        f64::from(totals.bludgeons) / f64::from(n),
     );
     for (depth, &count) in deaths.iter().enumerate().skip(1) {
         println!(
@@ -71,10 +80,15 @@ fn play(seed: u64) -> (World, Stats) {
         stats.peak_dread = stats.peak_dread.max(world.player().dread.value());
     }
     stats.tallow_left_at_end = world.player().candle.tallow();
+    stats.level = world.player().level;
+    stats.bludgeons = world.rank(tallow_core::Skill::Bludgeons);
     (world, stats)
 }
 
 fn choose(world: &World) -> Command {
+    if world.pending_draft().is_some() {
+        return Command::ChooseBoon(0);
+    }
     let here = world.player().pos;
     let telegraphed: Vec<_> = world.telegraphs().collect();
     let free = |p| world.map().is_walkable(p) && world.floor().monster_at(p).is_none();

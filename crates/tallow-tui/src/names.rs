@@ -123,3 +123,140 @@ pub fn item_stats(world: &World, kind: ItemKindId) -> Vec<String> {
 pub fn tenths(value: u32) -> String {
     format!("{}.{}", value / 10, value % 10)
 }
+
+use tallow_core::{Boon, Family, Passive, Reward, Skill, Technique, Trigger};
+
+pub fn skill_name(skill: Skill) -> &'static str {
+    match skill {
+        Skill::Blades => "Blades",
+        Skill::Bludgeons => "Bludgeons",
+        Skill::Reach => "Reach",
+        Skill::Missiles => "Missiles",
+        Skill::Endurance => "Endurance",
+    }
+}
+
+fn family_noun(family: Family) -> &'static str {
+    match family {
+        Family::Blade => "blades",
+        Family::Bludgeon => "bludgeons",
+        Family::Reach => "reach weapons",
+    }
+}
+
+/// A boon's name and what it does.
+pub fn boon_text(boon: Boon) -> (String, String) {
+    match boon {
+        Boon::Passive(p) => {
+            let (title, text) = match p {
+                Passive::Accuracy(n) => ("Steady Hand", format!("+{n} accuracy with everything.")),
+                Passive::Defense(n) => ("Hard to Hit", format!("+{n} defense.")),
+                Passive::MaxHealth(n) => ("Deep Breath", format!("+{n} health.")),
+                Passive::FamilyDamage(f) => (
+                    match f {
+                        Family::Blade => "Keen Edge",
+                        Family::Bludgeon => "Heavy Hand",
+                        Family::Reach => "Long Leverage",
+                    },
+                    format!("+1 damage with {}.", family_noun(f)),
+                ),
+                Passive::MissileAccuracy(n) => (
+                    "Sure Throw",
+                    format!("+{n} accuracy with thrown and fired things."),
+                ),
+                Passive::CandleThrift => {
+                    ("Slow Wick", "Your candle burns a quarter slower.".into())
+                }
+                Passive::DarkSight => (
+                    "Night Eyes",
+                    "In the dark you feel two tiles around you, not one.".into(),
+                ),
+                Passive::CalmInLight => (
+                    "Candle Calm",
+                    "Candlelight breeds less than half the dread.".into(),
+                ),
+                Passive::BrazierKin => (
+                    "Hearth-Kin",
+                    "Brazier light eases dread twice as fast.".into(),
+                ),
+                Passive::StrongMedicine => (
+                    "Strong Medicine",
+                    "Mending tinctures mend half again as much.".into(),
+                ),
+                Passive::TallowThief => (
+                    "Tallow Thief",
+                    "Tallow you find is worth a quarter more.".into(),
+                ),
+                Passive::PackMule => (
+                    "Broad Back",
+                    "Carry 5.0 more before you're burdened or stuck.".into(),
+                ),
+                Passive::QuickMending => (
+                    "Quick Mending",
+                    "Regain health every 8 turns instead of 12.".into(),
+                ),
+            };
+            (title.into(), text)
+        }
+        Boon::Triggered { when, then } => {
+            let (title, condition) = match when {
+                Trigger::Kill => ("Grim Harvest", "When you kill something".to_string()),
+                Trigger::KillWith(f) => (
+                    match f {
+                        Family::Blade => "Blade's Due",
+                        Family::Bludgeon => "Bone Toll",
+                        Family::Reach => "Long Due",
+                    },
+                    format!("When you kill with {}", family_noun(f)),
+                ),
+                Trigger::MissileHit => (
+                    "Marksman's Ease",
+                    "When something you throw or shoot hits".into(),
+                ),
+                Trigger::Snuff => ("Dark Comfort", "When you snuff your candle".into()),
+                Trigger::Descend => ("Down and Deeper", "When you go down a stair".into()),
+                Trigger::Drink => ("Second Draught", "When you drink a tincture".into()),
+                Trigger::DodgeHeavyBlow => ("Light Feet", "When a heavy blow misses you".into()),
+            };
+            let result = match then {
+                Reward::Heal(n) => format!("mend {n} health"),
+                Reward::EaseDread(n) => format!("dread eases by {n}"),
+                Reward::Tallow(n) => format!("gain {n} tallow"),
+                Reward::LoseTrail => "the nearest hunter loses your trail".into(),
+            };
+            (title.into(), format!("{condition}, {result}."))
+        }
+    }
+}
+
+/// A technique's name and what it does.
+pub fn technique_text(technique: Technique) -> (String, String) {
+    match technique {
+        Technique::Riposte { chance } => (
+            format!("Riposte ({chance}%)"),
+            "When a creature misses you in melee, your blade strikes back at once.".into(),
+        ),
+        Technique::Stagger { chance } => (
+            format!("Stagger ({chance}%)"),
+            "A bludgeon hit can cost a creature its next action.".into(),
+        ),
+        Technique::LongReach { accuracy } => (
+            "Long Reach".into(),
+            if accuracy > 0 {
+                format!(
+                    "Strike a creature two tiles away in a straight line, at {accuracy:+} accuracy."
+                )
+            } else {
+                "Strike a creature two tiles away in a straight line.".into()
+            },
+        ),
+        Technique::Pin { chance, actions } => (
+            format!("Pin ({chance}%)"),
+            format!("A missile hit can hold a creature in place for {actions} of its actions."),
+        ),
+        Technique::Brace { percent } => (
+            "Brace".into(),
+            format!("Heavy blows that land on you do {percent}% less."),
+        ),
+    }
+}

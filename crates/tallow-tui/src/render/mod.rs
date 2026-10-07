@@ -4,6 +4,7 @@ mod hud;
 mod map;
 mod pack;
 mod palette;
+mod sheet;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -40,7 +41,7 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
 
     let cursor = match app.mode() {
         Mode::Look { cursor } | Mode::Target { cursor, .. } => Some(cursor),
-        Mode::Play | Mode::Dead | Mode::Pack { .. } => None,
+        Mode::Play | Mode::Dead | Mode::Pack { .. } | Mode::Draft | Mode::Sheet => None,
     };
     frame.render_widget(
         map::MapView::new(app.world(), time, cursor, app.aim_path()),
@@ -53,6 +54,8 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
         Mode::Pack { purpose, selected } => {
             pack::draw(frame, map_area, app.world(), purpose, selected)
         }
+        Mode::Draft => sheet::draw_draft(frame, map_area, app.world()),
+        Mode::Sheet => sheet::draw_sheet(frame, map_area, app.world()),
         Mode::Play | Mode::Look { .. } | Mode::Target { .. } => {}
     }
 }
@@ -337,7 +340,7 @@ mod tests {
         assert!(screen.contains('@'));
         assert!(screen.contains("T A L L O W"));
         assert!(screen.contains("floorboards"));
-        assert!(screen.contains("Floor 1 of 12"));
+        assert!(screen.contains("Floor 1/12 · Level 1"));
         assert!(screen.contains("seed 7"));
     }
 
@@ -360,7 +363,7 @@ mod tests {
         app.handle(Action::Descend);
 
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
-        assert!(screen.contains("Floor 2 of 12"));
+        assert!(screen.contains("Floor 2/12"));
         assert!(screen.contains("The stair turns more times than it should."));
     }
 
@@ -409,6 +412,27 @@ mod tests {
         assert!(screen.contains("─ aim ─"));
         assert!(screen.contains("Throwing a stone."));
         assert!(screen.contains("At the Taken"));
+    }
+
+    #[test]
+    fn the_draft_offers_three_numbered_boons() {
+        let mut app = App::new(7);
+        app.grant_insight_for_test(tallow_core::progress::insight_for_next(1));
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains(" Level up "));
+        assert!(screen.contains("level 2. Choose one."));
+        assert!(screen.contains("1  ") && screen.contains("2  ") && screen.contains("3  "));
+    }
+
+    #[test]
+    fn the_sheet_shows_skills_and_what_unlocks_next() {
+        let mut app = App::new(7);
+        app.handle(Action::Sheet);
+        let screen = render(MIN_WIDTH + 10, MIN_HEIGHT + 4, &app);
+        assert!(screen.contains("Level 1 · Insight"));
+        assert!(screen.contains("Blades"));
+        assert!(screen.contains("next at 3: Riposte (50%)"));
+        assert!(screen.contains("None yet."));
     }
 
     #[test]

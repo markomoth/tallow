@@ -1,0 +1,64 @@
+// Skills grow from meaningful use only (BUILD_GUIDE.md §5):
+//   weapon skills from damage you deal to real creatures (never more than
+//   they had to lose), Missiles from thrown and fired hits, Endurance from
+//   damage you take while wearing a vestment.
+// Rank n needs xp_factor × n² experience in total. Ranks run 0–10.
+// Each rank adds accuracy_per_rank (and defense_per_rank) with that skill.
+// Techniques unlock at their rank; a later entry of the same technique replaces an earlier one.
+[
+    (
+        skill: Blades,
+        description: "Sickles, cleavers, knives held in the hand.",
+        xp_factor: 8,
+        accuracy_per_rank: 2,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: Riposte(chance: 50)),
+            (rank: 6, technique: Riposte(chance: 100)),
+        ],
+    ),
+    (
+        skill: Bludgeons,
+        description: "Candlesticks, staves, censers: things that break.",
+        xp_factor: 8,
+        accuracy_per_rank: 2,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: Stagger(chance: 25)),
+            (rank: 6, technique: Stagger(chance: 40)),
+        ],
+    ),
+    (
+        skill: Reach,
+        description: "Hooks and poles that keep the dark at arm's length and more.",
+        xp_factor: 8,
+        accuracy_per_rank: 2,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: LongReach(accuracy: 0)),
+            (rank: 6, technique: LongReach(accuracy: 10)),
+        ],
+    ),
+    (
+        skill: Missiles,
+        description: "Anything that leaves your hand: stones, knives, bolts, flasks.",
+        xp_factor: 6,
+        accuracy_per_rank: 2,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: Pin(chance: 30, actions: 2)),
+            (rank: 6, technique: Pin(chance: 50, actions: 3)),
+        ],
+    ),
+    (
+        skill: Endurance,
+        description: "Taking blows inside a vestment, and staying up.",
+        xp_factor: 10,
+        accuracy_per_rank: 0,
+        defense_per_rank: 1,
+        techniques: [
+            (rank: 3, technique: Brace(percent: 25)),
+            (rank: 6, technique: Brace(percent: 40)),
+        ],
+    ),
+]

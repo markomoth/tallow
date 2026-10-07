@@ -36,6 +36,8 @@ pub struct Monster {
     pub cooldown: u32,
     /// A hallucination: looks real, can't hurt anyone, and Look sees through it.
     pub phantom: bool,
+    /// Actions left before it can move again (it can still strike).
+    pub pinned: u32,
 }
 
 impl Monster {
@@ -51,6 +53,7 @@ impl Monster {
             blow_ready: false,
             cooldown: 0,
             phantom: false,
+            pinned: 0,
         }
     }
 }

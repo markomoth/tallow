@@ -221,7 +221,12 @@ impl Floor {
     /// Recomputes light and sight from `eye`, carrying an optional light of its own.
     /// You see what is in line of sight and lit, plus whatever is right beside you.
     /// Returns a `Spotted` event for each landmark seen for the first time.
-    pub(crate) fn update_view(&mut self, eye: Point, carried: Option<LightSource>) -> Vec<Event> {
+    pub(crate) fn update_view(
+        &mut self,
+        eye: Point,
+        carried: Option<LightSource>,
+        feel: i32,
+    ) -> Vec<Event> {
         let sources: Vec<LightSource> = self.lights.iter().copied().chain(carried).collect();
         self.light = light::compute(&self.map, &sources);
 
@@ -235,7 +240,7 @@ impl Floor {
             |p| map.blocks_sight(p),
             |p| {
                 in_sight.set(p, true);
-                if light.at(p).is_lit() || p.chebyshev(eye) <= 1 {
+                if light.at(p).is_lit() || p.chebyshev(eye) <= feel {
                     visible.set(p, true);
                 }
             },
@@ -279,7 +284,7 @@ mod tests {
     fn darkness_hides_what_is_in_line_of_sight() {
         let (map, start) = prefab::parse("##########\n#@.......#\n##########").unwrap();
         let mut floor = Floor::new(map, start);
-        floor.update_view(start, None);
+        floor.update_view(start, None, 1);
         assert!(
             floor.is_visible(Point::new(2, 1)),
             "adjacent tiles are felt"
@@ -291,7 +296,7 @@ mod tests {
     fn braziers_light_distant_rooms() {
         let (map, start) = prefab::parse("#############\n#@.........&#\n#############").unwrap();
         let mut floor = Floor::new(map, start);
-        let events = floor.update_view(start, None);
+        let events = floor.update_view(start, None, 1);
         assert!(floor.is_visible(Point::new(10, 1)));
         assert_eq!(
             events,
@@ -306,8 +311,8 @@ mod tests {
     fn memory_outlasts_sight_and_landmarks_are_spotted_once() {
         let (map, start) = prefab::parse("#######\n#@...&#\n#######").unwrap();
         let mut floor = Floor::new(map, start);
-        assert_eq!(floor.update_view(start, None).len(), 1);
-        assert!(floor.update_view(start, None).is_empty());
+        assert_eq!(floor.update_view(start, None, 1).len(), 1);
+        assert!(floor.update_view(start, None, 1).is_empty());
         assert!(floor.is_explored(Point::new(5, 1)));
     }
 }

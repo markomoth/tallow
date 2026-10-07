@@ -3,12 +3,15 @@
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 
+use crate::boons::Trigger;
 use crate::combat;
 use crate::content::Trait;
 use crate::events::{Cause, Event, Who};
 use crate::geom::{Direction, Point};
+use crate::item::Family;
 use crate::map::path;
 use crate::monster::{Mind, MonsterId};
+use crate::skills::{Skill, Technique};
 use crate::world::World;
 
 /// Packmates closer than this keep a pack creature brave.
@@ -25,6 +28,8 @@ impl World {
         let content = self.content;
         let m = self.floor.monsters[id].clone();
         let def = content.monster(m.kind);
+        let pinned = &mut self.floor.monsters[id].pinned;
+        *pinned = pinned.saturating_sub(1);
         let kind = m.kind;
         let player = self.player.pos;
 
@@ -62,8 +67,17 @@ impl World {
             let monster = &mut self.floor.monsters[id];
             monster.winding_up = None;
             monster.cooldown = cooldown;
-            let damage =
-                (player == target).then(|| combat::roll_damage(&mut self.combat_rng, (lo, hi)));
+            let braced = self
+                .techniques(Skill::Endurance)
+                .into_iter()
+                .find_map(|t| match t {
+                    Technique::Brace { percent } => Some(percent),
+                    _ => None,
+                });
+            let damage = (player == target).then(|| {
+                let raw = combat::roll_damage(&mut self.combat_rng, (lo, hi));
+                raw - raw * braced.unwrap_or(0) / 100
+            });
             events.push(Event::HeavyBlow {
                 kind,
                 target,
@@ -71,6 +85,8 @@ impl World {
             });
             if let Some(damage) = damage {
                 self.hurt_player(damage, Cause::HeavyBlow(kind), events);
+            } else if self.floor.is_visible(target) {
+                self.trigger(Trigger::DodgeHeavyBlow, events);
             }
             return;
         }
@@ -137,6 +153,7 @@ impl World {
                         let monster = &mut self.floor.monsters[id];
                         monster.winding_up = Some(player);
                         monster.blow_ready = false;
+                        self.stats.heavy_blows_seen += 1;
                         events.push(Event::WindUp {
                             kind,
                             target: player,
@@ -172,6 +189,16 @@ impl World {
             defender: Who::Player,
             damage,
         });
+        if damage.is_none()
+            && self.wielded_family() == Some(Family::Blade)
+            && let Some(Technique::Riposte { chance }) =
+                self.melee_technique(|t| matches!(t, Technique::Riposte { .. }))
+            && self.combat_rng.random_range(0..100) < chance
+        {
+            events.push(Event::Riposte { kind });
+            self.player_attack(id, 0, events);
+            return;
+        }
         if let Some(damage) = damage {
             self.hurt_player(damage, Cause::Attack(kind), events);
             if def.has(|t| *t == Trait::EatsLight) && self.player.candle.is_lit() {
@@ -217,6 +244,9 @@ impl World {
 
     /// Moves to the enterable neighbor with the lowest score (`None` = not allowed).
     fn step_by(&mut self, id: MonsterId, score: impl Fn(Point, Point) -> Option<i64>) -> bool {
+        if self.floor.monsters[id].pinned > 0 {
+            return false;
+        }
         let here = self.floor.monsters[id].pos;
         let options: Vec<(i64, Point)> = Direction::ALL
             .iter()

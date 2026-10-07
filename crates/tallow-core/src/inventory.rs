@@ -2,6 +2,7 @@
 
 use rand::RngExt;
 
+use crate::boons::{Passive, Trigger};
 use crate::combat::{self, BASE_ACCURACY, BASE_DEFENSE, FISTS};
 use crate::content::Faction;
 use crate::events::Event;
@@ -12,6 +13,8 @@ use crate::item::{
     TALLOW_PER_TENTH, ThrowStats, TinctureEffect,
 };
 use crate::monster::MonsterId;
+use crate::progress::Source;
+use crate::skills::{Skill, Technique};
 use crate::world::World;
 
 /// How far a hand can throw.
@@ -43,7 +46,18 @@ impl World {
     }
 
     pub fn burden(&self) -> Burden {
-        Burden::of(self.load())
+        let (light, max) = self.load_limits();
+        Burden::within(self.load(), light, max)
+    }
+
+    /// Carrying limits in tenths: (burdened above, stuck above).
+    pub fn load_limits(&self) -> (u32, u32) {
+        let extra = if self.has_passive(Passive::PackMule) {
+            50
+        } else {
+            0
+        };
+        (item::LIGHT_LOAD + extra, item::MAX_LOAD + extra)
     }
 
     pub fn inventory_item(&self, id: ItemId) -> Option<&Item> {
@@ -52,11 +66,40 @@ impl World {
 
     /// The acolyte's chance-to-hit base plus the wielded weapon's.
     pub fn player_accuracy(&self) -> i32 {
-        BASE_ACCURACY + self.melee().map_or(0, |(acc, _)| acc)
+        let skill = self
+            .wielded_family()
+            .map_or(0, |f| self.skill_accuracy(Skill::of_family(f)));
+        BASE_ACCURACY + self.melee().map_or(0, |(acc, _)| acc) + skill + self.boon_accuracy()
+    }
+
+    /// Accuracy with thrown and fired things, before the projectile's own.
+    pub fn missile_accuracy(&self) -> i32 {
+        let boons = self.passive_sum(|p| match p {
+            Passive::MissileAccuracy(n) => Some(n),
+            _ => None,
+        });
+        BASE_ACCURACY + self.skill_accuracy(Skill::Missiles) + self.boon_accuracy() + boons
+    }
+
+    fn skill_accuracy(&self, skill: Skill) -> i32 {
+        self.content.skill(skill).accuracy_per_rank * self.rank(skill) as i32
+    }
+
+    fn boon_accuracy(&self) -> i32 {
+        self.passive_sum(|p| match p {
+            Passive::Accuracy(n) => Some(n),
+            _ => None,
+        })
     }
 
     pub fn player_damage(&self) -> (u32, u32) {
-        self.melee().map_or(FISTS, |(_, dmg)| dmg)
+        let (lo, hi) = self.melee().map_or(FISTS, |(_, dmg)| dmg);
+        let family = self.wielded_family();
+        let bonus = self.passive_sum(|p| match p {
+            Passive::FamilyDamage(f) if Some(f) == family => Some(1),
+            _ => None,
+        }) as u32;
+        (lo + bonus, hi + bonus)
     }
 
     pub fn player_defense(&self) -> i32 {
@@ -66,7 +109,13 @@ impl World {
                 ItemClass::Vestment { defense } => *defense,
                 _ => 0,
             });
-        BASE_DEFENSE + worn
+        let endurance = self.content.skill(Skill::Endurance).defense_per_rank
+            * self.rank(Skill::Endurance) as i32;
+        let boons = self.passive_sum(|p| match p {
+            Passive::Defense(n) => Some(n),
+            _ => None,
+        });
+        BASE_DEFENSE + worn + endurance + boons
     }
 
     fn melee(&self) -> Option<(i32, (u32, u32))> {
@@ -248,7 +297,13 @@ impl World {
         };
         self.take_from_pack(id, 1);
         let lore = self.tinctures[&item.kind];
-        let amount = item::tincture_amount(effect, lore.potency);
+        let base = item::tincture_amount(effect, lore.potency);
+        let amount =
+            if effect == TinctureEffect::Mending && self.has_passive(Passive::StrongMedicine) {
+                base * 3 / 2
+            } else {
+                base
+            };
         let mut events = vec![Event::Drank {
             kind: item.kind,
             effect,
@@ -270,6 +325,11 @@ impl World {
         }
         if lore.side == SideEffect::Bitter {
             self.shift_dread(BITTER_DREAD, &mut events);
+        }
+        self.stats.drinks += 1;
+        self.trigger(Trigger::Drink, &mut events);
+        if !lore.known {
+            self.gain_insight(crate::progress::INSIGHT_TINCTURE_LEARNED, &mut events);
         }
         self.pass_time(&mut events);
         events
@@ -294,7 +354,7 @@ impl World {
         let thrown = self.take_from_pack(id, 1).expect("checked above");
         let shot = Shot {
             item: thrown.kind,
-            accuracy: BASE_ACCURACY + accuracy,
+            accuracy: self.missile_accuracy() + accuracy,
             damage,
             range: THROW_RANGE,
             breaks,
@@ -335,7 +395,7 @@ impl World {
         let round = self.take_from_pack(stack.id, 1).expect("found above");
         let shot = Shot {
             item: ammo_kind,
-            accuracy: BASE_ACCURACY + accuracy,
+            accuracy: self.missile_accuracy() + accuracy,
             damage,
             range,
             breaks: false,
@@ -397,8 +457,21 @@ impl World {
             damage,
         });
         self.wake(id);
-        if let Some(damage) = damage {
-            self.damage_monster(id, damage, events);
+        let Some(damage) = damage else { return };
+        let health_before = self.floor.monsters[id].health;
+        self.train(Skill::Missiles, damage.min(health_before), events);
+        self.trigger(Trigger::MissileHit, events);
+        self.damage_monster(id, damage, Source::Missile, events);
+        if damage > 0
+            && let Some(Technique::Pin { chance, actions }) = self
+                .techniques(Skill::Missiles)
+                .into_iter()
+                .find(|t| matches!(t, Technique::Pin { .. }))
+            && self.floor.monsters.contains_key(id)
+            && self.combat_rng.random_range(0..100) < chance
+        {
+            self.floor.monsters[id].pinned = actions;
+            events.push(Event::Pinned { kind });
         }
     }
 

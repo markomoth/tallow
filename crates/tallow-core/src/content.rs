@@ -6,9 +6,11 @@ use serde::Deserialize;
 
 use crate::item::{ItemClass, ItemDef, ItemKindId};
 use crate::map::light::Rgb;
+use crate::skills::{Skill, SkillDef};
 
 const MONSTERS: &str = include_str!("../../../assets/monsters.ron");
 const ITEMS: &str = include_str!("../../../assets/items.ron");
+const SKILLS: &str = include_str!("../../../assets/skills.ron");
 
 /// Index of a monster definition in [`Content::monsters`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -86,6 +88,7 @@ impl MonsterDef {
 pub struct Content {
     pub monsters: Vec<MonsterDef>,
     pub items: Vec<ItemDef>,
+    pub skills: Vec<SkillDef>,
 }
 
 #[derive(Debug)]
@@ -117,14 +120,25 @@ impl Content {
     pub fn bundled() -> &'static Content {
         static CONTENT: OnceLock<Content> = OnceLock::new();
         CONTENT.get_or_init(|| {
-            Content::parse(MONSTERS, ITEMS).expect("bundled content is valid; covered by tests")
+            Content::parse(MONSTERS, ITEMS, SKILLS)
+                .expect("bundled content is valid; covered by tests")
         })
     }
 
-    pub fn parse(monsters: &str, items: &str) -> Result<Content, ContentError> {
+    pub fn parse(monsters: &str, items: &str, skills: &str) -> Result<Content, ContentError> {
         let monsters: Vec<MonsterDef> = ron::from_str(monsters)?;
         let items: Vec<ItemDef> = ron::from_str(items)?;
-        let content = Content { monsters, items };
+        let skills: Vec<SkillDef> = ron::from_str(skills)?;
+        let content = Content {
+            monsters,
+            items,
+            skills,
+        };
+        for skill in Skill::ALL {
+            if !content.skills.iter().any(|d| d.skill == skill) {
+                return Err(ContentError::Missing(format!("{skill:?}")));
+            }
+        }
         for def in &content.items {
             if let ItemClass::Ranged { ammo, .. } = &def.class {
                 content
@@ -133,6 +147,13 @@ impl Content {
             }
         }
         Ok(content)
+    }
+
+    pub fn skill(&self, skill: Skill) -> &SkillDef {
+        self.skills
+            .iter()
+            .find(|d| d.skill == skill)
+            .expect("every skill is defined; checked when content loads")
     }
 
     pub fn item(&self, kind: ItemKindId) -> &ItemDef {
@@ -214,7 +235,7 @@ mod tests {
             description: "", class: Ranged(damage: (1, 2), accuracy: 0, range: 5, ammo: "nope"),
             weight: 1, depth: (1, 1), frequency: 1)]"#;
         assert!(matches!(
-            Content::parse("[]", items),
+            Content::parse("[]", items, SKILLS),
             Err(ContentError::Missing(_))
         ));
     }

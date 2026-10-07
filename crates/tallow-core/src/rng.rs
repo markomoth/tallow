@@ -20,6 +20,8 @@ pub enum Stream {
     Ai = 2,
     /// Per-run item secrets, like how strong each tincture is.
     Loot = 3,
+    /// Level-up drafts.
+    Boons = 4,
 }
 
 pub fn stream(seed: u64, stream: Stream) -> GameRng {
