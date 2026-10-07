@@ -94,6 +94,11 @@ impl Candle {
         self.tallow += tallow;
     }
 
+    /// Takes tallow off the candle without putting it out.
+    pub(crate) fn shed(&mut self, tallow: u32) {
+        self.tallow = self.tallow.saturating_sub(tallow);
+    }
+
     /// Takes tallow away (something ate it) and puts the flame out.
     pub(crate) fn eat(&mut self, tallow: u32) {
         self.tallow = self.tallow.saturating_sub(tallow);

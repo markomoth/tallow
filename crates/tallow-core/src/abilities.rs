@@ -254,6 +254,9 @@ impl World {
         }
         self.throne_death(kind, at, events);
         let last_of_kind = !self.floor.monsters().any(|(_, m)| m.kind == kind);
+        if def.boss && last_of_kind {
+            self.defeated.insert(kind);
+        }
         // The mini-bosses; Beelzebub's forms announce themselves.
         if def.boss && last_of_kind && def.boss_floor.is_some() {
             events.push(Event::BossDefeated { kind });
@@ -385,7 +388,7 @@ mod tests {
         let b = world.spawn_monster(kind("drowned_choir"), Point::new(8, 2));
         let mut events = Vec::new();
         world.damage_monster(a, 10, crate::progress::Source::Rite, &mut events);
-        assert_eq!(world.floor().monster(b).unwrap().health, 35);
+        assert_eq!(world.floor().monster(b).unwrap().health, 30);
         world.damage_monster(b, 99, crate::progress::Source::Rite, &mut events);
         assert!(world.floor().monster(a).is_none());
         assert!(events.contains(&Event::BossDefeated {

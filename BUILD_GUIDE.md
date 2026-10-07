@@ -439,9 +439,9 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `c` | Snuff / relight candle |
 | `C` | Shut the open doors beside you |
 | `R` | Rest until healed (or calm, by a brazier) |
-| `o` | Auto-explore |
+| `o` | Auto-explore (stops when anything new is in view; skips fire, deep water, rotten boards, seep rooms) |
 | `@` | Character sheet: skills, techniques, boons |
-| `J` | Journal |
+| `M` | Journal (`J` is taken by running south) |
 | `?` | Help |
 | `q` / Ctrl-C | Quit (saves the run once saves exist) |
 
@@ -457,6 +457,12 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 
 - Save on quit, resume on launch. Save is deleted when loaded (no save-scumming).
 - Every run has a seed shown on death/win screens. A seed can be passed on the command line to replay the same dungeon.
+
+**As built (M11):**
+- A save is the seed plus every command given (`save.ron`, RON). The core is deterministic, so loading replays the commands, log and all. This replaced the planned `postcard` world snapshot: nothing to keep in sync as the world grows. Bump `save::VERSION` whenever a change would make old saves replay differently.
+- Quitting (`q`, Ctrl-C) mid-run saves; launching without `--seed` resumes and deletes the save. Dead or won runs leave no save. Dev flags never read or write saves or the journal.
+- Files live in the platform data directory (`directories`), or `$TALLOW_HOME` if set.
+- **Journal** (`M`; `J` runs south): runs, deaths, wins, deepest floor; every creature met (marked if studied), every rite ever learned, every Leaving held, and 9 pages of the town's history unlocked by reaching each biome, killing each mini-boss and bringing the candle home. Lore only.
 
 ---
 
@@ -534,6 +540,8 @@ tallow/
 - Property tests on mapgen: every floor connected, stairs reachable, ≥1 tallow source.
 - `tallow-sim`: a dumb bot plays 1000 seeds; reports softlocks, average death floor, tallow starvation rate. Used for balance.
 
+**As built (M11):** `cargo run --release -p tallow-sim -- 500` plays whole runs (descent, Beelzebub, candle, ascent, altar) and reports where they end, softlocks (a run stuck on one floor for 5000 commands, or not over after 30 000) and, for the first 300 seeds, any floor whose way onward can't be reached without deep water or rotten boards. `SIM_TRACE=<seed>` prints the end of one run. Last result (500 seeds): 0 softlocks, 0 unreachable stairs, the bot wins 8% and its deaths cluster at the four bosses (floor 3 24%, 6 13%, 9 17%, 12 11%); it never casts rites or uses items, so human runs should go better. Fixes it drove: tallow you can't carry spills instead of pinning you overloaded; seep rooms never sit on the path to the stairs and hold nothing but their Leaving; deep water is drained if it would be the only way somewhere; the Lord of Flies heaves himself up between blows (an opening; still no unmarked attack).
+
 ---
 
 ## 13. Milestones
@@ -565,7 +573,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | M8 ✅ | Biomes & content | Descend all 12 floors through 4 biomes, beat 3 mini-bosses | 5–6 h |
 | M9 ✅ | Leavings | Throw a stone into a Seep room, find an anomaly, take a Leaving, survive its warning | 3–4 h |
 | M10 ✅ | Beelzebub & ascent | Beat 3 phases, take the candle, outrun the Following, win at the altar | 5–6 h |
-| M11 | Polish & balance | Save/quit/resume, Journal persists, help screen, sim shows ~0 softlocks | 4–6 h |
+| M11 ✅ | Polish & balance | Save/quit/resume, Journal persists, help screen, sim shows ~0 softlocks | 4–6 h |
 
 Total: roughly 40–55 hours of build + playtest time.
 

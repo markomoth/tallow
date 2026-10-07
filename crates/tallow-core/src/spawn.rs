@@ -261,6 +261,18 @@ pub fn fill_seep<R: Rng + ?Sized>(
     }
 }
 
+/// `at` if it is outside the room, else the nearest open floor outside it.
+pub fn outside_room(map: &Map, (a, b): (Point, Point), at: Point) -> Point {
+    let inside = |p: Point| p.x >= a.x - 1 && p.x <= b.x + 1 && p.y >= a.y - 1 && p.y <= b.y + 1;
+    if !inside(at) {
+        return at;
+    }
+    map.points()
+        .filter(|&p| map.tile(p) == Tile::Floor && !inside(p))
+        .min_by_key(|p| (p.distance_squared(at), p.y, p.x))
+        .unwrap_or(at)
+}
+
 /// Items lying about on a fresh floor.
 const ITEMS_PER_FLOOR: (u32, u32) = (3, 5);
 

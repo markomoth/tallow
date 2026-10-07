@@ -3,7 +3,19 @@
 use std::ops::Add;
 
 /// A tile coordinate. `x` grows right, `y` grows down.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
@@ -38,7 +50,7 @@ impl Add<Direction> for Point {
 }
 
 /// One of the eight compass directions a creature can step in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Direction {
     N,
     NE,

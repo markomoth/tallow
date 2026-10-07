@@ -277,3 +277,152 @@ pub fn draw_corpse(frame: &mut Frame, area: Rect, world: &World) {
     ];
     popup(frame, area, "A body", lines, 64);
 }
+
+/// Keys, and the few rules worth knowing before you go down.
+pub fn draw_help(frame: &mut Frame, area: Rect) {
+    let key = |k: &'static str, what: &'static str| {
+        Line::from(vec![
+            Span::styled(format!("{k:<14}"), Style::new().fg(palette::ACCENT)),
+            Span::styled(what, text()),
+        ])
+    };
+    let lines = vec![
+        key(
+            "hjkl yubn",
+            "move (arrows and numpad too); walk into things to fight, open, ring, light",
+        ),
+        key("HJKL…", "run until something happens"),
+        key("o", "explore until something new is in view"),
+        key(". R", "wait a turn · rest until healed"),
+        key(
+            "g i",
+            "pick up · pack (letters for items, numbers for Leavings)",
+        ),
+        key("t f", "throw · fire your sling or crossbow"),
+        key("s z", "study or render the body underfoot · cast a rite"),
+        key("c C", "snuff or light your candle · shut doors beside you"),
+        key("> <", "go down · go up (only with the Vigil Candle)"),
+        key("x @ M", "look · your sheet · the journal"),
+        key("q", "save and quit"),
+        Line::default(),
+        Line::styled("─ how it works ─", dim()),
+        Line::styled(
+            "Your candle is your light and your clock: it burns a turn of tallow each turn. Find tallow, render bodies, snuff it to save it.",
+            dim(),
+        ),
+        Line::styled(
+            "Dread rises in the dark and when you cast. It brings whispers, then phantoms, then a Manifestation that hunts you. Braziers calm it.",
+            dim(),
+        ),
+        Line::styled(
+            "Rites cost dread, and dread makes them stronger. Read pages and study bodies to learn them.",
+            dim(),
+        ),
+        Line::styled(
+            "Anything that can kill you is announced first: red tiles, a chant, a warning in the log. Look (x) shows real hit chances.",
+            dim(),
+        ),
+        Line::default(),
+        Line::styled("Esc: close", dim()),
+    ];
+    popup(frame, area, "Help", lines, 92);
+}
+
+/// The journal: what all your runs have taught you, this one included.
+pub fn draw_journal(frame: &mut Frame, area: Rect, app: &crate::app::App, page: Option<usize>) {
+    if let Some(page) = page.and_then(|i| crate::journal::PAGES.get(i)) {
+        let lines = vec![
+            Line::styled(page.title, text().add_modifier(Modifier::BOLD)),
+            Line::default(),
+            Line::styled(page.text, text()),
+            Line::default(),
+            Line::styled("Esc: back", dim()),
+        ];
+        popup(frame, area, "Journal", lines, 70);
+        return;
+    }
+    let world = app.world();
+    let mut journal = app.journal().clone();
+    journal.record(world);
+    let content = world.content();
+    let mut lines = vec![
+        Line::styled(
+            format!(
+                "Runs {} · deaths {} · candles brought home {} · deepest floor {}",
+                journal.runs, journal.deaths, journal.wins, journal.deepest
+            ),
+            text().add_modifier(Modifier::BOLD),
+        ),
+        Line::default(),
+        Line::styled("─ creatures met ─ (* studied)", dim()),
+    ];
+    let names: Vec<String> = journal
+        .creatures
+        .iter()
+        .filter_map(|(id, studied)| {
+            let kind = content.kind_by_id(id)?;
+            let name = &content.monster(kind).name;
+            Some(if *studied {
+                format!("{name}*")
+            } else {
+                name.clone()
+            })
+        })
+        .collect();
+    lines.push(Line::styled(
+        if names.is_empty() {
+            "None yet.".into()
+        } else {
+            names.join(", ")
+        },
+        text(),
+    ));
+    lines.push(Line::default());
+    lines.push(Line::styled("─ rites known in some life ─", dim()));
+    lines.push(Line::styled(
+        if journal.rites.is_empty() {
+            "None yet.".to_string()
+        } else {
+            journal.rites.iter().cloned().collect::<Vec<_>>().join(", ")
+        },
+        text(),
+    ));
+    lines.push(Line::default());
+    lines.push(Line::styled("─ Leavings held ─", dim()));
+    lines.push(Line::styled(
+        if journal.leavings.is_empty() {
+            "None yet.".to_string()
+        } else {
+            journal
+                .leavings
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        },
+        text(),
+    ));
+    lines.push(Line::default());
+    lines.push(Line::styled("─ pages of the town's history ─", dim()));
+    for (i, page) in crate::journal::PAGES
+        .iter()
+        .filter(|p| journal.pages.contains(p.id))
+        .enumerate()
+    {
+        lines.push(Line::from(vec![
+            Span::styled(format!("{}  ", i + 1), Style::new().fg(palette::ACCENT)),
+            Span::styled(page.title, text()),
+        ]));
+    }
+    let missing =
+        crate::journal::PAGES.len() - journal.pages.len().min(crate::journal::PAGES.len());
+    if missing > 0 {
+        lines.push(Line::styled(
+            format!("{missing} pages still missing. Go deeper."),
+            dim(),
+        ));
+    }
+    lines.push(Line::default());
+    lines.push(Line::styled("number: read a page · Esc: close", dim()));
+    popup(frame, area, "Journal", lines, 90);
+}

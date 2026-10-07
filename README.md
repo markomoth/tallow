@@ -29,9 +29,12 @@ cargo run --release -- --seed 42   # replay a specific dungeon
 | `s` | Study or render the body underfoot |
 | `z` | Cast a rite |
 | `@` | Character sheet |
+| `o` | Auto-explore |
+| `M` | Journal (what all your runs have taught you) |
+| `?` | Help |
 | `.` / `5` | Wait |
-| `q` | Quit |
+| `q` | Save and quit (the next launch picks up where you left off) |
 
 ## Status
 
-Early development. See [`BUILD_GUIDE.md`](BUILD_GUIDE.md) for the design and milestone plan.
+All milestones of the build guide are in: twelve floors down, Beelzebub, the ascent and the altar. See [`BUILD_GUIDE.md`](BUILD_GUIDE.md) for the design.

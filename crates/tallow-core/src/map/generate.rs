@@ -168,6 +168,15 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) ->
         }
     }
 
+    // Deep water must never be the only way somewhere: drain it if it is.
+    if map.find(Tile::DeepWater).next().is_some() && !dry_paths_everywhere(&map) {
+        for p in map.points() {
+            if map.tile(p) == Tile::DeepWater {
+                map.set(p, Tile::ShallowWater);
+            }
+        }
+    }
+
     let start_room = rng.random_range(0..rooms.len());
     let start = *rooms[start_room]
         .interior()
@@ -209,6 +218,7 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) ->
                     && (4..=10).contains(&r.w)
                     && (3..=7).contains(&r.h)
                     && r.interior().all(|p| map.tile(p) != Tile::StairsDown)
+                    && off_the_path(&map, r, start)
             })
             .map(|(_, r)| r)
             .collect();
@@ -351,6 +361,35 @@ fn add_shelves(map: &mut Map, room: &Room) {
         }
         y += 2;
     }
+}
+
+/// A seep room must never stand between you and the way on: with its floor
+/// walled off, every stair is still reachable from the start.
+fn off_the_path(map: &Map, room: &Room, start: Point) -> bool {
+    let mut without = map.clone();
+    for p in room.interior() {
+        without.set(p, Tile::Wall);
+    }
+    let dist = path::distances(&without, start);
+    map.points()
+        .filter(|&p| matches!(map.tile(p), Tile::StairsDown | Tile::StairsUp))
+        .all(|p| dist.at(p).is_some())
+}
+
+/// Every open tile can be reached from every other without wading deep water.
+fn dry_paths_everywhere(map: &Map) -> bool {
+    let mut dry = map.clone();
+    for p in map.points() {
+        if map.tile(p) == Tile::DeepWater {
+            dry.set(p, Tile::Wall);
+        }
+    }
+    let Some(from) = dry.points().find(|&p| dry.is_walkable(p)) else {
+        return true;
+    };
+    let dist = path::distances(&dry, from);
+    dry.points()
+        .all(|p| !dry.is_walkable(p) || dist.at(p).is_some())
 }
 
 /// Floods a room: shallow water, with a deep pool in the middle of big rooms.

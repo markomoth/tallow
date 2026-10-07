@@ -17,7 +17,9 @@ use crate::skills::{Skill, Technique};
 use crate::world::World;
 
 /// Index of a rite definition in [`crate::Content::rites`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, Deserialize,
+)]
 pub struct RiteId(pub u16);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]

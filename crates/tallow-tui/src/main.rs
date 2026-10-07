@@ -2,9 +2,11 @@
 
 mod app;
 mod input;
+mod journal;
 mod log;
 mod names;
 mod render;
+mod save;
 
 use std::hash::{BuildHasher, RandomState};
 use std::time::{Duration, Instant};
@@ -44,7 +46,30 @@ fn main() -> Result<()> {
 }
 
 fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<()> {
-    let mut app = App::new(seed);
+    let dev = options.dev_depth.is_some()
+        || options.dev_rites
+        || options.dev_kit
+        || options.dev_level.is_some()
+        || options.dev_near_stairs
+        || options.dev_ascent.is_some();
+    // Dev runs and replays of a chosen seed don't touch your save or journal.
+    let home = if dev { None } else { save::home() };
+    let save_path = home.as_ref().map(|h| h.join("save.ron"));
+    let journal_path = home.as_ref().map(|h| h.join("journal.ron"));
+    let mut journal = journal_path
+        .as_deref()
+        .map(journal::Journal::load)
+        .unwrap_or_default();
+    let resumed = match (&save_path, options.seed) {
+        (Some(path), None) => save::Save::take(path),
+        _ => None,
+    };
+    let mut app = match &resumed {
+        Some(save) => App::resume(save),
+        None => App::new(seed),
+    };
+    app.set_journal(journal.clone());
+    let mut recorded = false;
     if let Some(depth) = options.dev_depth {
         app.world_mut().dev_skip_to(depth);
     }
@@ -74,6 +99,17 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
     while !app.should_quit() {
         if app.wants_restart() {
             app = App::new(random_seed());
+            app.set_journal(journal.clone());
+            recorded = false;
+        }
+        // A finished run goes into the journal once.
+        if app.is_over() && !recorded {
+            recorded = true;
+            journal.end_run(app.world());
+            if let Some(path) = &journal_path {
+                journal.save(path).ok();
+            }
+            app.set_journal(journal.clone());
         }
         let time = started.elapsed().as_secs_f32();
         terminal.draw(|frame| render::draw(frame, &app, time))?;
@@ -83,6 +119,19 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         {
             app.handle_key(key);
         }
+    }
+    // Quitting mid-run saves it; what you learned goes into the journal either way.
+    if !app.is_over() {
+        journal.record(app.world());
+        if let Some(path) = &save_path {
+            app.save().write(path)?;
+        }
+    }
+    if let Some(path) = &journal_path {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).ok();
+        }
+        journal.save(path).ok();
     }
     Ok(())
 }

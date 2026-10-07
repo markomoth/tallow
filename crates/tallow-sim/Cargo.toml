@@ -1,0 +1,16 @@
+[package]
+name = "tallow-sim"
+description = "Headless bot for Tallow: plays many seeds, reports softlocks and where runs end."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "tallow-sim"
+path = "src/main.rs"
+
+[dependencies]
+tallow-core.workspace = true
+
+[lints]
+workspace = true

@@ -140,11 +140,11 @@ impl World {
             let here = self.player.pos;
             self.floor.corpses.retain(|c| c.at != here);
             let tallow = render_yield(self.content.monster(corpse.kind).health);
-            self.player.candle.add(tallow);
             events.push(Event::Rendered {
                 kind: corpse.kind,
                 tallow,
             });
+            self.gain_tallow(tallow, &mut events);
         }
         events
     }

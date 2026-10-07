@@ -16,7 +16,9 @@ use crate::monster::{Mind, MonsterId};
 use crate::world::World;
 
 /// Index into the run's register of Leavings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, Deserialize,
+)]
 pub struct LeavingId(pub u32);
 
 /// What wakes a Leaving.
@@ -340,6 +342,9 @@ impl World {
             let first = !self.stats.took_leaving;
             self.stats.took_leaving = true;
             self.player.leavings.push(id);
+            if !self.leavings_taken.contains(&id) {
+                self.leavings_taken.push(id);
+            }
             events.push(Event::LeavingTaken { id, first });
         }
     }
@@ -570,7 +575,7 @@ impl World {
                 self.player.health = (self.player.health + amount).min(self.player.max_health);
             }
             Marvel::Calm { amount } => self.shift_dread(-(amount as i32) * 100, events),
-            Marvel::Kindle { amount } => self.player.candle.add(amount),
+            Marvel::Kindle { amount } => self.gain_tallow(amount, events),
             Marvel::Blink => {
                 let dist = path::distances(self.map(), here);
                 let spots: Vec<Point> = self

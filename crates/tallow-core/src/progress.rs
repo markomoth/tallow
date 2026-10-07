@@ -180,7 +180,7 @@ impl World {
                     self.player.health = (self.player.health + n).min(self.player.max_health);
                 }
                 Reward::EaseDread(n) => self.shift_dread(-(n as i32) * 100, events),
-                Reward::Tallow(n) => self.player.candle.add(n),
+                Reward::Tallow(n) => self.gain_tallow(n, events),
                 Reward::LoseTrail => self.lose_nearest_trail(),
             }
         }

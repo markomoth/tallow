@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/tallow-core", "crates/tallow-tui"]
+members = ["crates/tallow-core", "crates/tallow-tui", "crates/tallow-sim"]
 default-members = ["crates/tallow-tui"]
 
 [workspace.package]
@@ -17,6 +17,7 @@ serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 slotmap = "1"
 anyhow = "1"
+directories = "6"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

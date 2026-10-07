@@ -13,7 +13,8 @@ cargo clippy --workspace --all-targets     # must be warning-free
 cargo fmt --all                            # format before committing
 cargo run -p tallow-core --example floor -- <seed> <depth>   # print a generated floor as ASCII
 cargo run -- --seed 7                      # replay a specific dungeon
-cargo run --release -p tallow-core --example bot -- 300   # balance smoke test: where a dumb bot dies
+cargo run --release -p tallow-sim -- 500   # whole-run bot: softlocks, unreachable stairs, where runs end
+SIM_TRACE=17 cargo run --release -p tallow-sim   # the last commands of one seed's run
 cargo run -p tallow-core --example route -- <seed> <depth> <x> <y> <stop>   # vi keys from the arrival stair to within <stop> of a tile
 cargo run -- --seed 54 --dev-depth 4 --dev-rites --dev-kit   # testing aids: start deeper, know every rite, flasks + handbell
 cargo run -- --seed 261 --dev-depth 3 --dev-level 6 --dev-near-stairs   # stand near a floor's boss, levelled up
@@ -24,12 +25,13 @@ SHOW_SCREEN=1 cargo test -p tallow-tui -- --nocapture   # print rendered test sc
 ## Layout
 
 - `crates/tallow-core` — pure game logic. `World::apply(Command) -> Vec<Event>`.
-- `crates/tallow-tui` — the `tallow` binary: ratatui rendering, key bindings, message log.
+- `crates/tallow-tui` — the `tallow` binary: ratatui rendering, key bindings, message log, saves (`save.rs`, a seed and the commands given) and the journal (`journal.rs`).
+- `crates/tallow-sim` — the headless bot (`tallow-sim`).
 - `assets/` — RON content embedded with `include_str!` (`monsters.ron`, `items.ron`, `skills.ron`, `rites.ron`, `leavings.ron`). Loaded and cross-checked by `content.rs`.
 
-Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor and per-system seeded streams), `monster.rs` + `ai.rs` (monsters and their decisions), `combat.rs`, `time.rs` (energy scheduler), `spawn.rs`, `candle.rs`, `dread.rs`, `nightmare.rs` (per-turn candle/dread, whispers, phantoms, Manifestation). `item.rs` (item types, burden, tincture lore) + `inventory.rs` (pack, equipment, drinking, throwing, firing, projectile paths). `skills.rs` (skill defs, ranks, techniques), `boons.rs` (boon types, weighted draft), `progress.rs` (training, Insight, levels, boon triggers). `rites.rs` (rite defs, potency and cost, casting, rite timers) + `corpse.rs` (bodies: study, render, rot, reading texts). Thralls, foes, faction aggression, holy ground and the False Flame live in `ai.rs`. `environment.rs` (fire, oil, noise and bells, doors, braziers, faction hostility). `leavings.rs` (Leavings: rules, generation, waking and prices; seep-room anomalies and probing). `throne.rs` (the throne room, Beelzebub's three phases, the Vigil Candle, the ascent and the Following, the church and victory). `abilities.rs` (creature tricks: chants, songs, drags, bursts, summoning, raising bodies, the Provost's locks, choruses).
+Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor and per-system seeded streams), `monster.rs` + `ai.rs` (monsters and their decisions), `combat.rs`, `time.rs` (energy scheduler), `spawn.rs`, `candle.rs`, `dread.rs`, `nightmare.rs` (per-turn candle/dread, whispers, phantoms, Manifestation). `item.rs` (item types, burden, tincture lore) + `inventory.rs` (pack, equipment, drinking, throwing, firing, projectile paths). `skills.rs` (skill defs, ranks, techniques), `boons.rs` (boon types, weighted draft), `progress.rs` (training, Insight, levels, boon triggers). `rites.rs` (rite defs, potency and cost, casting, rite timers) + `corpse.rs` (bodies: study, render, rot, reading texts). Thralls, foes, faction aggression, holy ground and the False Flame live in `ai.rs`. `environment.rs` (fire, oil, noise and bells, doors, braziers, faction hostility). `leavings.rs` (Leavings: rules, generation, waking and prices; seep-room anomalies and probing). `explore.rs` (auto-explore). `throne.rs` (the throne room, Beelzebub's three phases, the Vigil Candle, the ascent and the Following, the church and victory). `abilities.rs` (creature tricks: chants, songs, drags, bursts, summoning, raising bodies, the Provost's locks, choruses).
 
-Frontend: `app.rs` (modes: play, look, pack, target, draft, sheet, corpse, rites, leaving, dead, won), `log.rs` (`narrate`), `names.rs` (item names reflecting what's been learned), `render/` (`map`, `hud`, `pack`, `sheet` for the `@` sheet, level-up draft, rite list and corpse prompt, `palette`).
+Frontend: `app.rs` (modes: play, look, pack, target, draft, sheet, corpse, rites, leaving, help, journal, dead, won), `log.rs` (`narrate`), `names.rs` (item names reflecting what's been learned), `render/` (`map`, `hud`, `pack`, `sheet` for the `@` sheet, level-up draft, rite list and corpse prompt, `palette`).
 
 ## Rules for the code
 

@@ -4,7 +4,7 @@ use crate::geom::{Direction, Point};
 use crate::item::ItemId;
 
 /// A request from the player. The world decides what actually happens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Command {
     /// Step one tile. Later this also bumps to attack and opens doors.
     Move(Direction),
@@ -39,6 +39,8 @@ pub enum Command {
     ChooseBoon(usize),
     /// Shut the open doors beside you.
     CloseDoor,
+    /// Walk toward unknown ground until something new is in view.
+    Explore,
     /// Study the body underfoot.
     Study,
     /// Render the body underfoot into tallow.

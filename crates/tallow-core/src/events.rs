@@ -593,4 +593,14 @@ pub enum Event {
     /// The way down is behind you now. Costs no time.
     NoGoingBack,
     Won,
+    /// Auto-explore found nothing left to see. Costs no time.
+    Explored,
+    /// A creature that sweeps heaves itself up after a blow: an opening.
+    Recovering {
+        kind: KindId,
+    },
+    /// You couldn't carry it all: this much tallow spilled at your feet.
+    TallowSpilled {
+        amount: u32,
+    },
 }

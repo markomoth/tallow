@@ -162,6 +162,8 @@ pub struct World {
     /// The turn the Following comes up onto this ascent floor.
     pub(crate) following_at: Option<u64>,
     pub(crate) victory: Option<crate::throne::Victory>,
+    pub(crate) defeated: HashSet<KindId>,
+    pub(crate) leavings_taken: Vec<crate::leavings::LeavingId>,
 }
 
 impl World {
@@ -234,6 +236,8 @@ impl World {
             ascent: 0,
             following_at: None,
             victory: None,
+            defeated: HashSet::new(),
+            leavings_taken: Vec::new(),
         };
         // The acolyte comes down with what was at hand.
         for (id, equip) in [
@@ -306,6 +310,17 @@ impl World {
         let seep = layout.seep.map(|room| {
             spawn::fill_seep(&mut rng, content, &layout.map, room, layout.start, depth)
         });
+        // Nothing worth having lies inside a seep room but its Leaving.
+        let outside = |at: Point| match layout.seep {
+            Some(room) => spawn::outside_room(&layout.map, room, at),
+            None => at,
+        };
+        let tallow: Vec<(Point, u32)> =
+            tallow.into_iter().map(|(at, n)| (outside(at), n)).collect();
+        let items: Vec<_> = items
+            .into_iter()
+            .map(|(at, k, n)| (outside(at), k, n))
+            .collect();
         let mut floor = Floor::new(layout.map, layout.start);
         if let Some(seep) = seep {
             floor.seep = layout.seep;
@@ -582,6 +597,7 @@ impl World {
             Command::ChooseBoon(index) => self.choose_boon(index),
             Command::Study => self.study(),
             Command::CloseDoor => self.close_doors(),
+            Command::Explore => self.explore(),
             Command::UseLeaving(id) => self.use_leaving(id),
             Command::DropLeaving(id) => self.drop_leaving(id),
             Command::Render => self.render(),
@@ -591,7 +607,7 @@ impl World {
     }
 
     /// Steps into `dir`, attacking whatever stands there.
-    fn player_step(&mut self, dir: Direction) -> Vec<Event> {
+    pub(crate) fn player_step(&mut self, dir: Direction) -> Vec<Event> {
         let target = self.player.pos + dir;
         let mut events = Vec::new();
         let mut cost = ACTION_COST;
@@ -673,8 +689,8 @@ impl World {
                 } else {
                     found.amount
                 };
-                self.player.candle.add(amount);
                 events.push(Event::TallowFound { amount });
+                self.gain_tallow(amount, &mut events);
             }
         }
         self.pass_time_costing(cost, &mut events);
@@ -873,8 +889,24 @@ impl World {
         }
     }
 
-    pub(crate) fn sighted_kinds(&self) -> impl Iterator<Item = KindId> + '_ {
+    /// Kinds of creature you have seen this run.
+    pub fn sighted_kinds(&self) -> impl Iterator<Item = KindId> + '_ {
         self.sighted.iter().copied()
+    }
+
+    /// Kinds whose bodies you've studied this run.
+    pub fn studied_kinds(&self) -> impl Iterator<Item = KindId> + '_ {
+        self.studied.iter().copied()
+    }
+
+    /// The great ones you have put down this run.
+    pub fn defeated(&self) -> impl Iterator<Item = KindId> + '_ {
+        self.defeated.iter().copied()
+    }
+
+    /// Every Leaving you have held this run.
+    pub fn leavings_taken(&self) -> &[crate::leavings::LeavingId] {
+        &self.leavings_taken
     }
 
     pub(crate) fn witness(&mut self, kind: KindId, t: Trait) {
@@ -1108,6 +1140,29 @@ impl World {
             .and_then(|(id, _, radius)| Some((self.floor.monsters.get(id)?.pos, radius)));
         self.floor
             .update_view(self.player.pos, candle, feel, borrowed)
+    }
+
+    /// Adds tallow to your candle. What you can't carry without being stuck
+    /// spills at your feet, so tallow alone can never pin you in place.
+    pub(crate) fn gain_tallow(&mut self, amount: u32, events: &mut Vec<Event>) {
+        self.player.candle.add(amount);
+        let (_, max) = self.load_limits();
+        let load = self.load();
+        if load <= max {
+            return;
+        }
+        let excess = (load - max) * crate::item::TALLOW_PER_TENTH;
+        let spill = excess.min(amount).min(self.player.candle.tallow());
+        if spill == 0 {
+            return;
+        }
+        self.player.candle.shed(spill);
+        let here = self.player.pos;
+        match self.floor.tallow.iter_mut().find(|t| t.at == here) {
+            Some(pile) => pile.amount += spill,
+            None => self.floor.tallow.push(Tallow::seen(here, spill)),
+        }
+        events.push(Event::TallowSpilled { amount: spill });
     }
 
     /// Creatures in view that aren't your thralls, nearest first.

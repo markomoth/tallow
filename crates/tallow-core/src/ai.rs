@@ -280,6 +280,12 @@ impl World {
                             target: player,
                         });
                         self.witness(kind, *heavy);
+                    } else if def.has(|t| *t == Trait::Sweeps) {
+                        // Every blow it strikes is marked first; between them it
+                        // heaves itself up, and that is your opening.
+                        if self.floor.is_visible(m.pos) {
+                            events.push(Event::Recovering { kind });
+                        }
                     } else {
                         self.monster_attack(id, events);
                     }

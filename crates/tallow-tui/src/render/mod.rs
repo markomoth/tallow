@@ -44,6 +44,8 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
         Mode::Play
         | Mode::Dead
         | Mode::Won
+        | Mode::Help
+        | Mode::Journal(_)
         | Mode::Pack { .. }
         | Mode::Draft
         | Mode::Sheet
@@ -60,6 +62,8 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
     match app.mode() {
         Mode::Dead => draw_death(frame, map_area, app),
         Mode::Won => draw_victory(frame, map_area, app),
+        Mode::Help => sheet::draw_help(frame, map_area),
+        Mode::Journal(page) => sheet::draw_journal(frame, map_area, app, page),
         Mode::Pack { purpose, selected } => {
             pack::draw(frame, map_area, app.world(), purpose, selected)
         }

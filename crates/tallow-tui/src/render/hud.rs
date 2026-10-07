@@ -173,6 +173,8 @@ impl Widget for Hud<'_> {
             Mode::Play
             | Mode::Dead
             | Mode::Won
+            | Mode::Help
+            | Mode::Journal(_)
             | Mode::Pack { .. }
             | Mode::Draft
             | Mode::Sheet
@@ -323,17 +325,16 @@ fn keys() -> Vec<Line<'static>> {
         ])
     };
     vec![
-        Line::styled("─ keys ─", dim()),
+        Line::styled("─ keys ─ (? for all)", dim()),
         key("hjkl yubn", "move"),
-        key("HJKL", "run"),
+        key("HJKL o", "run, explore"),
         key(". R", "wait, rest"),
         key("g i", "take, pack"),
         key("t f", "throw, fire"),
         key("s z", "study, rites"),
-        key("c >", "candle, down"),
-        key("C", "shut doors"),
-        key("x @", "look, self"),
-        key("q", "quit"),
+        key("c C >", "light,doors,go"),
+        key("x @ M", "look,self,notes"),
+        key("q", "save and quit"),
     ]
 }
 

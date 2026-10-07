@@ -828,6 +828,15 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             Danger,
         ),
         Event::AltarEmpty => ("You have nothing to set on the altar.".into(), Normal),
+        Event::Recovering { kind } => (
+            format!("The {} heaves itself up, open. Strike now.", name(kind)),
+            Normal,
+        ),
+        Event::TallowSpilled { amount } => (
+            format!("You can't carry any more; {amount} tallow spills at your feet."),
+            Normal,
+        ),
+        Event::Explored => ("There is nothing more here you can reach safely.".into(), Normal),
         Event::NoGoingBack => ("Down is behind you now. The way is up.".into(), Normal),
         Event::Won => (
             "You set the Vigil Candle on the altar. Its light fills the church.".into(),

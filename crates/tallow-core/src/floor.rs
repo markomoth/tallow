@@ -98,6 +98,15 @@ impl Tallow {
             seen: false,
         }
     }
+
+    /// Tallow you put down yourself.
+    pub fn seen(at: Point, amount: u32) -> Self {
+        Self {
+            at,
+            amount,
+            seen: true,
+        }
+    }
 }
 
 impl Floor {

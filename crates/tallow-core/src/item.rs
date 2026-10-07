@@ -7,7 +7,9 @@ use serde::Deserialize;
 pub struct ItemKindId(pub u16);
 
 /// One particular item or stack, unique for the run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, Deserialize,
+)]
 pub struct ItemId(pub u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

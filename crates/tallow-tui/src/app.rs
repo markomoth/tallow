@@ -5,7 +5,9 @@ use tallow_core::inventory::THROW_RANGE;
 use tallow_core::{Command, Event, ItemId, MonsterId, Point, RiteId, RiteTarget, World};
 
 use crate::input::{Action, map_key};
+use crate::journal::Journal;
 use crate::log::{MessageLog, Tone, narrate};
+use crate::save::Save;
 
 /// How far a Shift+direction moves a cursor.
 const CURSOR_JUMP: i32 = 5;
@@ -58,6 +60,10 @@ pub enum Mode {
     Dead,
     /// The candle is home.
     Won,
+    /// Keys and how the game works.
+    Help,
+    /// What you've learned across all your runs; one history page may be open.
+    Journal(Option<usize>),
 }
 
 pub struct App {
@@ -66,6 +72,9 @@ pub struct App {
     mode: Mode,
     quit: bool,
     restart: bool,
+    /// Every command given, for the save.
+    commands: Vec<Command>,
+    journal: Journal,
 }
 
 impl App {
@@ -85,7 +94,44 @@ impl App {
             mode: Mode::Play,
             quit: false,
             restart: false,
+            commands: Vec::new(),
+            journal: Journal::default(),
         }
+    }
+
+    /// Picks a saved run back up by replaying it.
+    pub fn resume(save: &Save) -> Self {
+        let mut app = App::new(save.seed);
+        for &command in &save.commands {
+            app.play(command);
+        }
+        app.log.push(
+            "You wake where you left off. The candle is still burning.",
+            Tone::Normal,
+        );
+        app
+    }
+
+    /// The run so far, as a save.
+    pub fn save(&self) -> Save {
+        Save {
+            version: crate::save::VERSION,
+            seed: self.world.seed(),
+            commands: self.commands.clone(),
+        }
+    }
+
+    pub fn journal(&self) -> &Journal {
+        &self.journal
+    }
+
+    pub fn set_journal(&mut self, journal: Journal) {
+        self.journal = journal;
+    }
+
+    /// The run has ended in death or victory.
+    pub fn is_over(&self) -> bool {
+        self.world.death().is_some() || self.world.victory().is_some()
     }
 
     pub fn world(&self) -> &World {
@@ -143,6 +189,27 @@ impl App {
                 _ => {}
             },
             Mode::Rites => self.handle_rites_key(key),
+            Mode::Journal(open) => match key.code {
+                KeyCode::Char(c @ '1'..='9') => {
+                    let mut journal = self.journal.clone();
+                    journal.record(&self.world);
+                    let found: Vec<usize> = crate::journal::PAGES
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, p)| journal.pages.contains(p.id))
+                        .map(|(i, _)| i)
+                        .collect();
+                    if let Some(&page) = found.get(c as usize - '1' as usize) {
+                        self.mode = Mode::Journal(Some(page));
+                    }
+                }
+                KeyCode::Esc if open.is_some() => self.mode = Mode::Journal(None),
+                _ => {
+                    if let Some(action) = map_key(key) {
+                        self.handle(action);
+                    }
+                }
+            },
             Mode::Leaving(id) => match key.code {
                 KeyCode::Char('a') => {
                     self.mode = Mode::Play;
@@ -183,10 +250,15 @@ impl App {
             }
             Mode::Target { aim, cursor } => self.handle_target(action, aim, cursor),
             Mode::Pack { .. } | Mode::Draft | Mode::Corpse | Mode::Rites | Mode::Leaving(_) => {}
-            Mode::Sheet => {
+            Mode::Sheet | Mode::Help | Mode::Journal(_) => {
                 if matches!(
                     action,
-                    Action::Cancel | Action::Sheet | Action::Quit | Action::Confirm
+                    Action::Cancel
+                        | Action::Sheet
+                        | Action::Quit
+                        | Action::Confirm
+                        | Action::Help
+                        | Action::Journal
                 ) {
                     self.mode = Mode::Play;
                 }
@@ -210,6 +282,15 @@ impl App {
             Action::Rest => Command::Rest,
             Action::PickUp => Command::PickUp,
             Action::CloseDoor => Command::CloseDoor,
+            Action::Explore => Command::Explore,
+            Action::Help => {
+                self.mode = Mode::Help;
+                return;
+            }
+            Action::Journal => {
+                self.mode = Mode::Journal(None);
+                return;
+            }
             Action::Pack => {
                 self.mode = Mode::Pack {
                     purpose: PackPurpose::Browse,
@@ -398,6 +479,7 @@ impl App {
 
     /// Applies a command and writes what happened to the log.
     fn play(&mut self, command: Command) {
+        self.commands.push(command);
         for event in self.world.apply(command) {
             if let Some((text, tone)) = narrate(&event, &self.world) {
                 self.log.push(text, tone);
@@ -631,6 +713,25 @@ mod tests {
         app.handle(Action::Study);
         assert_eq!(app.mode(), Mode::Play);
         assert!(app.log().entries().last().unwrap().text.contains("no body"));
+    }
+
+    #[test]
+    fn a_saved_run_resumes_exactly() {
+        let mut app = App::new(9);
+        for _ in 0..30 {
+            app.handle(Action::Explore);
+            app.handle(Action::Move(Direction::E));
+            if app.mode() == Mode::Draft {
+                app.handle_key(key('1'));
+            }
+        }
+        let save = app.save();
+        assert!(!save.commands.is_empty());
+        let resumed = App::resume(&save);
+        assert_eq!(resumed.world().turn(), app.world().turn());
+        assert_eq!(resumed.world().player().pos, app.world().player().pos);
+        assert_eq!(resumed.world().player().health, app.world().player().health);
+        assert_eq!(resumed.save(), save);
     }
 
     #[test]
