@@ -41,8 +41,6 @@ const CHURCH: [&str; 24] = [
 
 /// The first graveyard row.
 const GROUND: usize = 22;
-/// Rows under the art: title, line, gap, two choices, hint.
-const MENU_HEIGHT: u16 = 6;
 
 const STONE: Rgb = [112, 104, 98];
 const GLASS: Rgb = [255, 172, 72];
@@ -55,27 +53,6 @@ const MIST: Rgb = [78, 86, 104];
 const GRAVE: Rgb = [92, 88, 86];
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, choice: TitleChoice, time: f32) {
-    // The art and menu fit 30 rows exactly; taller terminals get a gap
-    // between them, and a short one loses sky first, never the menu.
-    let art = CHURCH.len() as u16;
-    let gap = u16::from(area.height > art + MENU_HEIGHT);
-    let wanted = art + gap + MENU_HEIGHT;
-    let skip = usize::from(wanted.saturating_sub(area.height));
-    let height = wanted - skip as u16;
-    let top = area.y + area.height.saturating_sub(height) / 2;
-    let width = CHURCH.iter().map(|l| l.chars().count()).max().unwrap_or(0) as u16;
-    let left = area.x + area.width.saturating_sub(width) / 2;
-
-    let buf = frame.buffer_mut();
-    for (row, line) in CHURCH.iter().enumerate().skip(skip) {
-        let y = top + (row - skip) as u16;
-        for (col, ch) in line.chars().enumerate() {
-            if ch != ' ' {
-                paint(buf, left + col as u16, y, row, col, ch, time);
-            }
-        }
-    }
-
     let label = if app.resumed() {
         let world = app.world();
         format!(
@@ -99,7 +76,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, choice: TitleChoice, time:
         };
         Line::styled(format!("{marker}{key}  {text:<34}"), style)
     };
-    let lines = vec![
+    let mut lines = vec![
         Line::styled(
             "T A L L O W",
             Style::new()
@@ -112,17 +89,43 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, choice: TitleChoice, time:
         ),
         Line::default(),
         item("p", label, choice == TitleChoice::Play),
+        item("M", "Journal".into(), choice == TitleChoice::Journal),
         item("q", "Quit".into(), choice == TitleChoice::Quit),
         Line::styled(
             "↑↓ choose · Enter confirm",
             Style::new().fg(palette::BORDER),
         ),
     ];
+    // The art and menu fit 30 rows exactly. A taller terminal gets a gap
+    // between them; a shorter one loses the key hint, then sky, never a choice.
+    let art = CHURCH.len() as u16;
+    if area.height < art + lines.len() as u16 {
+        lines.pop();
+    }
+    let menu_height = lines.len() as u16;
+    let gap = u16::from(area.height > art + menu_height);
+    let wanted = art + gap + menu_height;
+    let skip = usize::from(wanted.saturating_sub(area.height));
+    let height = wanted - skip as u16;
+    let top = area.y + area.height.saturating_sub(height) / 2;
+    let width = CHURCH.iter().map(|l| l.chars().count()).max().unwrap_or(0) as u16;
+    let left = area.x + area.width.saturating_sub(width) / 2;
+
+    let buf = frame.buffer_mut();
+    for (row, line) in CHURCH.iter().enumerate().skip(skip) {
+        let y = top + (row - skip) as u16;
+        for (col, ch) in line.chars().enumerate() {
+            if ch != ' ' {
+                paint(buf, left + col as u16, y, row, col, ch, time);
+            }
+        }
+    }
+
     let menu = Rect::new(
         area.x,
         top + (CHURCH.len() - skip) as u16 + gap,
         area.width,
-        MENU_HEIGHT,
+        menu_height,
     )
     .intersection(area);
     frame.render_widget(Paragraph::new(lines).centered(), menu);

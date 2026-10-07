@@ -45,9 +45,14 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
         return;
     }
 
-    if let Mode::Title(choice) = app.mode() {
-        title::draw(frame, area, app, choice, time);
-        return;
+    match app.mode() {
+        Mode::Title(choice) => return title::draw(frame, area, app, choice, time),
+        // The journal opened from the start menu sits over the church.
+        Mode::Journal(page) if app.on_title() => {
+            title::draw(frame, area, app, crate::app::TitleChoice::Journal, time);
+            return sheet::draw_journal(frame, area, app, page);
+        }
+        _ => {}
     }
 
     let [top, log_area] =

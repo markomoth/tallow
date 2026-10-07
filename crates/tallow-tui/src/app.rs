@@ -72,7 +72,20 @@ pub enum Mode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TitleChoice {
     Play,
+    Journal,
     Quit,
+}
+
+impl TitleChoice {
+    /// In menu order.
+    pub const ALL: [TitleChoice; 3] = [TitleChoice::Play, TitleChoice::Journal, TitleChoice::Quit];
+
+    /// The next choice up or down, wrapping around.
+    fn step(self, down: bool) -> Self {
+        let i = Self::ALL.iter().position(|&c| c == self).unwrap_or(0);
+        let n = Self::ALL.len();
+        Self::ALL[if down { (i + 1) % n } else { (i + n - 1) % n }]
+    }
 }
 
 pub struct App {
@@ -88,6 +101,8 @@ pub struct App {
     simple: bool,
     /// Picked up from a save rather than begun fresh.
     resumed: bool,
+    /// The start menu is still up, under whatever screen it opened.
+    on_title: bool,
 }
 
 impl App {
@@ -111,6 +126,7 @@ impl App {
             journal: Journal::default(),
             simple: false,
             resumed: false,
+            on_title: false,
         }
     }
 
@@ -131,6 +147,12 @@ impl App {
     /// Opens on the start menu instead of dropping straight into the run.
     pub fn show_title(&mut self) {
         self.mode = Mode::Title(TitleChoice::Play);
+        self.on_title = true;
+    }
+
+    /// The start menu is up, perhaps under the journal.
+    pub fn on_title(&self) -> bool {
+        self.on_title
     }
 
     /// Picked up from a save, so the menu offers to continue.
@@ -305,7 +327,11 @@ impl App {
                         | Action::Help
                         | Action::Journal
                 ) {
-                    self.mode = Mode::Play;
+                    self.mode = if self.on_title {
+                        Mode::Title(TitleChoice::Journal)
+                    } else {
+                        Mode::Play
+                    };
                 }
             }
             Mode::Dead | Mode::Won => match action {
@@ -427,23 +453,26 @@ impl App {
         }
     }
 
-    /// Up and down move between the choices; Enter takes one. `p` plays, `q` quits.
+    /// Up and down move between the choices; Enter takes one. `p` plays,
+    /// `M` opens the journal, `q` quits.
     fn handle_title_key(&mut self, key: KeyEvent, choice: TitleChoice) {
         let chosen = match (key.code, map_key(key)) {
             (KeyCode::Char('p'), _) => TitleChoice::Play,
+            (_, Some(Action::Journal)) => TitleChoice::Journal,
             (_, Some(Action::Quit | Action::Cancel)) => TitleChoice::Quit,
             (_, Some(Action::Confirm)) => choice,
-            (_, Some(Action::Move(Direction::N | Direction::S))) => {
-                self.mode = Mode::Title(match choice {
-                    TitleChoice::Play => TitleChoice::Quit,
-                    TitleChoice::Quit => TitleChoice::Play,
-                });
+            (_, Some(Action::Move(dir @ (Direction::N | Direction::S)))) => {
+                self.mode = Mode::Title(choice.step(dir == Direction::S));
                 return;
             }
             _ => return,
         };
         match chosen {
-            TitleChoice::Play => self.mode = Mode::Play,
+            TitleChoice::Play => {
+                self.on_title = false;
+                self.mode = Mode::Play;
+            }
+            TitleChoice::Journal => self.mode = Mode::Journal(None),
             TitleChoice::Quit => self.quit = true,
         }
     }
@@ -836,12 +865,30 @@ mod tests {
         let mut app = App::new(3);
         app.show_title();
         assert_eq!(app.mode(), Mode::Title(TitleChoice::Play));
-        app.handle_key(key('j'));
-        assert_eq!(app.mode(), Mode::Title(TitleChoice::Quit));
         app.handle_key(key('k'));
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode(), Mode::Title(TitleChoice::Quit), "wraps around");
+        app.handle_key(key('j'));
+        app.handle_key(key('j'));
+        assert_eq!(app.mode(), Mode::Title(TitleChoice::Journal));
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        app.handle_key(enter);
+        assert_eq!(app.mode(), Mode::Journal(None));
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(
+            app.mode(),
+            Mode::Title(TitleChoice::Journal),
+            "the journal closes back to the menu"
+        );
+        app.handle_key(key('p'));
         assert_eq!(app.mode(), Mode::Play);
         assert!(!app.started(), "the menu gives no commands");
+        app.handle(Action::Journal);
+        app.handle(Action::Cancel);
+        assert_eq!(
+            app.mode(),
+            Mode::Play,
+            "in a run, the journal closes to play"
+        );
 
         let mut app = App::new(3);
         app.show_title();
