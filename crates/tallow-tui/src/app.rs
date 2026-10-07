@@ -2,7 +2,7 @@
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use tallow_core::inventory::THROW_RANGE;
-use tallow_core::{Command, Event, ItemId, MonsterId, Point, World};
+use tallow_core::{Command, Event, ItemId, MonsterId, Point, RiteId, RiteTarget, World};
 
 use crate::input::{Action, map_key};
 use crate::log::{MessageLog, Tone, narrate};
@@ -24,6 +24,7 @@ pub enum PackPurpose {
 pub enum Aim {
     Throw(ItemId),
     Fire,
+    Rite(RiteId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +48,10 @@ pub enum Mode {
     Draft,
     /// The character sheet.
     Sheet,
+    /// Standing on a body: study it or render it?
+    Corpse,
+    /// Choosing a rite to cast.
+    Rites,
     /// The run is over; waiting for "again" or "quit".
     Dead,
 }
@@ -103,6 +108,9 @@ impl App {
     /// The tiles a projectile would cross, while aiming.
     pub fn aim_path(&self) -> Vec<Point> {
         match self.mode {
+            Mode::Target {
+                aim: Aim::Rite(_), ..
+            } => Vec::new(),
             Mode::Target { aim, cursor } => self.world.aim(cursor, self.range(aim)),
             _ => Vec::new(),
         }
@@ -118,6 +126,19 @@ impl App {
                     self.play(Command::ChooseBoon(c as usize - '1' as usize));
                 }
             }
+            Mode::Corpse => match key.code {
+                KeyCode::Char('s') => {
+                    self.mode = Mode::Play;
+                    self.play(Command::Study);
+                }
+                KeyCode::Char('r') => {
+                    self.mode = Mode::Play;
+                    self.play(Command::Render);
+                }
+                KeyCode::Esc | KeyCode::Char('q') => self.mode = Mode::Play,
+                _ => {}
+            },
+            Mode::Rites => self.handle_rites_key(key),
             _ => {
                 if let Some(action) = map_key(key) {
                     self.handle(action);
@@ -140,7 +161,7 @@ impl App {
                 }
             }
             Mode::Target { aim, cursor } => self.handle_target(action, aim, cursor),
-            Mode::Pack { .. } | Mode::Draft => {}
+            Mode::Pack { .. } | Mode::Draft | Mode::Corpse | Mode::Rites => {}
             Mode::Sheet => {
                 if matches!(
                     action,
@@ -206,6 +227,24 @@ impl App {
                 self.mode = Mode::Sheet;
                 return;
             }
+            Action::Study => {
+                if self.world.corpse_here().is_some() {
+                    self.mode = Mode::Corpse;
+                    return;
+                }
+                Command::Study
+            }
+            Action::Rites => {
+                if self.world.known_rites().is_empty() {
+                    self.log.push(
+                        "You know no rites yet. Read pages (?) and study bodies to learn them.",
+                        Tone::Normal,
+                    );
+                } else {
+                    self.mode = Mode::Rites;
+                }
+                return;
+            }
             Action::Quit => {
                 self.quit = true;
                 return;
@@ -229,10 +268,46 @@ impl App {
                         target: cursor,
                     },
                     Aim::Fire => Command::Fire { target: cursor },
+                    Aim::Rite(rite) => Command::Cast {
+                        rite,
+                        target: cursor,
+                    },
                 });
             }
             Action::Cancel | Action::Quit => self.mode = Mode::Play,
             _ => {}
+        }
+    }
+
+    fn handle_rites_key(&mut self, key: KeyEvent) {
+        let KeyCode::Char(c) = key.code else {
+            if key.code == KeyCode::Esc {
+                self.mode = Mode::Play;
+            }
+            return;
+        };
+        let index = (c as u32).wrapping_sub('a' as u32) as usize;
+        let Some(&rite) = self.world.known_rites().get(index) else {
+            return;
+        };
+        match self.world.content().rite(rite).effect.target() {
+            RiteTarget::Myself => {
+                self.mode = Mode::Play;
+                let here = self.world.player().pos;
+                self.play(Command::Cast { rite, target: here });
+            }
+            RiteTarget::Creature => {
+                self.mode = Mode::Target {
+                    aim: Aim::Rite(rite),
+                    cursor: self.first_target(),
+                };
+            }
+            RiteTarget::Tile => {
+                self.mode = Mode::Target {
+                    aim: Aim::Rite(rite),
+                    cursor: self.world.player().pos,
+                };
+            }
         }
     }
 
@@ -353,6 +428,7 @@ impl App {
         match aim {
             Aim::Throw(_) => THROW_RANGE,
             Aim::Fire => self.world.fire_range().unwrap_or(0),
+            Aim::Rite(rite) => self.world.content().rite(rite).range,
         }
     }
 
@@ -365,7 +441,7 @@ impl App {
         self.world.despawn_all();
     }
 
-    #[cfg(test)]
+    /// Direct access for tests and the dev flags.
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
@@ -473,6 +549,53 @@ mod tests {
         assert_eq!(app.mode(), Mode::Sheet);
         app.handle(Action::Cancel);
         assert_eq!(app.mode(), Mode::Play);
+    }
+
+    #[test]
+    fn rites_need_learning_then_cast_from_the_list() {
+        let mut app = App::new(3);
+        app.clear_floor_for_test();
+        app.handle(Action::Rites);
+        assert_eq!(app.mode(), Mode::Play);
+        assert!(
+            app.log()
+                .entries()
+                .last()
+                .unwrap()
+                .text
+                .contains("no rites")
+        );
+        let shroud = app.world().content().rite_by_id("shroud").unwrap();
+        let compel = app.world().content().rite_by_id("compel").unwrap();
+        app.world_mut().teach_rite(shroud);
+        app.world_mut().teach_rite(compel);
+        app.handle(Action::Rites);
+        assert_eq!(app.mode(), Mode::Rites);
+        app.handle_key(key('b'));
+        assert!(
+            matches!(
+                app.mode(),
+                Mode::Target {
+                    aim: Aim::Rite(_),
+                    ..
+                }
+            ),
+            "Compel needs a target"
+        );
+        app.handle(Action::Cancel);
+        app.handle(Action::Rites);
+        app.handle_key(key('a'));
+        assert_eq!(app.mode(), Mode::Play);
+        assert!(app.world().shrouded(), "Shroud is cast at once");
+    }
+
+    #[test]
+    fn standing_on_a_body_offers_study_or_render() {
+        let mut app = App::new(3);
+        app.clear_floor_for_test();
+        app.handle(Action::Study);
+        assert_eq!(app.mode(), Mode::Play);
+        assert!(app.log().entries().last().unwrap().text.contains("no body"));
     }
 
     #[test]

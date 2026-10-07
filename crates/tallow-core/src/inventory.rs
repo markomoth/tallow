@@ -216,7 +216,7 @@ impl World {
     }
 
     /// Takes `count` of an item out of the pack (unequipping it if needed).
-    fn take_from_pack(&mut self, id: ItemId, count: u32) -> Option<Item> {
+    pub(crate) fn take_from_pack(&mut self, id: ItemId, count: u32) -> Option<Item> {
         let index = self.player.inventory.iter().position(|it| it.id == id)?;
         let stack = &mut self.player.inventory[index];
         let taken = count.min(stack.count);
@@ -292,8 +292,10 @@ impl World {
         let Some(item) = self.inventory_item(id).copied() else {
             return Vec::new();
         };
-        let ItemClass::Tincture { effect } = self.content.item(item.kind).class else {
-            return self.toggle_equip(id);
+        let effect = match self.content.item(item.kind).class {
+            ItemClass::Tincture { effect } => effect,
+            ItemClass::Text { .. } => return self.read(id),
+            _ => return self.toggle_equip(id),
         };
         self.take_from_pack(id, 1);
         let lore = self.tinctures[&item.kind];

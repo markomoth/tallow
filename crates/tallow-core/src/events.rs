@@ -9,6 +9,7 @@ use crate::dread::DreadBand;
 use crate::geom::Point;
 use crate::item::{Burden, ItemKindId, Potency, SideEffect, TinctureEffect};
 use crate::map::Tile;
+use crate::rites::{RiteFailure, RiteId};
 use crate::skills::{Skill, Technique};
 
 /// Someone in a fight.
@@ -245,5 +246,109 @@ pub enum Event {
     },
     PlayerDied {
         cause: Cause,
+    },
+
+    /// Study or rendering asked for with no body underfoot. Costs no time.
+    NoCorpse,
+    /// This kind has nothing more to teach you. Costs no time.
+    NothingToLearn {
+        kind: KindId,
+    },
+    /// Finished studying a body. `first` if this kind is new to you.
+    Studied {
+        kind: KindId,
+        first: bool,
+    },
+    /// Study or rendering stopped early; the progress is kept.
+    WorkInterrupted {
+        kind: KindId,
+    },
+    Rendered {
+        kind: KindId,
+        tallow: u32,
+    },
+    /// A body has begun to swell. It will rot soon.
+    CorpseSwelling {
+        kind: KindId,
+        at: Point,
+    },
+    /// A rotting body burst into a fly swarm.
+    CorpseHatched {
+        kind: KindId,
+        at: Point,
+    },
+    /// A text was read. `learned` if it taught a new rite.
+    Read {
+        kind: ItemKindId,
+        learned: bool,
+    },
+    ReadingInterrupted {
+        kind: ItemKindId,
+    },
+    RiteLearned {
+        rite: RiteId,
+    },
+    /// A rite couldn't be cast. Costs no time and no dread.
+    RiteFailed {
+        rite: RiteId,
+        why: RiteFailure,
+    },
+    Cast {
+        rite: RiteId,
+    },
+    Compelled {
+        kind: KindId,
+    },
+    /// Compel wore off. The creature remembers.
+    CompelEnded {
+        kind: KindId,
+    },
+    Knelt {
+        kind: KindId,
+    },
+    Leeched {
+        kind: KindId,
+        amount: u32,
+    },
+    Transferred {
+        kind: KindId,
+        amount: u32,
+    },
+    EyesBorrowed {
+        kind: KindId,
+    },
+    EyesReturned,
+    Unseen {
+        kind: KindId,
+    },
+    FalseFlameLit {
+        at: Point,
+    },
+    FalseFlameOut,
+    /// A lantern-eater ate the False Flame.
+    FlameEaten {
+        kind: KindId,
+    },
+    Shrouded,
+    ShroudFaded,
+    Sanctified,
+    SanctityFaded,
+    /// One of the Taken was freed and ran.
+    Exorcised {
+        kind: KindId,
+        at: Point,
+    },
+    /// Too strong to cast out; it burns instead.
+    ExorciseResisted {
+        kind: KindId,
+        damage: u32,
+    },
+    /// One of the Taken stepped on holy ground and lost an action.
+    Flinched {
+        kind: KindId,
+    },
+    /// You traded places with your thrall.
+    SwappedPlaces {
+        kind: KindId,
     },
 }

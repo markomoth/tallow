@@ -8,6 +8,7 @@ use tallow_core::{
 };
 
 use crate::names::{boon_text, item_name, item_phrase, skill_name, technique_text};
+use tallow_core::RiteFailure;
 
 const CAPACITY: usize = 200;
 
@@ -266,8 +267,8 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             ),
             Good,
         ),
-        Event::TechniqueLearned { technique, .. } => {
-            let (name, what) = technique_text(technique);
+        Event::TechniqueLearned { skill, technique } => {
+            let (name, what) = technique_text(skill, technique);
             (format!("You learn {name}. {what}"), Good)
         }
         Event::LevelUp { level } => (
@@ -323,6 +324,17 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             damage: None,
         } => (format!("You miss the {}.", name(kind)), Normal),
         Event::Attack {
+            attacker: Who::Monster(a),
+            defender: Who::Monster(d),
+            damage,
+        } => match damage {
+            Some(n) => (
+                format!("The {} strikes the {} ({n}).", name(a), name(d)),
+                Normal,
+            ),
+            None => (format!("The {} misses the {}.", name(a), name(d)), Normal),
+        },
+        Event::Attack {
             attacker: Who::Monster(kind),
             damage: Some(d),
             ..
@@ -356,6 +368,155 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
         ),
         Event::MonsterDied { kind, .. } => (death_line(content, kind), Normal),
         Event::PlayerDied { .. } => ("You die.".into(), Danger),
+
+        Event::NoCorpse => ("There is no body here.".into(), Normal),
+        Event::NothingToLearn { kind } => (
+            format!("You have learned all a {} can teach you.", name(kind)),
+            Normal,
+        ),
+        Event::Studied { kind, first: true } => (
+            format!(
+                "You finish your study of the {}. You know its ways now (Look shows them all).",
+                name(kind)
+            ),
+            Good,
+        ),
+        Event::Studied { kind, first: false } => {
+            (format!("You study the {} again.", name(kind)), Good)
+        }
+        Event::WorkInterrupted { .. } => (
+            "You stop what you're doing. Your work will keep.".into(),
+            Danger,
+        ),
+        Event::Rendered { kind, tallow } => (
+            format!(
+                "You render the {} down. Grim work, but it will burn (+{tallow} tallow).",
+                name(kind)
+            ),
+            Good,
+        ),
+        Event::CorpseSwelling { kind, .. } => (
+            format!(
+                "The {}'s body has begun to swell. Something moves inside it.",
+                name(kind)
+            ),
+            Danger,
+        ),
+        Event::CorpseHatched { kind, .. } => (
+            format!("The {}'s body splits, and flies pour out!", name(kind)),
+            Danger,
+        ),
+        Event::Read { kind, learned } => (
+            if learned {
+                format!("You read the {} closely, twice.", thing(kind, 1))
+            } else {
+                format!(
+                    "You read the {}. It teaches nothing you don't know, but it fills a gap.",
+                    thing(kind, 1)
+                )
+            },
+            Normal,
+        ),
+        Event::ReadingInterrupted { .. } => ("You look up from the page. Not now.".into(), Danger),
+        Event::RiteLearned { rite } => {
+            let def = content.rite(rite);
+            (
+                format!(
+                    "You learn the rite of {} ({}). Cast it with z.",
+                    def.name,
+                    crate::names::school_name(def.school)
+                ),
+                Good,
+            )
+        }
+        Event::RiteFailed { why, .. } => (
+            match why {
+                RiteFailure::Unknown => "You don't know that rite.",
+                RiteFailure::NoTarget => "The rite needs a creature you can see.",
+                RiteFailure::OutOfRange => "Too far. The words won't carry.",
+                RiteFailure::NotOpenGround => "It needs open ground you can see.",
+                RiteFailure::NotTaken => {
+                    "There is nothing in it to cast out. Only the Taken can be freed."
+                }
+                RiteFailure::Immune => "Your own dread will not obey you.",
+                RiteFailure::AlreadyCarries => {
+                    "It already carries your dread. It can hold no more."
+                }
+            }
+            .into(),
+            Normal,
+        ),
+        Event::Cast { rite } => (
+            format!("You speak the rite of {}.", content.rite(rite).name),
+            Dread,
+        ),
+        Event::Compelled { kind } => (
+            format!(
+                "The {} goes still, then turns to stand with you.",
+                name(kind)
+            ),
+            Good,
+        ),
+        Event::CompelEnded { kind } => (
+            format!("The {} shakes off your hold. It remembers.", name(kind)),
+            Danger,
+        ),
+        Event::Knelt { kind } => (format!("The {}'s legs fold under it.", name(kind)), Good),
+        Event::Leeched { kind, amount } => (
+            format!("You draw the warmth out of the {} (+{amount}).", name(kind)),
+            Good,
+        ),
+        Event::Transferred { kind, amount } => (
+            format!(
+                "Your dread pours into the {} (−{amount}). It runs from what it feels.",
+                name(kind)
+            ),
+            Good,
+        ),
+        Event::EyesBorrowed { kind } => (
+            format!(
+                "You see through the {}'s eyes as well as your own.",
+                name(kind)
+            ),
+            Good,
+        ),
+        Event::EyesReturned => ("Your sight is your own again.".into(), Normal),
+        Event::Unseen { kind } => (
+            format!("The {} looks through you, puzzled.", name(kind)),
+            Good,
+        ),
+        Event::FalseFlameLit { .. } => ("A pale flame burns where nothing burns.".into(), Good),
+        Event::FalseFlameOut => ("The false flame goes out.".into(), Normal),
+        Event::FlameEaten { kind } => (
+            format!("The {} swallows the false flame.", name(kind)),
+            Normal,
+        ),
+        Event::Shrouded => (
+            "Your candle burns on, but nothing notices it now.".into(),
+            Good,
+        ),
+        Event::ShroudFaded => ("Your shroud thins. Your light shows again.".into(), Danger),
+        Event::Sanctified => ("The ground around you remembers it was holy.".into(), Good),
+        Event::SanctityFaded => ("The holy ground forgets itself.".into(), Normal),
+        Event::Exorcised { kind, .. } => (
+            format!(
+                "The dream goes out of the {}. They wake, stare at you, and run for home.",
+                name(kind)
+            ),
+            Good,
+        ),
+        Event::ExorciseResisted { kind, damage } => (
+            format!(
+                "The {} is too deep in the dream. It burns instead ({damage}).",
+                name(kind)
+            ),
+            Normal,
+        ),
+        Event::Flinched { kind } => (
+            format!("The {} flinches from the holy ground.", name(kind)),
+            Normal,
+        ),
+        Event::SwappedPlaces { .. } => return None,
         Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => return None,
     };
     Some((text, tone))

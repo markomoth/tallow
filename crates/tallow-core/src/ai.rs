@@ -5,12 +5,14 @@ use rand::seq::IndexedRandom;
 
 use crate::boons::Trigger;
 use crate::combat;
-use crate::content::Trait;
+use crate::content::{Faction, Trait};
 use crate::events::{Cause, Event, Who};
 use crate::geom::{Direction, Point};
 use crate::item::Family;
 use crate::map::path;
 use crate::monster::{Mind, MonsterId};
+use crate::progress::Source;
+use crate::rites::{DECOY_IGNORED_WITHIN, DECOY_PULL};
 use crate::skills::{Skill, Technique};
 use crate::world::World;
 
@@ -22,6 +24,10 @@ const WANDER_CHANCE: f64 = 0.3;
 const DARK_NOTICE: i32 = 2;
 /// Tallow a light-eating bite takes.
 const TALLOW_BITTEN: u32 = 15;
+/// A creature gives up on a foe farther away than this.
+const FOE_RANGE: i32 = 10;
+/// A thrall with nothing to fight stays this close to you.
+const HEEL: i32 = 2;
 
 impl World {
     pub(crate) fn monster_act(&mut self, id: MonsterId, events: &mut Vec<Event>) {
@@ -49,13 +55,49 @@ impl World {
             return;
         }
 
+        // Rites wear off one action at a time.
+        let monster = &mut self.floor.monsters[id];
+        monster.unseeing = monster.unseeing.saturating_sub(1);
+        monster.terrified = monster.terrified.saturating_sub(1);
+        if std::mem::take(&mut monster.flinching) {
+            if self.floor.is_visible(m.pos) {
+                events.push(Event::Flinched { kind });
+            }
+            return;
+        }
+        if m.compelled > 0 {
+            self.thrall_act(id, events);
+            if let Some(monster) = self.floor.monsters.get_mut(id) {
+                monster.compelled -= 1;
+                if monster.compelled == 0 {
+                    monster.mind = Mind::Hunting { last_seen: player };
+                    monster.foe = None;
+                    let at = monster.pos;
+                    if self.floor.is_visible(at) {
+                        events.push(Event::CompelEnded { kind });
+                    }
+                }
+            }
+            return;
+        }
+        // The Dreaming can't abide holy ground; caught on it, they get off it.
+        if def.faction == Faction::Dreaming && self.floor.is_sanctified(m.pos) {
+            self.step_by(id, |_, _| Some(0));
+            return;
+        }
+
         // Your candle (or a brazier) shows you from afar. In the dark, only
-        // something close by notices you.
-        let conspicuous = self.player.candle.is_lit() || self.floor.ambient_light(player).is_lit();
+        // something close by notices you. Shroud hides even a lit candle.
+        let relentless = def.has(|t| *t == Trait::Relentless);
+        let conspicuous = !self.shrouded()
+            && (self.player.candle.is_lit() || self.floor.ambient_light(player).is_lit());
         let in_range = m.pos.distance_squared(player) <= def.sight * def.sight;
         let close = m.pos.chebyshev(player) <= DARK_NOTICE;
-        let sees = def.has(|t| *t == Trait::Relentless)
-            || (self.floor.in_sight(m.pos) && in_range && (conspicuous || close));
+        let sees = relentless
+            || (m.unseeing == 0
+                && self.floor.in_sight(m.pos)
+                && in_range
+                && (conspicuous || close));
 
         // A raised blow is held until you've had a turn, then comes down on the
         // tile it was aimed at.
@@ -92,6 +134,47 @@ impl World {
         }
         let monster = &mut self.floor.monsters[id];
         monster.cooldown = monster.cooldown.saturating_sub(1);
+
+        // A creature that's been struck by another fights back.
+        if let Some(foe) = m.foe {
+            match self.floor.monsters.get(foe).map(|f| f.pos) {
+                Some(at) if at.chebyshev(m.pos) <= FOE_RANGE => {
+                    if at.chebyshev(m.pos) == 1 {
+                        self.monster_strike(id, foe, events);
+                    } else {
+                        self.step_toward(id, at);
+                    }
+                    return;
+                }
+                _ => self.floor.monsters[id].foe = None,
+            }
+        }
+        if m.terrified > 0 {
+            self.step_away(id);
+            return;
+        }
+        // A False Flame draws everything near it, unless you are closer still.
+        if let Some(decoy) = self.floor.decoy
+            && !relentless
+            && m.pos.chebyshev(player) > DECOY_IGNORED_WITHIN
+            && m.pos.chebyshev(decoy.at) <= DECOY_PULL
+        {
+            if def.has(|t| *t == Trait::EatsLight) && m.pos.chebyshev(decoy.at) <= 1 {
+                self.floor.decoy = None;
+                if self.floor.is_visible(m.pos) || self.floor.is_visible(decoy.at) {
+                    events.push(Event::FlameEaten { kind });
+                    self.witness(kind, Trait::EatsLight);
+                }
+                return;
+            }
+            self.floor.monsters[id].mind = Mind::Hunting {
+                last_seen: decoy.at,
+            };
+            if m.pos != decoy.at {
+                self.step_toward(id, decoy.at);
+            }
+            return;
+        }
 
         match m.mind {
             Mind::Unaware if sees => {
@@ -179,6 +262,75 @@ impl World {
         }
     }
 
+    /// A compelled creature's action: fight the nearest creature it can see,
+    /// or keep close to you.
+    fn thrall_act(&mut self, id: MonsterId, events: &mut Vec<Event>) {
+        let me = &self.floor.monsters[id];
+        let (pos, sight) = (me.pos, self.content.monster(me.kind).sight);
+        let foe = self
+            .floor
+            .monsters
+            .iter()
+            .filter(|&(other, o)| {
+                other != id
+                    && !o.phantom
+                    && o.compelled == 0
+                    && o.pos.chebyshev(pos) <= sight
+                    && self.clear_line(pos, o.pos)
+            })
+            .min_by_key(|(_, o)| o.pos.distance_squared(pos))
+            .map(|(other, o)| (other, o.pos));
+        if let Some((foe, at)) = foe {
+            if at.chebyshev(pos) == 1 {
+                self.monster_strike(id, foe, events);
+            } else {
+                self.step_toward(id, at);
+            }
+        } else if pos.chebyshev(self.player.pos) > HEEL {
+            self.step_toward(id, self.player.pos);
+        }
+    }
+
+    /// Nothing solid between two points.
+    fn clear_line(&self, a: Point, b: Point) -> bool {
+        let line = crate::inventory::line(a, b);
+        line[1..line.len().saturating_sub(1)]
+            .iter()
+            .all(|&p| !self.map().blocks_sight(p))
+    }
+
+    /// One creature strikes another. The struck one turns on its attacker.
+    pub(crate) fn monster_strike(
+        &mut self,
+        attacker: MonsterId,
+        defender: MonsterId,
+        events: &mut Vec<Event>,
+    ) {
+        let a = &self.floor.monsters[attacker];
+        let d = &self.floor.monsters[defender];
+        let (akind, apos, thrall) = (a.kind, a.pos, a.compelled > 0);
+        let (dkind, dpos) = (d.kind, d.pos);
+        let adef = self.content.monster(akind);
+        let chance = combat::hit_chance(adef.accuracy, self.content.monster(dkind).defense);
+        let damage = combat::roll_attack(&mut self.combat_rng, chance, adef.damage);
+        if self.floor.is_visible(apos) || self.floor.is_visible(dpos) {
+            events.push(Event::Attack {
+                attacker: Who::Monster(akind),
+                defender: Who::Monster(dkind),
+                damage,
+            });
+        }
+        self.floor.monsters[defender].foe = Some(attacker);
+        if let Some(damage) = damage {
+            let source = if thrall {
+                Source::Thrall
+            } else {
+                Source::Other
+            };
+            self.damage_monster(defender, damage, source, events);
+        }
+    }
+
     fn monster_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
         let kind = self.floor.monsters[id].kind;
         let def = self.content.monster(kind);
@@ -217,6 +369,7 @@ impl World {
             && p != self.player.pos
             && self.floor.monster_at(p).is_none()
             && !(def.has(|t| *t == Trait::ShunsLight) && self.floor.ambient_light(p).is_lit())
+            && !(def.faction == Faction::Dreaming && self.floor.is_sanctified(p))
     }
 
     /// Steps one tile closer to `target`, choosing randomly between equally good
@@ -265,8 +418,19 @@ impl World {
         let &to = ties
             .choose(&mut self.ai_rng)
             .expect("ties include the best");
-        self.floor.monsters[id].pos = to;
+        self.move_monster(id, to);
         true
+    }
+
+    /// Moves a monster one step. The Taken flinch on stepping onto holy ground.
+    fn move_monster(&mut self, id: MonsterId, to: Point) {
+        let from = self.floor.monsters[id].pos;
+        let onto_holy = self.floor.is_sanctified(to) && !self.floor.is_sanctified(from);
+        let monster = &mut self.floor.monsters[id];
+        monster.pos = to;
+        if onto_holy && self.content.monster(monster.kind).faction == Faction::Taken {
+            monster.flinching = true;
+        }
     }
 
     fn wander(&mut self, id: MonsterId) {
@@ -277,7 +441,7 @@ impl World {
             .filter(|&p| self.can_enter(id, p))
             .collect();
         if let Some(&to) = options.choose(&mut self.ai_rng) {
-            self.floor.monsters[id].pos = to;
+            self.move_monster(id, to);
         }
     }
 }

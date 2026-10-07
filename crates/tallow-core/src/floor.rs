@@ -31,6 +31,11 @@ pub struct Floor {
     pub(crate) monsters: SlotMap<MonsterId, Monster>,
     pub(crate) tallow: Vec<Tallow>,
     pub(crate) items: Vec<FloorItem>,
+    pub(crate) corpses: Vec<crate::corpse::Corpse>,
+    /// Holy ground: the turn each sanctified tile stops being holy (0 = never was).
+    sanctified: Grid<u64>,
+    /// A False Flame burning somewhere on this floor.
+    pub(crate) decoy: Option<crate::rites::Decoy>,
 }
 
 /// An item lying on the floor.
@@ -103,7 +108,47 @@ impl Floor {
             monsters: SlotMap::with_key(),
             tallow: Vec::new(),
             items: Vec::new(),
+            corpses: Vec::new(),
+            sanctified: Grid::new(w, h, 0),
+            decoy: None,
         }
+    }
+
+    /// Bodies lying on this floor.
+    pub fn corpses(&self) -> &[crate::corpse::Corpse] {
+        &self.corpses
+    }
+
+    pub fn corpse_at(&self, p: Point) -> Option<&crate::corpse::Corpse> {
+        self.corpses.iter().find(|c| c.at == p)
+    }
+
+    /// Holy ground the Dreaming can't cross.
+    pub fn is_sanctified(&self, p: Point) -> bool {
+        self.sanctified.at(p) > 0
+    }
+
+    pub(crate) fn sanctify(&mut self, p: Point, until: u64) {
+        let now = self.sanctified.at(p);
+        self.sanctified.set(p, now.max(until));
+    }
+
+    /// Lets lapsed holy ground go. True if any tile stopped being holy.
+    pub(crate) fn expire_sanctity(&mut self, now: u64) -> bool {
+        let mut any = false;
+        for p in self.map.points() {
+            let until = self.sanctified.at(p);
+            if until > 0 && now >= until {
+                self.sanctified.set(p, 0);
+                any = true;
+            }
+        }
+        any
+    }
+
+    /// The False Flame on this floor, if one burns.
+    pub fn decoy(&self) -> Option<crate::rites::Decoy> {
+        self.decoy
     }
 
     pub fn map(&self) -> &Map {
@@ -219,15 +264,28 @@ impl Floor {
     }
 
     /// Recomputes light and sight from `eye`, carrying an optional light of its own.
-    /// You see what is in line of sight and lit, plus whatever is right beside you.
+    /// You see what is in line of sight and lit, plus whatever is right beside you,
+    /// plus (with Borrowed Eyes) whatever another creature sees, lit or not.
     /// Returns a `Spotted` event for each landmark seen for the first time.
     pub(crate) fn update_view(
         &mut self,
         eye: Point,
         carried: Option<LightSource>,
         feel: i32,
+        borrowed: Option<(Point, i32)>,
     ) -> Vec<Event> {
-        let sources: Vec<LightSource> = self.lights.iter().copied().chain(carried).collect();
+        let decoy = self.decoy.map(|d| LightSource {
+            at: d.at,
+            radius: crate::rites::DECOY_RADIUS,
+            color: crate::rites::DECOY_COLOR,
+        });
+        let sources: Vec<LightSource> = self
+            .lights
+            .iter()
+            .copied()
+            .chain(carried)
+            .chain(decoy)
+            .collect();
         self.light = light::compute(&self.map, &sources);
 
         self.visible.fill(false);
@@ -245,6 +303,16 @@ impl Floor {
                 }
             },
         );
+
+        if let Some((other, radius)) = borrowed {
+            let (map, visible) = (&self.map, &mut self.visible);
+            fov::compute(
+                other,
+                radius,
+                |p| map.blocks_sight(p),
+                |p| visible.set(p, true),
+            );
+        }
 
         let mut events = Vec::new();
         for p in self.map.points() {
@@ -284,7 +352,7 @@ mod tests {
     fn darkness_hides_what_is_in_line_of_sight() {
         let (map, start) = prefab::parse("##########\n#@.......#\n##########").unwrap();
         let mut floor = Floor::new(map, start);
-        floor.update_view(start, None, 1);
+        floor.update_view(start, None, 1, None);
         assert!(
             floor.is_visible(Point::new(2, 1)),
             "adjacent tiles are felt"
@@ -296,7 +364,7 @@ mod tests {
     fn braziers_light_distant_rooms() {
         let (map, start) = prefab::parse("#############\n#@.........&#\n#############").unwrap();
         let mut floor = Floor::new(map, start);
-        let events = floor.update_view(start, None, 1);
+        let events = floor.update_view(start, None, 1, None);
         assert!(floor.is_visible(Point::new(10, 1)));
         assert_eq!(
             events,
@@ -311,8 +379,8 @@ mod tests {
     fn memory_outlasts_sight_and_landmarks_are_spotted_once() {
         let (map, start) = prefab::parse("#######\n#@...&#\n#######").unwrap();
         let mut floor = Floor::new(map, start);
-        assert_eq!(floor.update_view(start, None, 1).len(), 1);
-        assert!(floor.update_view(start, None, 1).is_empty());
+        assert_eq!(floor.update_view(start, None, 1, None).len(), 1);
+        assert!(floor.update_view(start, None, 1, None).is_empty());
         assert!(floor.is_explored(Point::new(5, 1)));
     }
 }

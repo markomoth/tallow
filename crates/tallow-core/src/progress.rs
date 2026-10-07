@@ -33,6 +33,11 @@ pub const fn insight_for_next(level: u32) -> u32 {
 pub enum Source {
     Melee(Option<Family>),
     Missile,
+    Rite,
+    /// Your compelled creature did it. Insight, but no kill boons.
+    Thrall,
+    /// Creatures fighting each other.
+    Other,
 }
 
 impl World {
@@ -129,6 +134,9 @@ impl World {
                 snuffs: self.stats.snuffs,
                 drinks: self.stats.drinks,
                 heavy_blows_seen: self.stats.heavy_blows_seen,
+                casts: self.stats.casts,
+                studies: self.stats.studies,
+                knows_rites: !self.player.rites.is_empty(),
             };
             let mut rng = self.boon_rng.clone();
             let draft = boons::draft(&mut rng, &ctx);
@@ -210,6 +218,11 @@ impl World {
         } else {
             self.content.monster(kind).threat * INSIGHT_PER_THREAT
         };
+        match source {
+            Source::Other => return,
+            Source::Thrall => return self.gain_insight(insight, events),
+            _ => {}
+        }
         self.trigger(Trigger::Kill, events);
         if let Source::Melee(Some(family)) = source {
             self.trigger(Trigger::KillWith(family), events);

@@ -37,4 +37,13 @@ pub enum Command {
     },
     /// Take one boon from the waiting level-up draft. Costs no time.
     ChooseBoon(usize),
+    /// Study the body underfoot.
+    Study,
+    /// Render the body underfoot into tallow.
+    Render,
+    /// Cast a known rite. `target` is ignored by rites cast on yourself.
+    Cast {
+        rite: crate::rites::RiteId,
+        target: Point,
+    },
 }

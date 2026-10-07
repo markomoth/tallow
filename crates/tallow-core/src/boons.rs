@@ -36,6 +36,8 @@ pub enum Passive {
     PackMule,
     /// Regain health every 8 turns instead of 12.
     QuickMending,
+    /// Rites cost a quarter less dread.
+    RiteThrift,
 }
 
 impl Passive {
@@ -67,6 +69,10 @@ pub enum Trigger {
     Drink,
     /// A heavy blow comes down where you no longer are.
     DodgeHeavyBlow,
+    /// You cast a rite.
+    Cast,
+    /// You finish studying a body.
+    Study,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -94,6 +100,9 @@ pub struct DraftContext<'a> {
     pub snuffs: u32,
     pub drinks: u32,
     pub heavy_blows_seen: u32,
+    pub casts: u32,
+    pub studies: u32,
+    pub knows_rites: bool,
 }
 
 const FAMILIES: [Family; 3] = [Family::Blade, Family::Bludgeon, Family::Reach];
@@ -109,6 +118,8 @@ fn rewards(when: Trigger) -> Vec<Reward> {
         Trigger::Descend => vec![Heal(6), EaseDread(10), Tallow(60)],
         Trigger::Drink => vec![Heal(4), EaseDread(6)],
         Trigger::DodgeHeavyBlow => vec![Heal(3), EaseDread(5), Tallow(20)],
+        Trigger::Cast => vec![Heal(2), EaseDread(4), Tallow(10)],
+        Trigger::Study => vec![Heal(4), EaseDread(6), Tallow(25)],
     }
 }
 
@@ -141,6 +152,9 @@ fn candidates(ctx: &DraftContext) -> Vec<(Boon, u32)> {
     if used(Skill::Missiles) {
         passives.push((Passive::MissileAccuracy(8), weight_for(Skill::Missiles)));
     }
+    if ctx.knows_rites {
+        passives.push((Passive::RiteThrift, 5));
+    }
 
     let mut triggers: Vec<(Trigger, u32)> = vec![(Trigger::Kill, 5), (Trigger::Descend, 5)];
     for family in FAMILIES {
@@ -162,6 +176,12 @@ fn candidates(ctx: &DraftContext) -> Vec<(Boon, u32)> {
     }
     if ctx.heavy_blows_seen > 0 {
         triggers.push((Trigger::DodgeHeavyBlow, 4));
+    }
+    if ctx.casts > 0 {
+        triggers.push((Trigger::Cast, 6));
+    }
+    if ctx.studies > 0 {
+        triggers.push((Trigger::Study, 4));
     }
 
     let mut all: Vec<(Boon, u32)> = passives
@@ -219,6 +239,9 @@ mod tests {
             snuffs: 0,
             drinks: 0,
             heavy_blows_seen: 0,
+            casts: 0,
+            studies: 0,
+            knows_rites: false,
         }
     }
 
@@ -240,15 +263,20 @@ mod tests {
                 assert!(
                     !matches!(
                         boon,
-                        Boon::Passive(Passive::FamilyDamage(_) | Passive::MissileAccuracy(_))
-                            | Boon::Triggered {
-                                when: Trigger::KillWith(_)
-                                    | Trigger::MissileHit
-                                    | Trigger::Snuff
-                                    | Trigger::Drink
-                                    | Trigger::DodgeHeavyBlow,
-                                ..
-                            }
+                        Boon::Passive(
+                            Passive::FamilyDamage(_)
+                                | Passive::MissileAccuracy(_)
+                                | Passive::RiteThrift
+                        ) | Boon::Triggered {
+                            when: Trigger::KillWith(_)
+                                | Trigger::MissileHit
+                                | Trigger::Snuff
+                                | Trigger::Drink
+                                | Trigger::DodgeHeavyBlow
+                                | Trigger::Cast
+                                | Trigger::Study,
+                            ..
+                        }
                     ),
                     "seed {seed}: offered {boon:?} with nothing to power it"
                 );

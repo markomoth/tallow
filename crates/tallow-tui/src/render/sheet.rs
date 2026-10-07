@@ -10,7 +10,8 @@ use tallow_core::skills::MAX_RANK;
 use tallow_core::{Skill, World};
 
 use super::palette;
-use crate::names::{boon_text, skill_name, technique_text};
+use crate::names::{boon_text, rite_numbers, school_name, skill_name, technique_text};
+use tallow_core::corpse::{RENDER_TURNS, render_yield, study_turns};
 
 const BAR: usize = 10;
 
@@ -124,7 +125,13 @@ pub fn draw_sheet(frame: &mut Frame, area: Rect, world: &World) {
             .techniques
             .iter()
             .find(|u| u.rank > rank)
-            .map(|u| format!("  next at {}: {}", u.rank, technique_text(u.technique).0))
+            .map(|u| {
+                format!(
+                    "  next at {}: {}",
+                    u.rank,
+                    technique_text(skill, u.technique).0
+                )
+            })
             .unwrap_or_default();
         lines.push(Line::from(vec![
             Span::styled(format!("{:<10} ", skill_name(skill)), text()),
@@ -137,18 +144,35 @@ pub fn draw_sheet(frame: &mut Frame, area: Rect, world: &World) {
 
     let techniques: Vec<_> = Skill::ALL
         .iter()
-        .flat_map(|&s| world.techniques(s))
+        .flat_map(|&s| world.techniques(s).into_iter().map(move |t| (s, t)))
         .collect();
     if !techniques.is_empty() {
         lines.push(Line::default());
         lines.push(Line::styled("─ techniques ─", dim()));
-        for t in techniques {
-            let (name, what) = technique_text(t);
+        for (s, t) in techniques {
+            let (name, what) = technique_text(s, t);
             lines.push(Line::from(vec![
                 Span::styled(format!("{name}: "), text()),
                 Span::styled(what, dim()),
             ]));
         }
+    }
+
+    lines.push(Line::default());
+    lines.push(Line::styled("─ rites ─ (z to cast)", dim()));
+    if world.known_rites().is_empty() {
+        lines.push(Line::styled(
+            "None yet. Read pages and study bodies to learn them.",
+            dim(),
+        ));
+    }
+    for &rite in world.known_rites() {
+        let def = world.content().rite(rite);
+        lines.push(Line::from(vec![
+            Span::styled(format!("{} ", def.name), text()),
+            Span::styled(format!("({}) ", school_name(def.school)), dim()),
+            Span::styled(rite_numbers(world, rite), dim()),
+        ]));
     }
 
     lines.push(Line::default());
@@ -166,4 +190,90 @@ pub fn draw_sheet(frame: &mut Frame, area: Rect, world: &World) {
     lines.push(Line::default());
     lines.push(Line::styled("Esc: close", dim()));
     popup(frame, area, "The acolyte", lines, 76);
+}
+
+/// The rite list: pick one by letter.
+pub fn draw_rites(frame: &mut Frame, area: Rect, world: &World) {
+    let dread = world.player().dread.value();
+    let mut lines = vec![
+        Line::styled(
+            format!(
+                "Dread {dread} · rites at {}% strength. Dread pays for rites, and dread makes them stronger.",
+                world
+                    .known_rites()
+                    .first()
+                    .map_or(100, |&r| world.rite_potency(r))
+            ),
+            dim(),
+        ),
+        Line::default(),
+    ];
+    for (i, &rite) in world.known_rites().iter().enumerate() {
+        let def = world.content().rite(rite);
+        let letter = (b'a' + i as u8) as char;
+        let after = dread + world.rite_cost(rite);
+        let warn = if after >= 100 {
+            Span::styled(
+                "  (dread would reach 100: a Manifestation comes)",
+                Style::new().fg(palette::DANGER),
+            )
+        } else {
+            Span::raw("")
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{letter}  "), Style::new().fg(palette::ACCENT)),
+            Span::styled(def.name.clone(), text().add_modifier(Modifier::BOLD)),
+            Span::styled(format!("  {}", school_name(def.school)), dim()),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled(format!("   {}", rite_numbers(world, rite)), text()),
+            warn,
+        ]));
+        lines.push(Line::styled(format!("   {}", def.description), dim()));
+    }
+    lines.push(Line::default());
+    lines.push(Line::styled("letter: cast · Esc: close", dim()));
+    popup(frame, area, "Rites", lines, 72);
+}
+
+/// Standing on a body: what studying or rendering it would take and give.
+pub fn draw_corpse(frame: &mut Frame, area: Rect, world: &World) {
+    let Some(corpse) = world.corpse_here() else {
+        return;
+    };
+    let def = world.content().monster(corpse.kind);
+    let study = if world.study_would_teach(corpse.kind) {
+        let left = study_turns(def.threat).saturating_sub(corpse.studied);
+        let what = if world.has_studied(corpse.kind) {
+            "another rite it can teach"
+        } else {
+            "its ways, Insight, and perhaps a rite"
+        };
+        format!("s  study it ({left} turns): {what}")
+    } else {
+        "s  study it: it has nothing more to teach you".into()
+    };
+    let left = RENDER_TURNS.saturating_sub(corpse.rendered);
+    let lines = vec![
+        Line::styled(
+            format!("The body of {}.", crate::log::with_article(&def.name)),
+            text().add_modifier(Modifier::BOLD),
+        ),
+        Line::default(),
+        Line::styled(study, text()),
+        Line::styled(
+            format!(
+                "r  render it ({left} turns): +{} tallow. The body is gone after.",
+                render_yield(def.health)
+            ),
+            text(),
+        ),
+        Line::default(),
+        Line::styled(
+            "Left alone it rots, and big bodies hatch flies. Either task stops if anything appears; your work keeps.",
+            dim(),
+        ),
+        Line::styled("Esc: leave it", dim()),
+    ];
+    popup(frame, area, "A body", lines, 64);
 }

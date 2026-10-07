@@ -18,6 +18,8 @@ pub enum Action {
     Throw,
     Fire,
     Sheet,
+    Study,
+    Rites,
     Look,
     NextTarget,
     Cancel,
@@ -50,6 +52,8 @@ pub fn map_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('t') => Some(Action::Throw),
         KeyCode::Char('f') => Some(Action::Fire),
         KeyCode::Char('@') => Some(Action::Sheet),
+        KeyCode::Char('s') => Some(Action::Study),
+        KeyCode::Char('z') => Some(Action::Rites),
         KeyCode::Char('R') => Some(Action::Rest),
         KeyCode::Char('x') => Some(Action::Look),
         KeyCode::Tab => Some(Action::NextTarget),
@@ -131,6 +135,8 @@ mod tests {
         assert_eq!(press(KeyCode::Char('i')), Some(Action::Pack));
         assert_eq!(press(KeyCode::Char('t')), Some(Action::Throw));
         assert_eq!(press(KeyCode::Char('f')), Some(Action::Fire));
+        assert_eq!(press(KeyCode::Char('s')), Some(Action::Study));
+        assert_eq!(press(KeyCode::Char('z')), Some(Action::Rites));
         assert_eq!(press(KeyCode::Tab), Some(Action::NextTarget));
         assert_eq!(press(KeyCode::Esc), Some(Action::Cancel));
         assert_eq!(press(KeyCode::Enter), Some(Action::Confirm));
@@ -141,7 +147,7 @@ mod tests {
 
     #[test]
     fn unbound_keys_do_nothing() {
-        assert_eq!(press(KeyCode::Char('z')), None);
+        assert_eq!(press(KeyCode::Char('Z')), None);
         assert_eq!(press(KeyCode::Char('Q')), None);
         let ctrl_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL);
         assert_eq!(map_key(ctrl_k), None);

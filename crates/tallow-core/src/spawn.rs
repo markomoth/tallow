@@ -129,6 +129,17 @@ pub fn place_items<R: Rng + ?Sized>(
         let (lo, hi) = content.item(kind).stack;
         placed.push((at, kind, rng.random_range(lo..=hi)));
     }
+    // The first floor always has something to read, so every run can learn a rite.
+    let is_text = |k: crate::item::ItemKindId| {
+        matches!(content.item(k).class, crate::item::ItemClass::Text { .. })
+    };
+    if depth == 1 && !placed.iter().any(|&(_, k, _)| is_text(k)) && !spots.is_empty() {
+        let texts: Vec<_> = kinds.iter().copied().filter(|&k| is_text(k)).collect();
+        if let Some(&kind) = texts.choose(rng) {
+            let at = spots.swap_remove(rng.random_range(0..spots.len()));
+            placed.push((at, kind, 1));
+        }
+    }
     placed
 }
 
@@ -196,6 +207,23 @@ mod tests {
                 assert!(dist.at(at).is_some(), "seed {seed}: tallow out of reach");
                 assert_eq!(layout.map.tile(at), Tile::Floor);
             }
+        }
+    }
+
+    #[test]
+    fn the_first_floor_always_has_a_text() {
+        let content = Content::bundled();
+        for seed in 0..100 {
+            let mut r = rng::floor_rng(seed, 1);
+            let layout = generate::crypt(&mut r, true);
+            let items = place_items(&mut r, content, &layout.map, layout.start, 1);
+            assert!(
+                items.iter().any(|&(_, k, _)| matches!(
+                    content.item(k).class,
+                    crate::item::ItemClass::Text { .. }
+                )),
+                "seed {seed}"
+            );
         }
     }
 

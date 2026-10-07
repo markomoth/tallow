@@ -35,6 +35,8 @@ impl World {
         if self.turn().is_multiple_of(regen) {
             self.player.health = (self.player.health + 1).min(self.player.max_health);
         }
+        self.tick_rites(events);
+        self.tick_corpses(events);
 
         // A thrifty candle skips every fourth turn of burning.
         let thrifty = self.has_passive(Passive::CandleThrift) && self.turn().is_multiple_of(4);

@@ -152,6 +152,7 @@ fn detail(world: &World, id: ItemId) -> Vec<Line<'static>> {
     let mut actions: Vec<&str> = Vec::new();
     match def.class {
         ItemClass::Tincture { .. } => actions.push("a drink"),
+        ItemClass::Text { .. } => actions.push("a read"),
         ItemClass::Melee { .. } | ItemClass::Ranged { .. } | ItemClass::Vestment { .. } => {
             actions.push(if equipped { "e take off" } else { "e equip" });
         }

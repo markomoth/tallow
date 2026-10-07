@@ -1,0 +1,99 @@
+// Rites (BUILD_GUIDE.md §5). Each changes a situation; none only does damage.
+//
+// cost: dread added when cast (before the school's thrift and boons).
+// range: Chebyshev tiles to the target; 0 for rites cast on yourself.
+// The effect's numbers are at 1.0× potency. Potency grows with dread:
+// calm 1.0×, uneasy 1.25×, frayed or worse 1.5×, and with the school's
+// Deepen technique. Durations count the target's actions or whole turns.
+[
+    (
+        id: "compel",
+        name: "Compel",
+        school: Binding,
+        description: "Speak the old command into a creature's ear. It fights for you, follows you, and remembers when it wakes.",
+        cost: 15,
+        range: 6,
+        effect: Compel(actions: 12),
+    ),
+    (
+        id: "kneel",
+        name: "Kneel",
+        school: Binding,
+        description: "A creature's legs forget how to carry it. It can still strike whatever is beside it.",
+        cost: 8,
+        range: 6,
+        effect: Kneel(actions: 5),
+    ),
+    (
+        id: "leech",
+        name: "Leech",
+        school: Communion,
+        description: "Draw the warmth out of a creature and into your own wounds.",
+        cost: 10,
+        range: 4,
+        effect: Leech(amount: 5),
+    ),
+    (
+        id: "transference",
+        name: "Transference",
+        school: Communion,
+        description: "Give your dread to another. It runs from what it now feels. A creature can carry your dread only once.",
+        cost: 0,
+        range: 5,
+        effect: Transference(dread: 20, actions: 8),
+    ),
+    (
+        id: "borrowed_eyes",
+        name: "Borrowed Eyes",
+        school: Communion,
+        description: "For a while you also see what a creature sees, lit or not.",
+        cost: 6,
+        range: 8,
+        effect: BorrowedEyes(turns: 30, radius: 7),
+    ),
+    (
+        id: "unsee",
+        name: "Unsee",
+        school: Veil,
+        description: "A creature forgets you were ever there, and for a while cannot notice you.",
+        cost: 6,
+        range: 6,
+        effect: Unsee(actions: 10),
+    ),
+    (
+        id: "false_flame",
+        name: "False Flame",
+        school: Veil,
+        description: "A light that isn't. Creatures near it go to it and ignore you unless you come close. Lantern-eaters will eat it.",
+        cost: 8,
+        range: 8,
+        effect: FalseFlame(turns: 20),
+    ),
+    (
+        id: "shroud",
+        name: "Shroud",
+        school: Veil,
+        description: "Your candle still burns, but no one sees it. Only what is beside you notices you.",
+        cost: 8,
+        range: 0,
+        effect: Shroud(turns: 15),
+    ),
+    (
+        id: "sanctify",
+        name: "Sanctify",
+        school: Warding,
+        description: "The ground around you remembers it was holy. The Dreaming cannot cross it. The Taken flinch when they step on it.",
+        cost: 12,
+        range: 0,
+        effect: Sanctify(turns: 30, radius: 2),
+    ),
+    (
+        id: "exorcise",
+        name: "Exorcise",
+        school: Warding,
+        description: "Cast the dreamer out of one of the Taken. They wake, and run home. The strongest only burn.",
+        cost: 15,
+        range: 3,
+        effect: Exorcise(damage: 8),
+    ),
+]

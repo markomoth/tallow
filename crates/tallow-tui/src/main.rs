@@ -20,18 +20,33 @@ const FRAME: Duration = Duration::from_millis(80);
 
 const USAGE: &str = "usage: tallow [--seed <number>]";
 
+/// Testing aids, not for play: start deeper, know every rite.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Options {
+    seed: Option<u64>,
+    dev_depth: Option<u8>,
+    dev_rites: bool,
+}
+
 fn main() -> Result<()> {
-    let seed = parse_seed(std::env::args().skip(1))?.unwrap_or_else(random_seed);
+    let options = parse_args(std::env::args().skip(1))?;
+    let seed = options.seed.unwrap_or_else(random_seed);
 
     // `init` enters the alternate screen and installs a panic hook that restores the terminal.
     let mut terminal = ratatui::init();
-    let result = run(&mut terminal, seed);
+    let result = run(&mut terminal, seed, &options);
     ratatui::restore();
     result
 }
 
-fn run(terminal: &mut DefaultTerminal, seed: u64) -> Result<()> {
+fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<()> {
     let mut app = App::new(seed);
+    if let Some(depth) = options.dev_depth {
+        app.world_mut().dev_skip_to(depth);
+    }
+    if options.dev_rites {
+        app.world_mut().dev_learn_all_rites();
+    }
     let started = Instant::now();
     while !app.should_quit() {
         if app.wants_restart() {
@@ -49,23 +64,28 @@ fn run(terminal: &mut DefaultTerminal, seed: u64) -> Result<()> {
     Ok(())
 }
 
-fn parse_seed(mut args: impl Iterator<Item = String>) -> Result<Option<u64>> {
-    let mut seed = None;
+fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
+    let mut options = Options::default();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--seed" => {
                 let value = args.next().context(USAGE)?;
-                seed = Some(
+                options.seed = Some(
                     value
                         .parse()
                         .with_context(|| format!("bad seed {value:?}\n{USAGE}"))?,
                 );
             }
+            "--dev-depth" => {
+                let value = args.next().context(USAGE)?;
+                options.dev_depth = Some(value.parse().context("bad depth")?);
+            }
+            "--dev-rites" => options.dev_rites = true,
             "-h" | "--help" => bail!(USAGE),
             other => bail!("unknown argument {other:?}\n{USAGE}"),
         }
     }
-    Ok(seed)
+    Ok(options)
 }
 
 /// A fresh seed from the OS-seeded hasher keys; no extra dependency needed.
@@ -86,10 +106,18 @@ mod tests {
 
     #[test]
     fn seed_flag() {
-        assert_eq!(parse_seed(args(&[])).unwrap(), None);
-        assert_eq!(parse_seed(args(&["--seed", "42"])).unwrap(), Some(42));
-        assert!(parse_seed(args(&["--seed"])).is_err());
-        assert!(parse_seed(args(&["--seed", "x"])).is_err());
-        assert!(parse_seed(args(&["--nope"])).is_err());
+        let seed = |list: &[&str]| parse_args(args(list)).map(|o| o.seed);
+        assert_eq!(seed(&[]).unwrap(), None);
+        assert_eq!(seed(&["--seed", "42"]).unwrap(), Some(42));
+        assert!(seed(&["--seed"]).is_err());
+        assert!(seed(&["--seed", "x"]).is_err());
+        assert!(seed(&["--nope"]).is_err());
+    }
+
+    #[test]
+    fn dev_flags() {
+        let o = parse_args(args(&["--dev-depth", "4", "--dev-rites"])).unwrap();
+        assert_eq!(o.dev_depth, Some(4));
+        assert!(o.dev_rites);
     }
 }

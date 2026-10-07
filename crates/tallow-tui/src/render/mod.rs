@@ -41,7 +41,13 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
 
     let cursor = match app.mode() {
         Mode::Look { cursor } | Mode::Target { cursor, .. } => Some(cursor),
-        Mode::Play | Mode::Dead | Mode::Pack { .. } | Mode::Draft | Mode::Sheet => None,
+        Mode::Play
+        | Mode::Dead
+        | Mode::Pack { .. }
+        | Mode::Draft
+        | Mode::Sheet
+        | Mode::Corpse
+        | Mode::Rites => None,
     };
     frame.render_widget(
         map::MapView::new(app.world(), time, cursor, app.aim_path()),
@@ -56,6 +62,8 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
         }
         Mode::Draft => sheet::draw_draft(frame, map_area, app.world()),
         Mode::Sheet => sheet::draw_sheet(frame, map_area, app.world()),
+        Mode::Rites => sheet::draw_rites(frame, map_area, app.world()),
+        Mode::Corpse => sheet::draw_corpse(frame, map_area, app.world()),
         Mode::Play | Mode::Look { .. } | Mode::Target { .. } => {}
     }
 }
@@ -433,6 +441,18 @@ mod tests {
         assert!(screen.contains("Blades"));
         assert!(screen.contains("next at 3: Riposte (50%)"));
         assert!(screen.contains("None yet."));
+    }
+
+    #[test]
+    fn the_rite_list_shows_cost_and_strength() {
+        let mut app = App::new(7);
+        let compel = app.world().content().rite_by_id("compel").unwrap();
+        app.world_mut().teach_rite(compel);
+        app.handle(Action::Rites);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains(" Rites "));
+        assert!(screen.contains("Compel"));
+        assert!(screen.contains("dread +15 · range 6 · 12 actions"));
     }
 
     #[test]

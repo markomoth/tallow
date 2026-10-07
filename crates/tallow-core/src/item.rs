@@ -53,6 +53,10 @@ pub enum ItemClass {
     Tincture {
         effect: TinctureEffect,
     },
+    /// Teaches a rite of its school when read.
+    Text {
+        school: crate::rites::School,
+    },
 }
 
 /// Damage holy water does on a splash, by what it lands on.
@@ -101,7 +105,10 @@ impl ItemDef {
     pub fn stacks(&self) -> bool {
         matches!(
             self.class,
-            ItemClass::Ammo | ItemClass::Throwable | ItemClass::Tincture { .. }
+            ItemClass::Ammo
+                | ItemClass::Throwable
+                | ItemClass::Tincture { .. }
+                | ItemClass::Text { .. }
         )
     }
 

@@ -106,7 +106,13 @@ impl Widget for Hud<'_> {
             Mode::Target { aim, cursor } => {
                 lines.extend(target_panel(world, aim, cursor, self.app.aim_path().len()));
             }
-            Mode::Play | Mode::Dead | Mode::Pack { .. } | Mode::Draft | Mode::Sheet => {
+            Mode::Play
+            | Mode::Dead
+            | Mode::Pack { .. }
+            | Mode::Draft
+            | Mode::Sheet
+            | Mode::Corpse
+            | Mode::Rites => {
                 lines.extend(in_view(world));
                 lines.extend(keys());
             }
@@ -168,7 +174,17 @@ fn conditions(world: &World) -> Line<'static> {
         Burden::Burdened => Some("burdened"),
         Burden::Overloaded => Some("can't move!"),
     };
-    for (word, color) in candle.into_iter().chain(load.map(|w| (w, palette::DANGER))) {
+    let shroud = world.shrouded().then_some(("shrouded", palette::GOOD));
+    let eyes = world
+        .borrowed_eyes()
+        .is_some()
+        .then_some(("borrowed eyes", palette::GOOD));
+    for (word, color) in candle
+        .into_iter()
+        .chain(load.map(|w| (w, palette::DANGER)))
+        .chain(shroud)
+        .chain(eyes)
+    {
         if !spans.is_empty() {
             spans.push(Span::styled(" · ", dim()));
         }
@@ -209,6 +225,8 @@ fn in_view(world: &World) -> Vec<Line<'static>> {
                     .fg(palette::DANGER)
                     .add_modifier(Modifier::BOLD),
             ));
+        } else if info.compelled > 0 {
+            spans.push(Span::styled(" (yours)", Style::new().fg(palette::GOOD)));
         } else if let Some(state) = wound_word(&info) {
             spans.push(Span::styled(format!(" ({state})"), dim()));
         }
@@ -238,6 +256,7 @@ fn keys() -> Vec<Line<'static>> {
         key(". R", "wait, rest"),
         key("g i", "take, pack"),
         key("t f", "throw, fire"),
+        key("s z", "study, rites"),
         key("c >", "candle, down"),
         key("x @", "look, self"),
         key("q", "quit"),
@@ -284,9 +303,12 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
         ]));
         lines.push(Line::styled(def.description.clone(), dim()));
         let mind = match info.mind {
-            Mind::Unaware => "unaware of you",
-            Mind::Hunting { .. } => "hunting you",
-            Mind::Fleeing => "fleeing",
+            _ if info.compelled > 0 => "bound to your will".to_string(),
+            _ if info.terrified > 0 => "fleeing your dread".to_string(),
+            _ if info.unseeing > 0 => "can't see you".to_string(),
+            Mind::Unaware => "unaware of you".to_string(),
+            Mind::Hunting { .. } => "hunting you".to_string(),
+            Mind::Fleeing => "fleeing".to_string(),
         };
         let health = wound_word(&info).unwrap_or("unhurt");
         lines.push(Line::styled(
@@ -310,8 +332,26 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
                     .add_modifier(Modifier::BOLD),
             ));
         }
+        if info.compelled > 0 {
+            lines.push(Line::styled(
+                format!("Compelled for {} more of its actions.", info.compelled),
+                Style::new().fg(palette::GOOD),
+            ));
+        }
+        if info.pinned > 0 {
+            lines.push(Line::styled(
+                format!("Can't move for {} actions.", info.pinned),
+                text(),
+            ));
+        }
+        if info.carries_dread {
+            lines.push(Line::styled("It carries some of your dread.", dim()));
+        }
         for t in &info.known_traits {
             lines.push(Line::styled(format!("Seen: {}", trait_line(t)), dim()));
+        }
+        if world.has_studied(info.kind) {
+            lines.push(Line::styled("You have studied its kind.", dim()));
         }
     } else if cursor == world.player().pos {
         lines.push(Line::styled(
@@ -341,6 +381,27 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
                 dim(),
             ));
         }
+    } else if let Some(corpse) = floor
+        .corpse_at(cursor)
+        .filter(|_| floor.is_explored(cursor))
+    {
+        let def = world.content().monster(corpse.kind);
+        lines.push(Line::styled(
+            format!("The body of {}.", crate::log::with_article(&def.name)),
+            text().add_modifier(Modifier::BOLD),
+        ));
+        let state = match corpse.decay(world.turn()) {
+            tallow_core::Decay::Fresh => "Fresh.",
+            tallow_core::Decay::Swelling if def.health >= tallow_core::corpse::HATCH_HEALTH => {
+                "Swelling. Flies will hatch from it soon."
+            }
+            tallow_core::Decay::Swelling => "Rotting. It will soon be gone.",
+        };
+        lines.push(Line::styled(state, text()));
+        lines.push(Line::styled(
+            "Stand on it and press s to study or render it.",
+            dim(),
+        ));
     } else if let Some(tallow) = floor
         .tallow_at(cursor)
         .filter(|_| floor.is_explored(cursor))
@@ -356,6 +417,18 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
         lines.push(Line::styled("You don't know what is there.", dim()));
     } else {
         lines.push(Line::styled(tile_line(floor.map().tile(cursor)), text()));
+        if floor.is_sanctified(cursor) {
+            lines.push(Line::styled(
+                "Holy ground. The Dreaming can't cross it; the Taken flinch.",
+                Style::new().fg(palette::GOOD),
+            ));
+        }
+        if floor.decoy().is_some_and(|d| d.at == cursor) {
+            lines.push(Line::styled(
+                "Your false flame. Creatures near it go to it.",
+                Style::new().fg(palette::GOOD),
+            ));
+        }
         if !floor.is_visible(cursor) {
             lines.push(Line::styled("(remembered, not in view)", dim()));
         }
@@ -374,6 +447,7 @@ fn target_panel(world: &World, aim: Aim, cursor: Point, path_len: usize) -> Vec<
             format!("Throwing {what}.")
         }
         Aim::Fire => "Shooting.".into(),
+        Aim::Rite(rite) => format!("Casting {}.", world.content().rite(rite).name),
     };
     let mut lines = vec![Line::styled("─ aim ─", dim()), Line::styled(doing, text())];
     if let Some(info) = world
@@ -383,6 +457,18 @@ fn target_panel(world: &World, aim: Aim, cursor: Point, path_len: usize) -> Vec<
     {
         let def = world.content().monster(info.kind);
         lines.push(Line::styled(format!("At the {}.", def.name), text()));
+    }
+    if let Aim::Rite(rite) = aim {
+        lines.push(Line::styled(crate::names::rite_numbers(world, rite), dim()));
+        if let Err(why) = world.rite_check(rite, cursor) {
+            let text = crate::log::narrate(&tallow_core::Event::RiteFailed { rite, why }, world)
+                .map_or_else(String::new, |(t, _)| t);
+            lines.push(Line::styled(text, Style::new().fg(palette::DANGER)));
+        }
+        lines.push(Line::default());
+        lines.push(Line::styled("Enter cast · Tab next", dim()));
+        lines.push(Line::styled("Esc cancel", dim()));
+        return lines;
     }
     if path_len == 0 {
         lines.push(Line::styled(

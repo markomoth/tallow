@@ -4,6 +4,8 @@
 //   damage you take while wearing a vestment.
 // Rank n needs xp_factor × n² experience in total. Ranks run 0–10.
 // Each rank adds accuracy_per_rank (and defense_per_rank) with that skill.
+// Rite schools (Binding, Communion, Veil, Warding) grow from casting: the dread
+// a rite costs is its experience.
 // Techniques unlock at their rank; a later entry of the same technique replaces an earlier one.
 [
     (
@@ -59,6 +61,50 @@
         techniques: [
             (rank: 3, technique: Brace(percent: 25)),
             (rank: 6, technique: Brace(percent: 40)),
+        ],
+    ),
+    (
+        skill: Binding,
+        description: "Rites that hold and command another's body.",
+        xp_factor: 6,
+        accuracy_per_rank: 0,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: Deepen(percent: 50)),
+            (rank: 6, technique: Deepen(percent: 100)),
+        ],
+    ),
+    (
+        skill: Communion,
+        description: "Rites that take and give across the gap between bodies.",
+        xp_factor: 6,
+        accuracy_per_rank: 0,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: Deepen(percent: 50)),
+            (rank: 6, technique: Deepen(percent: 100)),
+        ],
+    ),
+    (
+        skill: Veil,
+        description: "Rites of not being seen, and of seeing what isn't there.",
+        xp_factor: 6,
+        accuracy_per_rank: 0,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: Thrift(percent: 25)),
+            (rank: 6, technique: Thrift(percent: 50)),
+        ],
+    ),
+    (
+        skill: Warding,
+        description: "Rites of holy ground, closed doors, and casting out.",
+        xp_factor: 6,
+        accuracy_per_rank: 0,
+        defense_per_rank: 0,
+        techniques: [
+            (rank: 3, technique: Thrift(percent: 25)),
+            (rank: 6, technique: Deepen(percent: 50)),
         ],
     ),
 ]

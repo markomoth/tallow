@@ -25,6 +25,8 @@ cargo run --release -- --seed 42   # replay a specific dungeon
 | `g` | Pick up |
 | `i` | Pack |
 | `t` / `f` | Throw / fire |
+| `s` | Study or render the body underfoot |
+| `z` | Cast a rite |
 | `@` | Character sheet |
 | `.` / `5` | Wait |
 | `q` | Quit |

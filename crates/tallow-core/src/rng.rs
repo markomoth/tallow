@@ -22,6 +22,8 @@ pub enum Stream {
     Loot = 3,
     /// Level-up drafts.
     Boons = 4,
+    /// Which rite a text teaches.
+    Rites = 5,
 }
 
 pub fn stream(seed: u64, stream: Stream) -> GameRng {

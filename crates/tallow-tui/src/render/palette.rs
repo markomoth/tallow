@@ -36,6 +36,8 @@ pub const CANDLE_EMPTY: Color = Color::Rgb(56, 44, 30);
 pub const TALLOW_FG: Rgb = [240, 220, 168];
 pub const LOAD: Color = Color::Rgb(150, 140, 120);
 pub const LOAD_EMPTY: Color = Color::Rgb(46, 42, 36);
+/// Background of holy ground.
+pub const HOLY_BG: Rgb = [58, 52, 26];
 /// Background of tiles a projectile would cross.
 pub const AIM: Rgb = [70, 58, 34];
 

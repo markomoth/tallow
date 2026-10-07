@@ -47,6 +47,10 @@ pub struct Player {
     pub insight: u32,
     pub skills: Skills,
     pub boons: Vec<Boon>,
+    /// Rites known, in the order learned.
+    pub rites: Vec<crate::rites::RiteId>,
+    /// Rites lasting on the acolyte (Shroud, Borrowed Eyes).
+    pub rite_state: crate::rites::Rites,
     pub(crate) energy: i32,
 }
 
@@ -56,6 +60,10 @@ pub struct RunStats {
     pub snuffs: u32,
     pub drinks: u32,
     pub heavy_blows_seen: u32,
+    pub casts: u32,
+    pub studies: u32,
+    /// Taken freed by Exorcise.
+    pub exorcised: u32,
 }
 
 /// How and when a run ended in death.
@@ -84,6 +92,14 @@ pub struct MonsterInfo {
     pub winding_up: Option<Point>,
     /// Not really there. Only Look can tell.
     pub phantom: bool,
+    /// Actions left under your Compel.
+    pub compelled: u32,
+    /// Actions left before it can notice you again.
+    pub unseeing: u32,
+    /// Actions left fleeing your dread.
+    pub terrified: u32,
+    pub pinned: u32,
+    pub carries_dread: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -109,7 +125,10 @@ pub struct World {
     pub(crate) stats: RunStats,
     sighted: HashSet<KindId>,
     witnessed: HashSet<(KindId, Trait)>,
-    death: Option<Death>,
+    /// Kinds whose bodies you've studied.
+    pub(crate) studied: HashSet<KindId>,
+    pub(crate) rite_rng: GameRng,
+    pub(crate) death: Option<Death>,
 }
 
 impl World {
@@ -147,6 +166,8 @@ impl World {
                 insight: 0,
                 skills: Skills::default(),
                 boons: Vec::new(),
+                rites: Vec::new(),
+                rite_state: crate::rites::Rites::default(),
                 energy: ACTION_COST,
             },
             floor,
@@ -164,6 +185,8 @@ impl World {
             stats: RunStats::default(),
             sighted: HashSet::new(),
             witnessed: HashSet::new(),
+            studied: HashSet::new(),
+            rite_rng: rng::stream(seed, Stream::Rites),
             death: None,
         };
         // The acolyte comes down with what was at hand.
@@ -256,6 +279,24 @@ impl World {
         self.update_view();
     }
 
+    /// Jumps straight to a deeper floor, as if by stairs but without the rewards.
+    /// For testing deep content.
+    pub fn dev_skip_to(&mut self, depth: u8) {
+        let depth = depth.clamp(1, MAX_DEPTH);
+        if depth <= self.depth {
+            return;
+        }
+        self.depth = depth;
+        self.floor = Self::generate_floor(self.content, self.seed, depth, &mut self.next_item);
+        self.player.pos = self.floor.arrival();
+        self.update_view();
+    }
+
+    /// Knows every rite. For testing.
+    pub fn dev_learn_all_rites(&mut self) {
+        self.player.rites = self.content.rite_ids().collect();
+    }
+
     /// Removes every monster from the current floor. For tests and scripted scenes.
     pub fn despawn_all(&mut self) {
         self.floor.monsters.clear();
@@ -320,6 +361,11 @@ impl World {
                 .collect(),
             winding_up: m.winding_up,
             phantom: m.phantom,
+            compelled: m.compelled,
+            unseeing: m.unseeing,
+            terrified: m.terrified,
+            pinned: m.pinned,
+            carries_dread: m.carries_dread,
         })
     }
 
@@ -361,6 +407,9 @@ impl World {
             Command::Throw { item, target } => self.throw(item, target),
             Command::Fire { target } => self.fire(target),
             Command::ChooseBoon(index) => self.choose_boon(index),
+            Command::Study => self.study(),
+            Command::Render => self.render(),
+            Command::Cast { rite, target } => self.cast(rite, target),
             Command::Ascend => match self.map().tile(self.player.pos) {
                 Tile::StairsUp => vec![Event::StairsSealed { depth: self.depth }],
                 _ => vec![Event::NoStairsHere],
@@ -373,7 +422,20 @@ impl World {
         let target = self.player.pos + dir;
         let mut events = Vec::new();
         let mut cost = ACTION_COST;
-        if let Some(id) = self.floor.monster_at(target) {
+        let thrall = self
+            .floor
+            .monster_at(target)
+            .filter(|&id| self.floor.monsters[id].compelled > 0);
+        if let Some(id) = thrall {
+            // Your thrall steps aside into your place.
+            let here = self.player.pos;
+            self.floor.monsters[id].pos = here;
+            self.player.pos = target;
+            events.push(Event::SwappedPlaces {
+                kind: self.floor.monsters[id].kind,
+            });
+            events.push(Event::PlayerMoved { to: target });
+        } else if let Some(id) = self.floor.monster_at(target) {
             self.player_attack(id, 0, &mut events);
         } else if let Some((id, bonus)) = self.reach_target(dir) {
             self.player_attack(id, bonus, &mut events);
@@ -422,7 +484,7 @@ impl World {
 
     /// Waits until healed (and, by a brazier, calm), or until something happens.
     fn rest(&mut self) -> Vec<Event> {
-        if !self.floor.visible_monsters(self.player.pos).is_empty() {
+        if !self.hostiles_in_view().is_empty() {
             return vec![Event::RunRefused];
         }
         if self.rested() {
@@ -436,7 +498,7 @@ impl World {
             turns += 1;
             let disturbed = step.iter().any(|e| !is_routine(e));
             events.extend(step);
-            if disturbed || !self.floor.visible_monsters(self.player.pos).is_empty() {
+            if disturbed || !self.hostiles_in_view().is_empty() {
                 return events;
             }
         }
@@ -468,7 +530,7 @@ impl World {
         let id = self
             .floor
             .monster_at(far)
-            .filter(|_| self.floor.is_visible(far))?;
+            .filter(|&id| self.floor.is_visible(far) && self.floor.monsters[id].compelled == 0)?;
         open.then_some((id, accuracy))
     }
 
@@ -535,7 +597,20 @@ impl World {
         }
         let (kind, at) = (monster.kind, monster.pos);
         self.floor.monsters.remove(id);
-        events.push(Event::MonsterDied { kind, at });
+        if self.floor.is_visible(at) {
+            events.push(Event::MonsterDied { kind, at });
+        }
+        self.leave_corpse(kind, at);
+        if self
+            .player
+            .rite_state
+            .borrowed
+            .is_some_and(|(b, _, _)| b == id)
+        {
+            self.player.rite_state.borrowed = None;
+            events.push(Event::EyesReturned);
+            events.extend(self.update_view());
+        }
         if kind == self.manifestation {
             events.push(Event::ManifestationBanished);
             self.ease_dread(events);
@@ -630,7 +705,7 @@ impl World {
     /// in view, anything happening to you, or (in a corridor) a side passage.
     /// Refused outright while something hostile is in view.
     fn run(&mut self, dir: Direction) -> Vec<Event> {
-        if !self.floor.visible_monsters(self.player.pos).is_empty() {
+        if !self.hostiles_in_view().is_empty() {
             return vec![Event::RunRefused];
         }
         let sides = |world: &World| {
@@ -661,7 +736,7 @@ impl World {
             let doors = self.doors_beside(dir);
             let new_door = doors.iter().any(|d| !known_doors.contains(d));
             let side_opened = in_corridor && sides(self) != [false, false];
-            let company = !self.floor.visible_monsters(self.player.pos).is_empty();
+            let company = !self.hostiles_in_view().is_empty();
             if disturbed
                 || company
                 || matches!(underfoot, Tile::Door | Tile::StairsDown | Tile::StairsUp)
@@ -722,7 +797,22 @@ impl World {
         } else {
             1
         };
-        self.floor.update_view(self.player.pos, candle, feel)
+        let borrowed = self
+            .player
+            .rite_state
+            .borrowed
+            .and_then(|(id, _, radius)| Some((self.floor.monsters.get(id)?.pos, radius)));
+        self.floor
+            .update_view(self.player.pos, candle, feel, borrowed)
+    }
+
+    /// Creatures in view that aren't your thralls, nearest first.
+    pub fn hostiles_in_view(&self) -> Vec<MonsterId> {
+        self.floor
+            .visible_monsters(self.player.pos)
+            .into_iter()
+            .filter(|&id| self.floor.monsters[id].compelled == 0)
+            .collect()
     }
 
     /// First sightings of creature kinds now in view. Reported from actions only,
@@ -758,10 +848,11 @@ impl World {
 }
 
 /// Events that don't interrupt a run or a rest.
-fn is_routine(event: &Event) -> bool {
+pub(crate) fn is_routine(event: &Event) -> bool {
     matches!(
         event,
         Event::PlayerMoved { .. }
+            | Event::SwappedPlaces { .. }
             | Event::PlayerWaited
             | Event::Spotted { .. }
             | Event::SpottedTallow { .. }

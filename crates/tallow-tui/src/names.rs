@@ -101,6 +101,10 @@ pub fn item_stats(world: &World, kind: ItemKindId) -> Vec<String> {
                 }
             }
         }
+        ItemClass::Text { school } => lines.push(format!(
+            "Read it (a few quiet turns) to learn a {} rite you don't know.",
+            school_name(*school)
+        )),
         ItemClass::Ammo | ItemClass::Throwable => {}
     }
     if let Some(thrown) = def.thrown {
@@ -124,7 +128,10 @@ pub fn tenths(value: u32) -> String {
     format!("{}.{}", value / 10, value % 10)
 }
 
-use tallow_core::{Boon, Family, Passive, Reward, Skill, Technique, Trigger};
+use tallow_core::{
+    Boon, Family, Passive, Reward, RiteEffect, RiteId, RiteTarget, School, Skill, Technique,
+    Trigger,
+};
 
 pub fn skill_name(skill: Skill) -> &'static str {
     match skill {
@@ -133,7 +140,49 @@ pub fn skill_name(skill: Skill) -> &'static str {
         Skill::Reach => "Reach",
         Skill::Missiles => "Missiles",
         Skill::Endurance => "Endurance",
+        Skill::Binding => "Binding",
+        Skill::Communion => "Communion",
+        Skill::Veil => "Veil",
+        Skill::Warding => "Warding",
     }
+}
+
+pub fn school_name(school: School) -> &'static str {
+    skill_name(school.skill())
+}
+
+/// A rite's numbers right now, at the current potency: "dread +15 · range 6 · 12 actions".
+pub fn rite_numbers(world: &World, rite: RiteId) -> String {
+    let def = world.content().rite(rite);
+    let p = world.rite_potency(rite);
+    let scale = |n: u32| (n * p / 100).max(1);
+    let what = match def.effect {
+        RiteEffect::Compel { actions } => format!("{} actions", scale(actions)),
+        RiteEffect::Kneel { actions } => format!("{} actions", scale(actions)),
+        RiteEffect::Leech { amount } => format!("drains {}", scale(amount)),
+        RiteEffect::Transference { dread, actions } => {
+            format!(
+                "dread −{}, it flees {} actions",
+                scale(dread),
+                scale(actions)
+            )
+        }
+        RiteEffect::BorrowedEyes { turns, .. } => format!("{} turns", scale(turns)),
+        RiteEffect::Unsee { actions } => format!("{} actions", scale(actions)),
+        RiteEffect::FalseFlame { turns } => format!("{} turns", scale(turns)),
+        RiteEffect::Shroud { turns } => format!("{} turns", scale(turns)),
+        RiteEffect::Sanctify { turns, radius } => {
+            format!("radius {radius}, {} turns", scale(turns))
+        }
+        RiteEffect::Exorcise { damage } => {
+            format!("frees one of the Taken (bosses: {})", scale(damage))
+        }
+    };
+    let reach = match def.effect.target() {
+        RiteTarget::Myself => "on yourself".to_string(),
+        RiteTarget::Creature | RiteTarget::Tile => format!("range {}", def.range),
+    };
+    format!("dread +{} · {reach} · {what}", world.rite_cost(rite))
 }
 
 fn family_noun(family: Family) -> &'static str {
@@ -195,6 +244,9 @@ pub fn boon_text(boon: Boon) -> (String, String) {
                     "Quick Mending",
                     "Regain health every 8 turns instead of 12.".into(),
                 ),
+                Passive::RiteThrift => {
+                    ("Familiar Words", "Rites cost a quarter less dread.".into())
+                }
             };
             (title.into(), text)
         }
@@ -217,6 +269,8 @@ pub fn boon_text(boon: Boon) -> (String, String) {
                 Trigger::Descend => ("Down and Deeper", "When you go down a stair".into()),
                 Trigger::Drink => ("Second Draught", "When you drink a tincture".into()),
                 Trigger::DodgeHeavyBlow => ("Light Feet", "When a heavy blow misses you".into()),
+                Trigger::Cast => ("Answered Prayer", "When you cast a rite".into()),
+                Trigger::Study => ("Scholar's Reward", "When you finish studying a body".into()),
             };
             let result = match then {
                 Reward::Heal(n) => format!("mend {n} health"),
@@ -230,8 +284,17 @@ pub fn boon_text(boon: Boon) -> (String, String) {
 }
 
 /// A technique's name and what it does.
-pub fn technique_text(technique: Technique) -> (String, String) {
+pub fn technique_text(skill: Skill, technique: Technique) -> (String, String) {
+    let school = skill_name(skill);
     match technique {
+        Technique::Deepen { percent } => (
+            format!("Deep Rites (+{percent}%)"),
+            format!("{school} rites last longer and do more."),
+        ),
+        Technique::Thrift { percent } => (
+            format!("Quiet Rites (−{percent}%)"),
+            format!("{school} rites cost less dread."),
+        ),
         Technique::Riposte { chance } => (
             format!("Riposte ({chance}%)"),
             "When a creature misses you in melee, your blade strikes back at once.".into(),

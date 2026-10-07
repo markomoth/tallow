@@ -38,6 +38,18 @@ pub struct Monster {
     pub phantom: bool,
     /// Actions left before it can move again (it can still strike).
     pub pinned: u32,
+    /// Actions left under Compel: it fights for you and follows you.
+    pub compelled: u32,
+    /// Actions left before it can notice you again (Unsee).
+    pub unseeing: u32,
+    /// Actions left fleeing in terror (Transference).
+    pub terrified: u32,
+    /// Already holds some of your dread; it can't take more.
+    pub carries_dread: bool,
+    /// Another creature it is fighting instead of you.
+    pub foe: Option<MonsterId>,
+    /// Stepped onto holy ground: loses its next action.
+    pub(crate) flinching: bool,
 }
 
 impl Monster {
@@ -54,6 +66,12 @@ impl Monster {
             cooldown: 0,
             phantom: false,
             pinned: 0,
+            compelled: 0,
+            unseeing: 0,
+            terrified: 0,
+            carries_dread: false,
+            foe: None,
+            flinching: false,
         }
     }
 }

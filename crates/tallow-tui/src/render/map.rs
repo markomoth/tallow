@@ -80,9 +80,17 @@ impl Widget for MapView<'_> {
                     palette::TELEGRAPH.map(|c| (f32::from(c) * pulse) as u8)
                 } else if self.path.contains(&p) {
                     palette::AIM
+                } else if floor.is_sanctified(p) && floor.is_explored(p) {
+                    if floor.is_visible(p) {
+                        palette::HOLY_BG
+                    } else {
+                        remember_bg(palette::HOLY_BG)
+                    }
                 } else {
                     bg
                 };
+                let decoy = floor.decoy().filter(|d| d.at == p && floor.is_visible(p));
+                let corpse = floor.corpse_at(p).filter(|_| floor.is_explored(p));
                 let monster = floor
                     .monster_at(p)
                     .filter(|_| floor.is_visible(p))
@@ -103,6 +111,15 @@ impl Widget for MapView<'_> {
                     };
                     cell.set_char(def.glyph).set_fg(rgb(color)).set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
+                    if monster.compelled > 0 {
+                        cell.modifier.insert(Modifier::UNDERLINED);
+                    }
+                } else if decoy.is_some() {
+                    let flicker = 0.8 + 0.2 * (self.time * 11.0).sin();
+                    let fg =
+                        tallow_core::rites::DECOY_COLOR.map(|c| (f32::from(c) * flicker) as u8);
+                    cell.set_char('*').set_fg(rgb(fg)).set_bg(rgb(bg));
+                    cell.modifier.insert(Modifier::BOLD);
                 } else if let Some(item) = item {
                     let def = content.item(item.item.kind);
                     let fg = if floor.is_visible(p) {
@@ -118,6 +135,14 @@ impl Widget for MapView<'_> {
                         remember(palette::TALLOW_FG)
                     };
                     cell.set_char(',').set_fg(rgb(fg)).set_bg(rgb(bg));
+                } else if let Some(corpse) = corpse {
+                    let base = content.monster(corpse.kind).color.map(|c| c / 2 + 30);
+                    let fg = if floor.is_visible(p) {
+                        shade(base, floor.light(p), global_flicker)
+                    } else {
+                        remember(base)
+                    };
+                    cell.set_char('%').set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else {
                     cell.set_char(look.glyph).set_fg(rgb(fg)).set_bg(rgb(bg));
                 }

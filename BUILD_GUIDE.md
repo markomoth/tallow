@@ -129,10 +129,12 @@ The key tension: **rites cost dread, and dread makes rites stronger.** Players d
 
 ### Corpses are a decision
 
-Every corpse offers three choices:
-- **Study** (10–20 turns): journal entry, weakness revealed, sometimes a rite fragment.
-- **Render** (10 turns): tallow.
-- **Leave it:** after ~100 turns it rots and a fly swarm hatches. Fire also removes it.
+Every corpse offers three choices (stand on it, press `s`):
+- **Study** (10 + 2 × threat turns, at most 20): the first study of a kind reveals all its tricks in Look and gives 10 Insight. Some kinds teach a rite (`teaches` in `monsters.ron`: parishioner → Exorcise, pallbearer → Kneel, gnawer → Unsee, Proctor → Sanctify). A kind with nothing left to teach is refused at once, costing nothing. Later: journal entry.
+- **Render** (10 turns): tallow, 4 × the creature's health (12–90).
+- **Leave it:** at 70 turns it visibly swells (log + Look), at 100 it rots. Bodies of creatures with 8+ health hatch a fly swarm; smaller ones just go. Fire also removes it (M7).
+- Both tasks are refused with a hostile in view and stop the moment anything happens. Progress stays on the body, so you can come back to it.
+- The Dreaming and swarms leave no body.
 
 ---
 
@@ -148,7 +150,7 @@ No attributes. No skill trees. No classes. Your build is what you do.
 | Bludgeons | Hitting with censers, maces, staves |
 | Reach | Hitting with spears, hooks, poles |
 | Missiles | Slings, crossbows, thrown things |
-| Binding | Casting control rites |
+| Binding | Casting control rites (each cast trains its school by the dread it cost, at least 4) |
 | Communion | Casting leech / transfer rites |
 | Veil | Casting concealment / illusion rites |
 | Warding | Casting protection / banishing rites |
@@ -157,7 +159,7 @@ No attributes. No skill trees. No classes. Your build is what you do.
 - Ranks 0–10. Rank n needs `k × n²` experience in total (`k` is 6–10 per skill, in `assets/skills.ron`).
 - **Meaningful use only:** experience is the damage you deal to real creatures, never more than they had left to lose. Monsters are finite and phantoms teach nothing, so there is nothing to grind. Endurance is damage taken while wearing a vestment.
 - Each rank: +2 accuracy with that skill (Endurance: +1 defense instead). The `@` sheet shows every skill's progress and what unlocks next.
-- Rite skills (Binding, Communion, Veil, Warding) arrive with rites in M6.
+- Rite skills (Binding, Communion, Veil, Warding) train from casting. Their ranks add no accuracy; their techniques make rites stronger or cheaper.
 
 | Technique | Rank 3 | Rank 6 |
 |---|---|---|
@@ -166,6 +168,10 @@ No attributes. No skill trees. No classes. Your build is what you do.
 | Reach: **Long Reach** | Moving toward a visible creature two tiles away in a straight line strikes it instead | +10 accuracy |
 | Missiles: **Pin** | A hit can hold the creature in place for 2 actions (30%) | 50%, 3 actions |
 | Endurance: **Brace** | Heavy blows that land do 25% less | 40% less |
+| Binding: **Deep Rites** | Binding rites +50% potency | +100% |
+| Communion: **Deep Rites** | Communion rites +50% potency | +100% |
+| Veil: **Quiet Rites** | Veil rites cost 25% less dread | 50% less |
+| Warding: **Quiet Rites** / **Deep Rites** | Warding rites cost 25% less dread | and +50% potency |
 
 ### Combat basics
 
@@ -179,12 +185,13 @@ No attributes. No skill trees. No classes. Your build is what you do.
 
 ### Character level
 
-- **Insight** (the in-game word for XP) comes from: first sight of a creature kind (8), each new floor (12), kills (6 × the creature's threat; a Manifestation 20), learning a tincture (5). Studying and rites add more in M6.
+- **Insight** (the in-game word for XP) comes from: first sight of a creature kind (8), each new floor (12), kills (6 × the creature's threat; a Manifestation 20; kills by your thrall count), learning a tincture (5), first study of a kind (10), learning a rite (10), reading a text with nothing new (6), freeing one of the Taken (10).
 - Level `L` → `L+1` at `15 × L × (L+1)` total Insight (30, 90, 180, 300, …). A diving bot ends runs around level 5–6.
 - Each level: +3 health, then a **draft of 3 boons** pops up. Press 1, 2 or 3. Choosing takes no time.
 - Boons are either **passive** (Steady Hand: +5 accuracy; Slow Wick: the candle burns a quarter slower; Night Eyes: feel two tiles in the dark; Hearth-Kin; Broad Back; …) or **trigger × reward** ("When you kill with bludgeons, gain 12 tallow"; "When you snuff your candle, the nearest hunter loses your trail"). Rare triggers pay more.
 - The draft is weighted toward skills you actually use, never repeats a unique boon, and never offers a dead pick: no blade boons before you've used a blade, no snuff boons before you've snuffed, and so on.
-- Later (with rites): "Leech also lowers your dread", "Thrown flasks shatter in a cross".
+- Rite boons: Familiar Words (rites cost a quarter less dread; offered once you know a rite), Answered Prayer ("when you cast a rite, …"; after your first cast), Scholar's Reward ("when you finish studying a body, …"; after your first study).
+- Later: "Thrown flasks shatter in a cross".
 
 ### Rites (magic)
 
@@ -198,6 +205,30 @@ Situational, manipulative, useful to every build. Cost dread. Learned by **study
 | **Warding** | *Sanctify* (ground nightmares can't cross), *Exorcise* (free a Taken; they flee as a villager), *Seal* (bar a door) |
 
 Target for v1: 16 rites (4 per school). No damage-only spells. Every rite changes a situation.
+
+**How rites work (M6):**
+- `z` lists known rites with their current numbers; pick a letter, then a target if the rite needs one. Rites are defined in `assets/rites.ron`.
+- **Cost:** the dread listed, minus the school's Quiet Rites and the Familiar Words boon. The list warns when a cast would take dread to 100. A failed cast (no target, out of range, wrong kind) costs nothing.
+- **Potency:** calm 1.0×, uneasy 1.25×, frayed or worse 1.5×, times the school's Deep Rites. Potency scales durations and amounts.
+- **Learning:** texts (`?`) teach a random unknown rite of their school; studying bodies teaches their kind's rites. Floor 1 always has a text. Rites last the run only.
+- **Bosses** resist Binding (durations ÷ 3) and can't be freed by Exorcise (it burns them instead). Your Manifestation ignores Compel, Unsee and Transference.
+
+| Rite | School | Dread | Range | Effect (1.0×) |
+|---|---|---|---|---|
+| Compel | Binding | 15 | 6 | The creature fights the nearest creature it can see and follows you, for 12 of its actions. You swap places with it. It never strikes you; when it wakes it hunts you. |
+| Kneel | Binding | 8 | 6 | Can't move for 5 actions (can still strike). |
+| Leech | Communion | 10 | 4 | Drain 5 health from it into you. |
+| Transference | Communion | 0 | 5 | Your dread −20; it flees for 8 actions. Each creature can carry your dread only once. |
+| Borrowed Eyes | Communion | 6 | 8 | 30 turns: you also see what it sees within 7 tiles, lit or not. |
+| Unsee | Veil | 6 | 6 | It forgets you and can't notice you for 10 actions. |
+| False Flame | Veil | 8 | 8 | A decoy light on open ground for 20 turns. Creatures within 10 of it go to it and ignore you unless you're within 2. Lantern-eaters eat it. |
+| Shroud | Veil | 8 | self | 15 turns: your lit candle doesn't give you away; only adjacent creatures notice you. |
+| Sanctify | Warding | 12 | self | Ground within 2 tiles is holy for 30 turns: the Dreaming can't enter (and leave it if caught on it), the Taken lose an action when they step on it. |
+| Exorcise | Warding | 15 | 3 | One of the Taken wakes and runs home (gone, counted for the epilogue). Bosses take 8 instead. |
+
+Still to come with M7's environment: Turncoat (Binding), Hush (Veil), Seal (Warding), and one more Communion rite.
+
+**Creatures fighting each other (M6):** a creature struck by another turns on it until one dies or they're 10+ tiles apart. M7 adds the faction hostility matrix on top.
 
 ---
 
@@ -231,7 +262,7 @@ Target for v1: 16 rites (4 per school). No damage-only spells. Every rite change
 | Throwables | Throwing knives, holy water; later oil flask, smoke pot, chalk (draws a ward line) |
 | Vestments | Cassock, gambeson, sexton's leathers, choir mail (heavy) |
 | Tinctures | Mending (+health), steadying (−dread), seeing (reveals the floor around you) |
-| Texts | Hymnal pages, heretic notes, Collegium lecture fragments (teach rites) |
+| Texts | Hymnal page (Warding), heretic's note (Binding), anatomist's notes (Communion), lecture fragment (Veil). Read with `a` in the pack: 3 quiet turns, then a rite. Used up. |
 | Tools | Handbell (noise lure), crowbar (pry, break), tallow lumps, incense |
 
 ### Identification: known category, learn by use
@@ -469,7 +500,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 |---|---|---|---|
 | M4 ✅ | Items & weight | Pick up, equip, throw, get Burdened, learn a tincture by drinking it | 3–4 h |
 | M5 ✅ | Skills & levels | See Blades rank up from use, pick 1 of 3 boons on level up | 2–3 h |
-| M6 | Rites & study | Study a corpse, learn Compel from a page, mind-control a Proctor into a Taken | 3–4 h |
+| M6 ✅ | Rites & study | Study a corpse, learn Compel from a page, mind-control a Proctor into a Taken | 3–4 h |
 | M7 | Factions & environment | Ring a bell to pull a swarm into a nightmare; set a library on fire | 4–5 h |
 
 ### Phase C: The full run (~3–4 days)

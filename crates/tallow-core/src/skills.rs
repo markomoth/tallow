@@ -15,15 +15,27 @@ pub enum Skill {
     Reach,
     Missiles,
     Endurance,
+    /// Rites of control.
+    Binding,
+    /// Rites of leeching and transfer.
+    Communion,
+    /// Rites of concealment and illusion.
+    Veil,
+    /// Rites of protection and banishing.
+    Warding,
 }
 
 impl Skill {
-    pub const ALL: [Skill; 5] = [
+    pub const ALL: [Skill; 9] = [
         Skill::Blades,
         Skill::Bludgeons,
         Skill::Reach,
         Skill::Missiles,
         Skill::Endurance,
+        Skill::Binding,
+        Skill::Communion,
+        Skill::Veil,
+        Skill::Warding,
     ];
 
     pub const fn of_family(family: Family) -> Skill {
@@ -48,6 +60,10 @@ pub enum Technique {
     Pin { chance: u32, actions: u32 },
     /// Heavy blows that land on you do less.
     Brace { percent: u32 },
+    /// Rites of this school last longer and do more, by this percent.
+    Deepen { percent: u32 },
+    /// Rites of this school cost this percent less dread.
+    Thrift { percent: u32 },
 }
 
 impl Technique {
