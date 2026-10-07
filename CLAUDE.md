@@ -11,13 +11,17 @@ cargo run                                  # play (binary: `tallow`, needs a 100
 cargo test --workspace                     # all tests
 cargo clippy --workspace --all-targets     # must be warning-free
 cargo fmt --all                            # format before committing
+cargo run -p tallow-core --example floor -- <seed> <depth>   # print a generated floor as ASCII
+cargo run -- --seed 7                      # replay a specific dungeon
 ```
 
 ## Layout
 
 - `crates/tallow-core` — pure game logic. `World::apply(Command) -> Vec<Event>`.
 - `crates/tallow-tui` — the `tallow` binary: ratatui rendering, key bindings, message log.
-- `assets/` — content embedded with `include_str!` (prefab maps now; RON data files later).
+- `assets/` — not created yet. From M4 on: RON content and prefab vaults, embedded with `include_str!`.
+
+Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor seeded streams).
 
 ## Rules for the code
 

@@ -1,73 +1,101 @@
-//! Tiles and the floor map.
+//! Tiles, the floor map, and the algorithms that run over it.
 
+pub mod fov;
+pub mod generate;
+pub mod light;
+pub mod path;
 pub mod prefab;
 
 use crate::geom::Point;
+use crate::grid::Grid;
 
 /// What a single map cell is made of.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Tile {
+    #[default]
     Wall,
     Floor,
-    /// An open doorway. Walkable for now; opening, closing and barring come later.
+    /// An open doorway. Opening, closing and barring come later.
     Door,
+    /// The way further down.
+    StairsDown,
+    /// The way you came. Sealed during the descent.
+    StairsUp,
+    /// A burning iron bowl. Blocks movement, not sight. Gives light.
+    Brazier,
 }
 
 impl Tile {
     /// Can a creature stand on this tile?
     pub const fn is_walkable(self) -> bool {
-        matches!(self, Tile::Floor | Tile::Door)
+        matches!(
+            self,
+            Tile::Floor | Tile::Door | Tile::StairsDown | Tile::StairsUp
+        )
+    }
+
+    /// Does this tile stop line of sight (and light)?
+    pub const fn blocks_sight(self) -> bool {
+        matches!(self, Tile::Wall)
+    }
+
+    /// Worth stopping a run for when it first comes into view.
+    pub const fn is_landmark(self) -> bool {
+        matches!(self, Tile::StairsDown | Tile::Brazier)
     }
 }
 
 /// A rectangular grid of tiles. Anything outside the bounds reads as wall.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Map {
-    width: i32,
-    height: i32,
-    tiles: Vec<Tile>,
+    tiles: Grid<Tile>,
 }
 
 impl Map {
     /// A map of the given size filled with walls.
     pub fn filled(width: i32, height: i32) -> Self {
-        assert!(width > 0 && height > 0, "map must have a positive size");
         Self {
-            width,
-            height,
-            tiles: vec![Tile::Wall; (width * height) as usize],
+            tiles: Grid::new(width, height, Tile::Wall),
         }
     }
 
     pub const fn width(&self) -> i32 {
-        self.width
+        self.tiles.width()
     }
 
     pub const fn height(&self) -> i32 {
-        self.height
+        self.tiles.height()
     }
 
     pub const fn in_bounds(&self, p: Point) -> bool {
-        p.x >= 0 && p.y >= 0 && p.x < self.width && p.y < self.height
+        self.tiles.in_bounds(p)
     }
 
     pub fn tile(&self, p: Point) -> Tile {
-        self.index(p).map_or(Tile::Wall, |i| self.tiles[i])
+        self.tiles.at(p)
     }
 
     /// Sets a tile. Writes outside the bounds are ignored.
     pub fn set(&mut self, p: Point, tile: Tile) {
-        if let Some(i) = self.index(p) {
-            self.tiles[i] = tile;
-        }
+        self.tiles.set(p, tile);
     }
 
     pub fn is_walkable(&self, p: Point) -> bool {
         self.tile(p).is_walkable()
     }
 
-    fn index(&self, p: Point) -> Option<usize> {
-        self.in_bounds(p).then(|| (p.y * self.width + p.x) as usize)
+    pub fn blocks_sight(&self, p: Point) -> bool {
+        self.tile(p).blocks_sight()
+    }
+
+    /// Every point on the map, row by row.
+    pub fn points(&self) -> impl Iterator<Item = Point> + use<> {
+        self.tiles.points()
+    }
+
+    /// Every point holding the given tile.
+    pub fn find(&self, tile: Tile) -> impl Iterator<Item = Point> + '_ {
+        self.points().filter(move |&p| self.tile(p) == tile)
     }
 }
 
@@ -92,9 +120,9 @@ mod tests {
     }
 
     #[test]
-    fn writes_out_of_bounds_are_ignored() {
-        let mut map = Map::filled(2, 2);
-        map.set(Point::new(5, 5), Tile::Floor);
-        assert_eq!(map, Map::filled(2, 2));
+    fn braziers_block_walking_but_not_sight() {
+        assert!(!Tile::Brazier.is_walkable());
+        assert!(!Tile::Brazier.blocks_sight());
+        assert!(Tile::Wall.blocks_sight());
     }
 }

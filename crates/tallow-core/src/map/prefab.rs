@@ -1,13 +1,10 @@
-//! Hand-drawn maps written as ASCII.
+//! Hand-drawn maps written as ASCII. Used for tests now and for vaults later.
 //!
-//! Legend: `#` wall, `.` floor, `+` door, `@` player start (on floor).
-//! Short rows are padded with wall.
+//! Legend: `#` wall, `.` floor, `+` door, `>` stairs down, `<` stairs up,
+//! `&` brazier, `@` player start (on floor). Short rows are padded with wall.
 
 use super::{Map, Tile};
 use crate::geom::Point;
-
-/// The first floor under the church, used until procedural generation lands in M1.
-pub const UNDERCROFT: &str = include_str!("../../../../assets/prefabs/undercroft.txt");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrefabError {
@@ -50,6 +47,9 @@ pub fn parse(text: &str) -> Result<(Map, Point), PrefabError> {
                 '#' => Tile::Wall,
                 '.' => Tile::Floor,
                 '+' => Tile::Door,
+                '>' => Tile::StairsDown,
+                '<' => Tile::StairsUp,
+                '&' => Tile::Brazier,
                 '@' => {
                     if start.replace(at).is_some() {
                         return Err(PrefabError::MultipleStarts);
@@ -68,15 +68,16 @@ pub fn parse(text: &str) -> Result<(Map, Point), PrefabError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geom::Direction;
-    use std::collections::{HashSet, VecDeque};
 
     #[test]
     fn parses_a_small_prefab() {
-        let (map, start) = parse("####\n#@+#\n#..#\n####").unwrap();
-        assert_eq!((map.width(), map.height()), (4, 4));
+        let (map, start) = parse("#####\n#@+>#\n#.&<#\n#####").unwrap();
+        assert_eq!((map.width(), map.height()), (5, 4));
         assert_eq!(start, Point::new(1, 1));
         assert_eq!(map.tile(Point::new(2, 1)), Tile::Door);
+        assert_eq!(map.tile(Point::new(3, 1)), Tile::StairsDown);
+        assert_eq!(map.tile(Point::new(2, 2)), Tile::Brazier);
+        assert_eq!(map.tile(Point::new(3, 2)), Tile::StairsUp);
         assert_eq!(map.tile(start), Tile::Floor);
     }
 
@@ -95,31 +96,5 @@ mod tests {
             parse("@x"),
             Err(PrefabError::UnknownGlyph { glyph: 'x', .. })
         ));
-    }
-
-    #[test]
-    fn undercroft_is_fully_connected() {
-        let (map, start) = parse(UNDERCROFT).expect("undercroft prefab should parse");
-
-        let mut seen = HashSet::from([start]);
-        let mut queue = VecDeque::from([start]);
-        while let Some(p) = queue.pop_front() {
-            for dir in Direction::ALL {
-                let next = p + dir;
-                if map.is_walkable(next) && seen.insert(next) {
-                    queue.push_back(next);
-                }
-            }
-        }
-
-        for y in 0..map.height() {
-            for x in 0..map.width() {
-                let p = Point::new(x, y);
-                assert!(
-                    !map.is_walkable(p) || seen.contains(&p),
-                    "walkable tile ({x}, {y}) is unreachable from the start"
-                );
-            }
-        }
     }
 }

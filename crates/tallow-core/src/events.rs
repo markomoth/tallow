@@ -14,4 +14,12 @@ pub enum Event {
     PlayerBlocked { at: Point, tile: Tile },
     /// The player waited a turn.
     PlayerWaited,
+    /// A landmark came into view for the first time on this floor.
+    Spotted { tile: Tile, at: Point },
+    /// The player went down to a new floor.
+    Descended { depth: u8 },
+    /// The player tried to use stairs that aren't there. Costs no time.
+    NoStairsHere,
+    /// The way back up is closed during the descent. Costs no time.
+    StairsSealed { depth: u8 },
 }

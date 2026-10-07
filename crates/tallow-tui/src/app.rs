@@ -12,12 +12,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(seed: u64) -> Self {
         let mut log = MessageLog::default();
         log.push("You pry up the floorboards behind the altar and climb down.");
         log.push("The air tastes of tallow and old water. Somewhere below, a bell.");
         Self {
-            world: World::undercroft(),
+            world: World::new(seed),
             log,
             quit: false,
         }

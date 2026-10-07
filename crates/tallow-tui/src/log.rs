@@ -41,12 +41,39 @@ impl MessageLog {
 
 /// The log line for an event, if it deserves one. Routine movement stays quiet.
 pub fn narrate(event: &Event) -> Option<&'static str> {
-    match event {
+    match *event {
         Event::PlayerBlocked {
             tile: Tile::Wall, ..
         } => Some("Cold stone. The wall does not give."),
         Event::PlayerBlocked { .. } => Some("Something blocks the way."),
-        Event::PlayerMoved { .. } | Event::PlayerWaited => None,
+        Event::Spotted {
+            tile: Tile::StairsDown,
+            ..
+        } => Some("A stair leads further down."),
+        Event::Descended { depth } => Some(descent_line(depth)),
+        Event::NoStairsHere => Some("There are no stairs here."),
+        Event::StairsSealed { depth: 1 } => {
+            Some("Above is only the church, and the dreamers. Not yet.")
+        }
+        Event::StairsSealed { .. } => Some("Rubble chokes the stair behind you. The way is down."),
+        Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => None,
+    }
+}
+
+fn descent_line(depth: u8) -> &'static str {
+    const ROUTINE: [&str; 4] = [
+        "You descend. The steps are slick with old wax.",
+        "Down again. Your candle leans toward something below.",
+        "The stair turns more times than it should.",
+        "You go down. Far above, very faintly, the bell.",
+    ];
+    // The first floor of each biome gets its own line.
+    match depth {
+        4 => "The crypt gives way to carved halls and empty lecterns. The Collegium.",
+        7 => "Water on the steps, then at your ankles. The lower stacks are drowned.",
+        10 => "The walls are warm here, and they hum. Flies.",
+        tallow_core::MAX_DEPTH => "The stair ends. Whatever lives under the church is here.",
+        _ => ROUTINE[usize::from(depth) % ROUTINE.len()],
     }
 }
 
@@ -74,6 +101,13 @@ mod tests {
                 }
             ]
         );
+    }
+
+    #[test]
+    fn every_depth_has_a_descent_line() {
+        for depth in 2..=tallow_core::MAX_DEPTH {
+            assert!(narrate(&Event::Descended { depth }).is_some());
+        }
     }
 
     #[test]

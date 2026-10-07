@@ -6,6 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rand.workspace = true
+rand_pcg.workspace = true
 
 [lints]
 workspace = true

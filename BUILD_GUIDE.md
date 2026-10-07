@@ -73,6 +73,8 @@ Target pacing: ~4 minutes per descent floor, ~10 minutes for the ascent, ~1 hour
 
 Mini-bosses always drop a **Leaving** (artifact, see §8).
 
+**The descent is one-way.** The stair behind you is sealed (rubble on deeper floors; on floor 1 the church above is no refuge). No stair-scumming, and the candle clock stays honest. Every floor is generated from the run seed and its depth, independent of other floors.
+
 ### Beelzebub
 
 Three phases. Each phase has a force answer, a rite answer, and a room answer.
@@ -289,7 +291,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Glyphs:** ASCII. `@` you, `#` wall, `.` floor, `+` door, `>` `<` stairs, letters for creatures, `!` tinctures, `?` texts, `*` Leavings, `~` water, `"` vestments, `/` `|` `)` weapons.
+- **Glyphs:** ASCII. `@` you, `#` wall, `.` floor, `+` door, `>` `<` stairs, `&` brazier, letters for creatures, `!` tinctures, `?` texts, `*` Leavings, `~` water, `"` vestments, `/` `|` `)` weapons.
 - **Lighting:** per-tile light value blended into foreground and background. Warm amber falloff from the candle; braziers orange; holy light pale gold; darkness near-black.
 - **Flicker:** small per-frame jitter on candle light (visual only, never affects rules).
 - **Remembered tiles:** desaturated blue-grey.
@@ -301,6 +303,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | Key | Action |
 |---|---|
 | arrows / `hjklyubn` / numpad | Move, bump to attack |
+| Shift + direction (`HJKLYUBN`, ⇧arrows) | Run until something interesting: a wall, a door or stair underfoot or alongside, a new landmark in view, or a side passage in a corridor. Later: any creature or item coming into view. |
 | `.` / `5` | Wait |
 | `<` `>` | Stairs |
 | `g` | Pick up |
@@ -356,7 +359,7 @@ tallow/
 ├── Cargo.toml                 # workspace
 ├── BUILD_GUIDE.md
 ├── assets/                    # RON content, embedded with include_str!
-│   ├── prefabs/               # hand-drawn ASCII maps (undercroft.txt)
+│   ├── prefabs/               # hand-drawn ASCII vaults (parser: map/prefab.rs)
 │   ├── monsters.ron
 │   ├── items.ron
 │   ├── rites.ron
@@ -416,7 +419,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | # | Milestone | Done when you can… | Est. |
 |---|---|---|---|
 | M0 ✅ | Skeleton | Run `cargo run`, see `@` on a map, move, quit | 1–2 h |
-| M1 | Map & sight | Walk procedurally generated floors with FOV, candlelight falloff, fog, stairs down | 3–4 h |
+| M1 ✅ | Map & sight | Walk procedurally generated floors with FOV, candlelight falloff, fog, stairs down | 3–4 h |
 | M2 | Combat & monsters | Fight 4 crypt monsters with energy-based turns, see the log, die, see death recap | 3–4 h |
 | M3 | Candle & dread | Watch the candle burn, snuff it, gain dread, trigger a Manifestation | 2–3 h |
 

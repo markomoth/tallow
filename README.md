@@ -10,12 +10,15 @@ Needs [Rust](https://rustup.rs) and a truecolor terminal of at least 100×30.
 
 ```sh
 cargo run --release
+cargo run --release -- --seed 42   # replay a specific dungeon
 ```
 
 | Key | Action |
 |---|---|
 | arrows / `hjkl` / numpad | Move |
 | `yubn` | Move diagonally |
+| Shift + direction | Run |
+| `>` | Descend stairs |
 | `.` / `5` | Wait |
 | `q` | Quit |
 

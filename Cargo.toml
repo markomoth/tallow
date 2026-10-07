@@ -11,6 +11,8 @@ rust-version = "1.90"
 [workspace.dependencies]
 tallow-core = { path = "crates/tallow-core" }
 ratatui = "0.30"
+rand = { version = "0.10", default-features = false, features = ["alloc"] }
+rand_pcg = { version = "0.10", default-features = false }
 anyhow = "1"
 
 [workspace.lints.rust]
