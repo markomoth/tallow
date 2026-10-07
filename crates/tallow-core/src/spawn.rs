@@ -139,7 +139,7 @@ pub fn place_remains<R: Rng + ?Sized>(
         return Vec::new();
     };
     let (count, near_stairs) = match depth {
-        3 => (4, true),
+        3 => (3, true),
         10..=12 => (rng.random_range(3..=5), false),
         _ => return Vec::new(),
     };
@@ -166,6 +166,99 @@ pub fn place_remains<R: Rng + ?Sized>(
         placed.push((kind, spots.swap_remove(rng.random_range(0..spots.len()))));
     }
     placed
+}
+
+/// What a seep room holds.
+pub struct Seep {
+    pub anomalies: Vec<crate::leavings::Anomaly>,
+    pub leaving: crate::leavings::Leaving,
+    pub leaving_at: Point,
+    /// Someone tried before you: a few stones by the way in.
+    pub stones_at: Point,
+    pub stones: u32,
+}
+
+/// Fills a seep room: a Leaving in the middle, invisible anomalies around it,
+/// and stones lying just outside to throw.
+pub fn fill_seep<R: Rng + ?Sized>(
+    rng: &mut R,
+    content: &Content,
+    map: &Map,
+    (a, b): (Point, Point),
+    start: Point,
+    depth: u8,
+) -> Seep {
+    use crate::leavings::{Anomaly, AnomalyKind, Leaving};
+    let inside: Vec<Point> = map
+        .points()
+        .filter(|p| p.x >= a.x && p.x <= b.x && p.y >= a.y && p.y <= b.y)
+        .filter(|&p| map.tile(p) == Tile::Floor)
+        .collect();
+    let center = Point::new((a.x + b.x) / 2, (a.y + b.y) / 2);
+    let leaving_at = inside
+        .iter()
+        .copied()
+        .min_by_key(|p| p.distance_squared(center))
+        .unwrap_or(center);
+    let mut spots: Vec<Point> = inside
+        .iter()
+        .copied()
+        .filter(|&p| p != leaving_at)
+        .collect();
+    let kinds = [
+        AnomalyKind::Heat,
+        AnomalyKind::Snare,
+        AnomalyKind::Pocket,
+        AnomalyKind::Swap,
+    ];
+    let mut anomalies = Vec::new();
+    for _ in 0..rng.random_range(3..=6) {
+        if spots.is_empty() {
+            break;
+        }
+        // Anomalies cluster around what they guard.
+        spots.sort_by_key(|p| p.distance_squared(leaving_at));
+        let near = spots.len().min(8);
+        let at = spots.swap_remove(rng.random_range(0..near));
+        anomalies.push(Anomaly {
+            at,
+            kind: *kinds.choose(rng).expect("kinds"),
+            revealed: false,
+        });
+    }
+    let leaving = content
+        .leavings
+        .named
+        .iter()
+        .find(|n| n.seep_floor == Some(depth))
+        .map_or_else(
+            || Leaving::roll(rng, &content.leavings),
+            Leaving::from_named,
+        );
+    // Stones by the way in from the stair: open floor just outside the room,
+    // on the near side, so you never have to cross it to reach them.
+    let to_room = path::distances(map, leaving_at);
+    let from_start = path::distances(map, start);
+    let outside: Vec<Point> = map
+        .points()
+        .filter(|&p| {
+            map.tile(p) == Tile::Floor
+                && !(p.x >= a.x - 1 && p.x <= b.x + 1 && p.y >= a.y - 1 && p.y <= b.y + 1)
+                && to_room.at(p).is_some_and(|d| d <= 8)
+        })
+        .collect();
+    let stones_at = outside
+        .iter()
+        .copied()
+        .min_by_key(|&p| from_start.at(p).unwrap_or(u32::MAX))
+        .unwrap_or(leaving_at);
+    Seep {
+        anomalies,
+        leaving,
+        leaving_at,
+        stones_at,
+        stones: rng.random_range(3..=5),
+    }
 }
 
 /// Items lying about on a fresh floor.

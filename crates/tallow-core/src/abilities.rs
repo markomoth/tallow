@@ -252,6 +252,17 @@ impl World {
         let last_of_kind = !self.floor.monsters().any(|(_, m)| m.kind == kind);
         if def.boss && last_of_kind {
             events.push(Event::BossDefeated { kind });
+            let named = self
+                .content
+                .leavings
+                .named
+                .iter()
+                .find(|n| n.from.as_deref() == Some(def.id.as_str()));
+            if let Some(named) = named {
+                let leaving = crate::leavings::Leaving::from_named(named);
+                let id = self.register_leaving(leaving);
+                self.floor.leavings.push((at, id));
+            }
         }
     }
 

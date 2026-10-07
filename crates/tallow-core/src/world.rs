@@ -55,6 +55,10 @@ pub struct Player {
     pub rite_state: crate::rites::Rites,
     /// Ink in your eyes until this turn: your light shrinks.
     pub blind_until: Option<u64>,
+    /// Leavings carried, in the order taken.
+    pub leavings: Vec<crate::leavings::LeavingId>,
+    /// A Leaving lets you see in the dark until this turn.
+    pub dark_sight_until: Option<u64>,
     pub(crate) energy: i32,
 }
 
@@ -68,6 +72,7 @@ pub struct RunStats {
     pub studies: u32,
     /// Taken freed by Exorcise.
     pub exorcised: u32,
+    pub took_leaving: bool,
 }
 
 /// How and when a run ended in death.
@@ -138,6 +143,12 @@ pub struct World {
     fire_warned: Option<Point>,
     /// The warning from the previous command, valid for this one only.
     fire_ok: Option<Point>,
+    /// Every Leaving of the run, wherever it is.
+    pub(crate) leavings: Vec<crate::leavings::Leaving>,
+    /// When a used Leaving can be used again.
+    pub(crate) leaving_ready: HashMap<crate::leavings::LeavingId, u64>,
+    /// A Leaving is waking; others don't wake from what it does.
+    pub(crate) leaving_busy: bool,
 }
 
 impl World {
@@ -145,7 +156,7 @@ impl World {
     pub fn new(seed: u64) -> Self {
         let content = Content::bundled();
         let mut next_item = 0;
-        let floor = Self::generate_floor(content, seed, 1, &mut next_item);
+        let floor = Self::generate_floor(content, seed, 1, &mut next_item, &mut Vec::new());
         Self::on_floor(content, seed, floor, next_item)
     }
 
@@ -178,6 +189,8 @@ impl World {
                 rites: Vec::new(),
                 rite_state: crate::rites::Rites::default(),
                 blind_until: None,
+                leavings: Vec::new(),
+                dark_sight_until: None,
                 energy: ACTION_COST,
             },
             floor,
@@ -200,6 +213,9 @@ impl World {
             death: None,
             fire_warned: None,
             fire_ok: None,
+            leavings: Vec::new(),
+            leaving_ready: HashMap::new(),
+            leaving_busy: false,
         };
         // The acolyte comes down with what was at hand.
         for (id, equip) in [
@@ -225,7 +241,13 @@ impl World {
         world
     }
 
-    fn generate_floor(content: &Content, seed: u64, depth: u8, next_item: &mut u32) -> Floor {
+    fn generate_floor(
+        content: &Content,
+        seed: u64,
+        depth: u8,
+        next_item: &mut u32,
+        leavings: &mut Vec<crate::leavings::Leaving>,
+    ) -> Floor {
         let mut rng = rng::floor_rng(seed, depth);
         let layout = generate::floor(&mut rng, depth, depth < MAX_DEPTH);
         let spawns = spawn::populate(&mut rng, content, &layout.map, layout.start, depth);
@@ -233,7 +255,27 @@ impl World {
         let items = spawn::place_items(&mut rng, content, &layout.map, layout.start, depth);
         let bosses = spawn::place_boss(&mut rng, content, &layout.map, depth);
         let remains = spawn::place_remains(&mut rng, content, &layout.map, layout.start, depth);
+        let seep = layout.seep.map(|room| {
+            spawn::fill_seep(&mut rng, content, &layout.map, room, layout.start, depth)
+        });
         let mut floor = Floor::new(layout.map, layout.start);
+        if let Some(seep) = seep {
+            floor.seep = layout.seep;
+            floor.anomalies = seep.anomalies;
+            leavings.push(seep.leaving);
+            let id = crate::leavings::LeavingId(leavings.len() as u32 - 1);
+            floor.leavings.push((seep.leaving_at, id));
+            let stone = content.item_by_id("stone").expect("stones exist");
+            *next_item += 1;
+            floor.items.push(FloorItem::new(
+                seep.stones_at,
+                Item {
+                    id: crate::item::ItemId(*next_item),
+                    kind: stone,
+                    count: seep.stones,
+                },
+            ));
+        }
         for (kind, at) in remains {
             floor.corpses.push(crate::corpse::Corpse {
                 at,
@@ -258,9 +300,9 @@ impl World {
             .into_iter()
             .map(|(at, amount)| Tallow::new(at, amount))
             .collect();
-        floor.items = items
-            .into_iter()
-            .map(|(at, kind, count)| {
+        floor
+            .items
+            .extend(items.into_iter().map(|(at, kind, count)| {
                 *next_item += 1;
                 FloorItem::new(
                     at,
@@ -270,8 +312,7 @@ impl World {
                         count,
                     },
                 )
-            })
-            .collect();
+            }));
         floor
     }
 
@@ -316,7 +357,13 @@ impl World {
             return;
         }
         self.depth = depth;
-        self.floor = Self::generate_floor(self.content, self.seed, depth, &mut self.next_item);
+        self.floor = Self::generate_floor(
+            self.content,
+            self.seed,
+            depth,
+            &mut self.next_item,
+            &mut self.leavings,
+        );
         self.player.pos = self.floor.arrival();
         self.update_view();
     }
@@ -481,6 +528,8 @@ impl World {
             Command::ChooseBoon(index) => self.choose_boon(index),
             Command::Study => self.study(),
             Command::CloseDoor => self.close_doors(),
+            Command::UseLeaving(id) => self.use_leaving(id),
+            Command::DropLeaving(id) => self.drop_leaving(id),
             Command::Render => self.render(),
             Command::Cast { rite, target } => self.cast(rite, target),
             Command::Ascend => match self.map().tile(self.player.pos) {
@@ -523,6 +572,8 @@ impl World {
             let here_tile = self.map().tile(self.player.pos);
             let warning = if self.floor.is_burning(target) {
                 Some(Event::FireAhead { at: target })
+            } else if self.anomaly_at(target).is_some_and(|a| a.revealed) {
+                Some(Event::AnomalyAhead { at: target })
             } else if tile == Tile::DeepWater && here_tile != Tile::DeepWater {
                 Some(Event::DeepWaterAhead { at: target })
             } else if tile == Tile::RottenFloor {
@@ -555,6 +606,10 @@ impl World {
             if tile == Tile::DeepWater && self.player.candle.is_lit() {
                 self.player.candle.snuff();
                 events.push(Event::CandleDrowned);
+                self.wake_leavings(crate::leavings::Wake::EnteringDarkness, &mut events);
+            }
+            if self.anomaly_at(target).is_some() {
+                self.trip_anomaly(target, &mut events);
             }
             if self.slips(target) {
                 events.push(Event::Slipped { who: Who::Player });
@@ -586,6 +641,7 @@ impl World {
             events.push(Event::CandleSnuffed);
             self.stats.snuffs += 1;
             self.trigger(Trigger::Snuff, &mut events);
+            self.wake_leavings(crate::leavings::Wake::EnteringDarkness, &mut events);
         } else if self.player.candle.light() {
             events.push(Event::CandleLit);
         } else {
@@ -749,6 +805,9 @@ impl World {
         if self.player.equipment.body.is_some() {
             self.train(Skill::Endurance, taken, events);
         }
+        if taken > 0 && cause != Cause::Leaving && self.player.health > 0 {
+            self.wake_leavings(crate::leavings::Wake::OnHurt, events);
+        }
         if self.player.health == 0 && self.death.is_none() {
             self.death = Some(Death {
                 cause,
@@ -770,6 +829,9 @@ impl World {
     pub(crate) fn shift_dread(&mut self, hundredths: i32, events: &mut Vec<Event>) {
         if let Some(band) = self.player.dread.shift(hundredths) {
             events.push(Event::DreadChanged { band });
+            if hundredths > 0 && band >= dread::DreadBand::Frayed {
+                self.wake_leavings(crate::leavings::Wake::AtDread, events);
+            }
         }
     }
 
@@ -904,7 +966,13 @@ impl World {
     fn enter_next_floor(&mut self, fell: bool, events: &mut Vec<Event>) {
         let fled = self.manifestation_present();
         self.depth += 1;
-        self.floor = Self::generate_floor(self.content, self.seed, self.depth, &mut self.next_item);
+        self.floor = Self::generate_floor(
+            self.content,
+            self.seed,
+            self.depth,
+            &mut self.next_item,
+            &mut self.leavings,
+        );
         let now = self.turn();
         for c in &mut self.floor.corpses {
             c.died = now;
@@ -959,7 +1027,9 @@ impl World {
             },
             color: candle::COLOR,
         });
-        let feel = if self.has_passive(Passive::DarkSight) {
+        let feel = if self.player.dark_sight_until.is_some() {
+            6
+        } else if self.has_passive(Passive::DarkSight) {
             2
         } else {
             1

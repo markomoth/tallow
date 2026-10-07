@@ -112,7 +112,8 @@ impl Widget for Hud<'_> {
             | Mode::Draft
             | Mode::Sheet
             | Mode::Corpse
-            | Mode::Rites => {
+            | Mode::Rites
+            | Mode::Leaving(_) => {
                 lines.extend(in_view(world));
                 lines.extend(keys());
             }
@@ -396,6 +397,36 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
                 dim(),
             ));
         }
+    } else if let Some(&(_, id)) = floor
+        .leavings()
+        .iter()
+        .find(|&&(at, _)| at == cursor && floor.is_explored(cursor))
+    {
+        let l = world.leaving(id);
+        lines.push(Line::styled(
+            capitalize(&crate::names::leaving_name(world, id)),
+            Style::new()
+                .fg(rgb(palette::tier_color(l.tier())))
+                .add_modifier(Modifier::BOLD),
+        ));
+        lines.push(Line::styled(
+            format!("A Leaving ({}).", crate::names::tier_name(l.tier())),
+            text(),
+        ));
+        lines.push(Line::styled(crate::names::leaving_tell(world, id), dim()));
+        if l.known {
+            lines.push(Line::styled(crate::names::leaving_rule(world, id), text()));
+        }
+    } else if let Some(a) = world
+        .anomaly_at(cursor)
+        .filter(|a| a.revealed && floor.is_explored(cursor))
+    {
+        let (name, what) = crate::names::anomaly_text(a.kind);
+        lines.push(Line::styled(
+            capitalize(name),
+            Style::new().fg(rgb(palette::ANOMALY_FG)),
+        ));
+        lines.push(Line::styled(what, text()));
     } else if let Some(corpse) = floor
         .corpse_at(cursor)
         .filter(|_| floor.is_explored(cursor))
@@ -442,6 +473,12 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             lines.push(Line::styled(
                 "Spilled lamp oil: slippery, and it burns fast.",
                 text(),
+            ));
+        }
+        if floor.is_seep(cursor) {
+            lines.push(Line::styled(
+                "The air here ripples like heat over a road. Something unseen is wrong with it: throw something through before you walk in.",
+                Style::new().fg(rgb(palette::ANOMALY_FG)),
             ));
         }
         if floor.is_sanctified(cursor) {

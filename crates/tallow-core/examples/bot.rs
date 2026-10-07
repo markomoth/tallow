@@ -31,7 +31,21 @@ fn main() {
         let (world, stats) = play(seed);
         turns += world.turn();
         match world.death() {
-            Some(death) => deaths[usize::from(death.depth)] += 1,
+            Some(death) => {
+                deaths[usize::from(death.depth)] += 1;
+                if std::env::var_os("BOT_CAUSES").is_some() {
+                    let cause = match death.cause {
+                        tallow_core::Cause::Attack(k)
+                        | tallow_core::Cause::HeavyBlow(k)
+                        | tallow_core::Cause::Chant(k) => world.content().monster(k).id.clone(),
+                        other => format!("{other:?}"),
+                    };
+                    println!(
+                        "seed {seed}: floor {} turn {} {cause}",
+                        death.depth, death.turn
+                    );
+                }
+            }
             None => wins += 1,
         }
         ran_dry += u32::from(stats.burned_out > 0);

@@ -8,6 +8,7 @@ use crate::content::KindId;
 use crate::dread::DreadBand;
 use crate::geom::Point;
 use crate::item::{Burden, ItemKindId, Potency, SideEffect, TinctureEffect};
+use crate::leavings::{AnomalyKind, LeavingId};
 use crate::map::Tile;
 use crate::rites::{RiteFailure, RiteId};
 use crate::skills::{Skill, Technique};
@@ -25,6 +26,8 @@ pub enum Cause {
     Attack(KindId),
     HeavyBlow(KindId),
     Fire,
+    /// A Leaving's price.
+    Leaving,
     /// A chanted rite.
     Chant(KindId),
     /// Falling through rotten boards.
@@ -497,5 +500,55 @@ pub enum Event {
     /// A mini-boss is down.
     BossDefeated {
         kind: KindId,
+    },
+
+    /// A seep room came into view for the first time.
+    SeepSpotted,
+    /// A Leaving came into view for the first time.
+    SpottedLeaving {
+        id: LeavingId,
+    },
+    /// You took a Leaving. `first` the first time this run: a warning.
+    LeavingTaken {
+        id: LeavingId,
+        first: bool,
+    },
+    LeavingDropped {
+        id: LeavingId,
+    },
+    /// It doesn't wake when you will it. Costs no time.
+    LeavingWontWake {
+        id: LeavingId,
+    },
+    /// Used too recently. Costs no time.
+    LeavingResting {
+        id: LeavingId,
+    },
+    /// Its next price would kill you. Drop it, or it takes it next turn.
+    LeavingThreatens {
+        id: LeavingId,
+    },
+    /// A Leaving woke. `learned` the first time: its rule is known now.
+    LeavingWoke {
+        id: LeavingId,
+        learned: bool,
+    },
+    Duplicated {
+        kind: ItemKindId,
+    },
+    DarkSightFaded,
+    /// Something thrown showed where an anomaly is.
+    AnomalyRevealed {
+        kind: AnomalyKind,
+        at: Point,
+    },
+    /// You walked into an anomaly.
+    AnomalyStruck {
+        kind: AnomalyKind,
+        damage: u32,
+    },
+    /// Walking into a known anomaly needs a second step. Costs no time.
+    AnomalyAhead {
+        at: Point,
     },
 }

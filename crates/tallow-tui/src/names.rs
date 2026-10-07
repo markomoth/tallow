@@ -343,3 +343,105 @@ pub fn technique_text(skill: Skill, technique: Technique) -> (String, String) {
         ),
     }
 }
+
+use tallow_core::leavings::{AnomalyKind, LeavingId, Marvel, Price, Tier, Wake};
+
+/// A Leaving's name, with "a"/"the" as written.
+pub fn leaving_name(world: &World, id: LeavingId) -> String {
+    let name = &world.leaving(id).name;
+    if name.starts_with("the ") || name.starts_with("a ") {
+        name.clone()
+    } else {
+        with_article(name)
+    }
+}
+
+/// What its look tells you before you know its rule.
+pub fn leaving_tell(world: &World, id: LeavingId) -> String {
+    let l = world.leaving(id);
+    l.tell.clone().unwrap_or_else(|| {
+        match l.tier() {
+            Tier::Mild => "It is cool and quiet in your hand. Whatever it asks will be small.",
+            Tier::Strange => "It is warm, and hums near the living. It will want something.",
+            Tier::Deadly => {
+                "It is heavy in a way that has nothing to do with weight. Something in you wants to put it down."
+            }
+        }
+        .into()
+    })
+}
+
+pub fn tier_name(tier: Tier) -> &'static str {
+    match tier {
+        Tier::Mild => "mild",
+        Tier::Strange => "strange",
+        Tier::Deadly => "deadly",
+    }
+}
+
+/// Its rule in words, once known: "When you kill, mend 4. It takes 4 dread."
+pub fn leaving_rule(world: &World, id: LeavingId) -> String {
+    let l = world.leaving(id);
+    let when = match l.wake {
+        Wake::OnUse => "When you use it".to_string(),
+        Wake::WhileCarried { every } => format!("Every {every} turns you carry it"),
+        Wake::OnKill => "When you kill".into(),
+        Wake::OnHurt => "When you are hurt".into(),
+        Wake::AtDread => "When your dread turns frayed".into(),
+        Wake::EnteringDarkness => "When your candle goes out".into(),
+    };
+    let what = match l.effect {
+        Marvel::SwapNearest => "you swap places with the nearest creature".to_string(),
+        Marvel::StopTime { actions } => format!("everything in view loses {actions} actions"),
+        Marvel::Pull => "creatures in view are dragged to you".into(),
+        Marvel::Push => "creatures near you are thrown back".into(),
+        Marvel::DarkSight { turns } => format!("you see in the dark for {turns} turns"),
+        Marvel::Duplicate => "one stack in your pack grows by one".into(),
+        Marvel::Mend { amount } => format!("you mend {amount}"),
+        Marvel::Calm { amount } => format!("your dread eases by {amount}"),
+        Marvel::Kindle { amount } => format!("your candle gains {amount} tallow"),
+        Marvel::Blink => "you are somewhere else nearby".into(),
+        Marvel::Ignite => "fire bursts up all around you".into(),
+        Marvel::Reveal => "the shape of the floor comes to you".into(),
+        Marvel::Ward { turns } => format!("the ground around you is holy for {turns} turns"),
+        Marvel::Banish => "the nearest of the Dreaming is sent away".into(),
+    };
+    let price = match l.price {
+        Price::Health { amount } => format!("It takes {amount} health."),
+        Price::Dread { amount } => format!("It takes {amount} dread."),
+        Price::Tallow { amount } => format!("It takes {amount} tallow."),
+        Price::Heavy => "Its price is its weight.".into(),
+        Price::Attention(f) => format!(
+            "Every one of {} on the floor learns where you are.",
+            faction_name(f)
+        ),
+    };
+    format!("{when}, {what}. {price}")
+}
+
+pub fn faction_name(f: tallow_core::Faction) -> &'static str {
+    match f {
+        tallow_core::Faction::Dreaming => "the Dreaming",
+        tallow_core::Faction::Taken => "the Taken",
+        tallow_core::Faction::Swarm => "the Swarm",
+        tallow_core::Faction::Remnant => "the Remnant",
+    }
+}
+
+pub fn anomaly_text(kind: AnomalyKind) -> (&'static str, &'static str) {
+    match kind {
+        AnomalyKind::Heat => ("a heat well", "The air here burns. It would burn you."),
+        AnomalyKind::Snare => (
+            "a snare",
+            "Something here pulls down, hard. It would hold you and crush a little.",
+        ),
+        AnomalyKind::Pocket => (
+            "a time pocket",
+            "Dust hangs in the air here, not falling. Turns would pass you by in it.",
+        ),
+        AnomalyKind::Swap => (
+            "a swap point",
+            "Things that go in come out somewhere else on the floor.",
+        ),
+    }
+}

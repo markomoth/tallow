@@ -43,6 +43,9 @@ pub enum Command {
     Study,
     /// Render the body underfoot into tallow.
     Render,
+    /// Wake a carried Leaving that answers to use.
+    UseLeaving(crate::leavings::LeavingId),
+    DropLeaving(crate::leavings::LeavingId),
     /// Cast a known rite. `target` is ignored by rites cast on yourself.
     Cast {
         rite: crate::rites::RiteId,

@@ -1,0 +1,61 @@
+// Leavings (BUILD_GUIDE.md §8): things the nightmare leaves where reality broke.
+//
+// Each has a rule for the run: trigger × effect × cost. Generated Leavings
+// roll theirs from the lists in leavings.rs and take a name from the words
+// below; the named ones are fixed and drop from the creature in `from` (or lie
+// in the seep room of `seep_floor`).
+//
+// weight is in tenths. Costs: Health and Tallow are amounts; Dread is points;
+// Attention(faction) wakes every creature of that faction on the floor.
+(
+    adjectives: [
+        "humming", "warm", "weeping", "cold", "too-heavy", "whispering", "bright",
+        "patient", "hungry", "bloodless", "sleeping", "ticking",
+    ],
+    nouns: [
+        "bone", "coin", "eye of black glass", "key", "tooth", "thimble", "rosary bead",
+        "lens", "bell clapper", "doll's hand", "wax seal", "nail",
+    ],
+    named: [
+        (
+            id: "sextons_spade",
+            name: "the Sexton's spade",
+            tell: "Short-handled and worn to the shape of his grip. The dead turn toward it.",
+            trigger: OnKill,
+            effect: Mend(amount: 4),
+            cost: Dread(amount: 4),
+            weight: 40,
+            from: Some("sexton"),
+        ),
+        (
+            id: "provosts_ring",
+            name: "the Provost's ring",
+            tell: "A heavy seal-ring. When you close your hand on it, the room goes still.",
+            trigger: OnUse,
+            effect: StopTime(actions: 3),
+            cost: Health(amount: 4),
+            weight: 2,
+            from: Some("provost"),
+        ),
+        (
+            id: "choirs_fork",
+            name: "the Choir's tuning fork",
+            tell: "It sings, very faintly, whenever the light goes.",
+            trigger: EnteringDarkness,
+            effect: DarkSight(turns: 40),
+            cost: Dread(amount: 6),
+            weight: 3,
+            from: Some("drowned_choir"),
+        ),
+        (
+            id: "remembering_wick",
+            name: "a wick that remembers",
+            tell: "A blackened wick that will not stay out. It drinks from you to burn.",
+            trigger: WhileCarried(every: 60),
+            effect: Kindle(amount: 60),
+            cost: Health(amount: 3),
+            weight: 1,
+            seep_floor: Some(11),
+        ),
+    ],
+)

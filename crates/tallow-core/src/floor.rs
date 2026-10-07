@@ -46,6 +46,12 @@ pub struct Floor {
     pub(crate) seals: Vec<(Point, u64)>,
     /// Doors locked against you by a boss, and when each gives.
     pub(crate) locks: Vec<(Point, u64)>,
+    /// The seep room, if this floor has one (interior corners).
+    pub(crate) seep: Option<(Point, Point)>,
+    seep_seen: bool,
+    pub(crate) anomalies: Vec<crate::leavings::Anomaly>,
+    pub(crate) leavings: Vec<(Point, crate::leavings::LeavingId)>,
+    leavings_seen: Vec<crate::leavings::LeavingId>,
 }
 
 /// An item lying on the floor.
@@ -105,6 +111,11 @@ impl Floor {
             oil: Grid::new(w, h, false),
             seals: Vec::new(),
             locks: Vec::new(),
+            seep: None,
+            seep_seen: false,
+            anomalies: Vec::new(),
+            leavings: Vec::new(),
+            leavings_seen: Vec::new(),
             map,
             arrival,
             lights,
@@ -176,6 +187,21 @@ impl Floor {
 
     pub(crate) fn set_oil(&mut self, p: Point, oil: bool) {
         self.oil.set(p, oil);
+    }
+
+    /// Inside the seep room.
+    pub fn is_seep(&self, p: Point) -> bool {
+        self.seep
+            .is_some_and(|(a, b)| p.x >= a.x && p.x <= b.x && p.y >= a.y && p.y <= b.y)
+    }
+
+    pub fn anomalies(&self) -> &[crate::leavings::Anomaly] {
+        &self.anomalies
+    }
+
+    /// Leavings lying on this floor.
+    pub fn leavings(&self) -> &[(Point, crate::leavings::LeavingId)] {
+        &self.leavings
     }
 
     /// Bodies lying on this floor.
@@ -323,6 +349,7 @@ impl Floor {
             .items
             .iter()
             .map(|f| f.at)
+            .chain(self.leavings.iter().map(|&(at, _)| at))
             .filter(|&p| self.is_visible(p));
         tiles.chain(tallow).chain(items)
     }
@@ -391,6 +418,21 @@ impl Floor {
             if !tallow.seen && self.visible.at(tallow.at) {
                 tallow.seen = true;
                 events.push(Event::SpottedTallow { at: tallow.at });
+            }
+        }
+        if !self.seep_seen
+            && self
+                .map
+                .points()
+                .any(|p| self.is_seep(p) && self.visible.at(p))
+        {
+            self.seep_seen = true;
+            events.push(Event::SeepSpotted);
+        }
+        for &(at, id) in &self.leavings {
+            if self.visible.at(at) && !self.leavings_seen.contains(&id) {
+                self.leavings_seen.push(id);
+                events.push(Event::SpottedLeaving { id });
             }
         }
         for item in &mut self.items {

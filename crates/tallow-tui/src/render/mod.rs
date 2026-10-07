@@ -47,7 +47,8 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
         | Mode::Draft
         | Mode::Sheet
         | Mode::Corpse
-        | Mode::Rites => None,
+        | Mode::Rites
+        | Mode::Leaving(_) => None,
     };
     frame.render_widget(
         map::MapView::new(app.world(), time, cursor, app.aim_path()),
@@ -64,6 +65,7 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
         Mode::Sheet => sheet::draw_sheet(frame, map_area, app.world()),
         Mode::Rites => sheet::draw_rites(frame, map_area, app.world()),
         Mode::Corpse => sheet::draw_corpse(frame, map_area, app.world()),
+        Mode::Leaving(id) => pack::draw_leaving(frame, map_area, app.world(), id),
         Mode::Play | Mode::Look { .. } | Mode::Target { .. } => {}
     }
 }
@@ -143,6 +145,7 @@ fn cause_line(world: &World, cause: Cause) -> String {
         Cause::Fire => "Burned to death".to_string(),
         Cause::Chant(kind) => format!("Undone by {}'s chanted rite", with_article(name(kind))),
         Cause::Fall => "Killed by a fall".to_string(),
+        Cause::Leaving => "Taken by a Leaving's price".to_string(),
     }
 }
 

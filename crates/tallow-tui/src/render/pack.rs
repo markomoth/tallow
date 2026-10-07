@@ -122,6 +122,26 @@ fn list(world: &World, purpose: PackPurpose) -> Vec<Line<'static>> {
     if lines.len() == 2 {
         lines.push(Line::styled("You have nothing you could throw.", dim()));
     }
+    if purpose == PackPurpose::Browse && !world.carried_leavings().is_empty() {
+        lines.push(Line::default());
+        lines.push(Line::styled("─ Leavings ─ (number to open)", dim()));
+        for (i, &id) in world.carried_leavings().iter().enumerate() {
+            let l = world.leaving(id);
+            let name = crate::names::leaving_name(world, id);
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}  ", i + 1), Style::new().fg(palette::ACCENT)),
+                Span::styled("* ", Style::new().fg(rgb(palette::tier_color(l.tier())))),
+                Span::styled(
+                    format!(
+                        "{:<42}",
+                        format!("{name} ({})", crate::names::tier_name(l.tier()))
+                    ),
+                    text(),
+                ),
+                Span::styled(format!("{:>5}", tenths(l.weight)), dim()),
+            ]));
+        }
+    }
     lines.push(Line::default());
     lines.push(Line::styled("letter: choose · Esc: close", dim()));
     lines
@@ -169,4 +189,56 @@ fn detail(world: &World, id: ItemId) -> Vec<Line<'static>> {
         Style::new().fg(palette::ACCENT),
     ));
     lines
+}
+
+/// One carried Leaving, opened up.
+pub fn draw_leaving(
+    frame: &mut Frame,
+    area: Rect,
+    world: &World,
+    id: tallow_core::leavings::LeavingId,
+) {
+    let l = world.leaving(id);
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("* ", Style::new().fg(rgb(palette::tier_color(l.tier())))),
+            Span::styled(
+                capitalize(&crate::names::leaving_name(world, id)),
+                text().add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::styled(
+            format!(
+                "A Leaving ({}). Weight {}.",
+                crate::names::tier_name(l.tier()),
+                tenths(l.weight)
+            ),
+            dim(),
+        ),
+        Line::default(),
+        Line::styled(crate::names::leaving_tell(world, id), dim()),
+        Line::default(),
+    ];
+    if l.known {
+        lines.push(Line::styled(crate::names::leaving_rule(world, id), text()));
+    } else {
+        lines.push(Line::styled(
+            "You don't know what wakes it, what it does, or what it takes. You'll learn when it wakes.",
+            text(),
+        ));
+    }
+    if l.armed {
+        lines.push(Line::styled(
+            "It is about to take more than you have. Drop it!",
+            Style::new()
+                .fg(palette::DANGER)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+    lines.push(Line::default());
+    lines.push(Line::styled(
+        "a use · d drop · Esc back",
+        Style::new().fg(palette::ACCENT),
+    ));
+    super::sheet::popup(frame, area, "Leaving", lines, 64);
 }

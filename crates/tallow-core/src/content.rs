@@ -13,6 +13,7 @@ const MONSTERS: &str = include_str!("../../../assets/monsters.ron");
 const ITEMS: &str = include_str!("../../../assets/items.ron");
 const SKILLS: &str = include_str!("../../../assets/skills.ron");
 const RITES: &str = include_str!("../../../assets/rites.ron");
+const LEAVINGS: &str = include_str!("../../../assets/leavings.ron");
 
 /// Index of a monster definition in [`Content::monsters`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -155,6 +156,7 @@ pub struct Content {
     pub items: Vec<ItemDef>,
     pub skills: Vec<SkillDef>,
     pub rites: Vec<RiteDef>,
+    pub leavings: crate::leavings::LeavingParts,
 }
 
 #[derive(Debug)]
@@ -186,7 +188,7 @@ impl Content {
     pub fn bundled() -> &'static Content {
         static CONTENT: OnceLock<Content> = OnceLock::new();
         CONTENT.get_or_init(|| {
-            Content::parse(MONSTERS, ITEMS, SKILLS, RITES)
+            Content::parse(MONSTERS, ITEMS, SKILLS, RITES, LEAVINGS)
                 .expect("bundled content is valid; covered by tests")
         })
     }
@@ -196,6 +198,7 @@ impl Content {
         items: &str,
         skills: &str,
         rites: &str,
+        leavings: &str,
     ) -> Result<Content, ContentError> {
         let mut monsters: Vec<MonsterDef> = ron::from_str(monsters)?;
         let ids: Vec<String> = monsters.iter().map(|d| d.id.clone()).collect();
@@ -211,12 +214,21 @@ impl Content {
         let items: Vec<ItemDef> = ron::from_str(items)?;
         let skills: Vec<SkillDef> = ron::from_str(skills)?;
         let rites: Vec<RiteDef> = ron::from_str(rites)?;
+        let leavings: crate::leavings::LeavingParts = ron::from_str(leavings)?;
         let content = Content {
             monsters,
             items,
             skills,
             rites,
+            leavings,
         };
+        for def in &content.leavings.named {
+            if let Some(from) = &def.from {
+                content
+                    .kind_by_id(from)
+                    .ok_or_else(|| ContentError::Missing(from.clone()))?;
+            }
+        }
         for def in &content.monsters {
             for id in &def.teaches {
                 content
@@ -346,7 +358,7 @@ mod tests {
             description: "", class: Ranged(damage: (1, 2), accuracy: 0, range: 5, ammo: "nope"),
             weight: 1, depth: (1, 1), frequency: 1)]"#;
         assert!(matches!(
-            Content::parse("[]", items, SKILLS, RITES),
+            Content::parse("[]", items, SKILLS, RITES, LEAVINGS),
             Err(ContentError::Missing(_))
         ));
     }

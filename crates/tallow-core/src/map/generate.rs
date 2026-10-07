@@ -23,6 +23,8 @@ const ROOM_GAP: i32 = 3;
 pub struct Layout {
     pub map: Map,
     pub start: Point,
+    /// A seep room's interior corners, if this floor has one.
+    pub seep: Option<(Point, Point)>,
 }
 
 /// Generates a crypt floor. The down-stair is left out on the deepest floor.
@@ -193,7 +195,35 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) ->
         map.set(*far_enough.choose(rng)?, Tile::StairsDown);
     }
 
-    Some(Layout { map, start })
+    let seep_chance = match depth {
+        11 => 1.0,
+        2..=10 => 0.4,
+        _ => 0.0,
+    };
+    let seep = rng.random_bool(seep_chance).then(|| {
+        let candidates: Vec<&Room> = rooms
+            .iter()
+            .enumerate()
+            .filter(|&(i, r)| {
+                i != start_room
+                    && (4..=10).contains(&r.w)
+                    && (3..=7).contains(&r.h)
+                    && r.interior().all(|p| map.tile(p) != Tile::StairsDown)
+            })
+            .map(|(_, r)| r)
+            .collect();
+        candidates.choose(rng).map(|r| {
+            (
+                Point::new(r.x, r.y),
+                Point::new(r.x + r.w - 1, r.y + r.h - 1),
+            )
+        })
+    });
+    Some(Layout {
+        map,
+        start,
+        seep: seep.flatten(),
+    })
 }
 
 fn place_rooms<R: Rng + ?Sized>(rng: &mut R) -> Vec<Room> {
@@ -396,7 +426,7 @@ mod tests {
 
     #[test]
     fn every_floor_is_fully_connected() {
-        for (seed, Layout { map, start }) in layouts(300, true) {
+        for (seed, Layout { map, start, .. }) in layouts(300, true) {
             let dist = path::distances(&map, start);
             for p in map.points() {
                 assert!(
@@ -409,7 +439,7 @@ mod tests {
 
     #[test]
     fn stairs_are_placed_once_and_far_apart() {
-        for (seed, Layout { map, start }) in layouts(300, true) {
+        for (seed, Layout { map, start, .. }) in layouts(300, true) {
             assert_eq!(map.tile(start), Tile::StairsUp, "seed {seed}");
             assert_eq!(map.find(Tile::StairsUp).count(), 1, "seed {seed}");
             let down: Vec<Point> = map.find(Tile::StairsDown).collect();
@@ -446,7 +476,7 @@ mod tests {
         let mut shelves = 0;
         for seed in 0..200 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let Layout { map, start } = floor(&mut rng, 5, true);
+            let Layout { map, start, .. } = floor(&mut rng, 5, true);
             shelves += map.find(Tile::Bookshelf).count();
             let dist = path::distances(&map, start);
             for p in map.points() {
@@ -464,7 +494,7 @@ mod tests {
         let mut deep = 0;
         for seed in 0..100 {
             let mut rng = Pcg64Mcg::seed_from_u64(seed);
-            let Layout { map, start } = floor(&mut rng, 8, true);
+            let Layout { map, start, .. } = floor(&mut rng, 8, true);
             deep += map.find(Tile::DeepWater).count();
             assert!(map.find(Tile::StairsDown).count() == 1);
             assert_eq!(map.tile(start), Tile::StairsUp);

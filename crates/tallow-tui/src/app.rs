@@ -52,6 +52,8 @@ pub enum Mode {
     Corpse,
     /// Choosing a rite to cast.
     Rites,
+    /// One carried Leaving, opened from the pack.
+    Leaving(tallow_core::leavings::LeavingId),
     /// The run is over; waiting for "again" or "quit".
     Dead,
 }
@@ -139,6 +141,23 @@ impl App {
                 _ => {}
             },
             Mode::Rites => self.handle_rites_key(key),
+            Mode::Leaving(id) => match key.code {
+                KeyCode::Char('a') => {
+                    self.mode = Mode::Play;
+                    self.play(Command::UseLeaving(id));
+                }
+                KeyCode::Char('d') => {
+                    self.mode = Mode::Play;
+                    self.play(Command::DropLeaving(id));
+                }
+                KeyCode::Esc => {
+                    self.mode = Mode::Pack {
+                        purpose: PackPurpose::Browse,
+                        selected: None,
+                    }
+                }
+                _ => {}
+            },
             _ => {
                 if let Some(action) = map_key(key) {
                     self.handle(action);
@@ -161,7 +180,7 @@ impl App {
                 }
             }
             Mode::Target { aim, cursor } => self.handle_target(action, aim, cursor),
-            Mode::Pack { .. } | Mode::Draft | Mode::Corpse | Mode::Rites => {}
+            Mode::Pack { .. } | Mode::Draft | Mode::Corpse | Mode::Rites | Mode::Leaving(_) => {}
             Mode::Sheet => {
                 if matches!(
                     action,
@@ -325,6 +344,17 @@ impl App {
             }
             return;
         };
+        if selected.is_none()
+            && purpose == PackPurpose::Browse
+            && let Some(digit) = c.to_digit(10)
+            && let Some(&id) = self
+                .world
+                .carried_leavings()
+                .get((digit as usize).wrapping_sub(1))
+        {
+            self.mode = Mode::Leaving(id);
+            return;
+        }
         let Some(item) = selected else {
             // Choosing an item by its letter.
             let index = (c as u32).wrapping_sub('a' as u32) as usize;

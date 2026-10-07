@@ -30,6 +30,16 @@ pub const SHALLOW_BG: Rgb = [22, 34, 44];
 pub const DEEP_FG: Rgb = [70, 110, 170];
 pub const DEEP_BG: Rgb = [10, 18, 40];
 pub const ROTTEN_FG: Rgb = [130, 100, 60];
+pub const SEEP_BG: Rgb = [30, 22, 34];
+pub const ANOMALY_FG: Rgb = [220, 120, 255];
+pub fn tier_color(tier: tallow_core::leavings::Tier) -> Rgb {
+    use tallow_core::leavings::Tier;
+    match tier {
+        Tier::Mild => [150, 210, 150],
+        Tier::Strange => [240, 190, 90],
+        Tier::Deadly => [240, 70, 60],
+    }
+}
 
 /// Each biome tints its stone a little: cold crypt grey, cool Collegium
 /// stone, green-blue damp, yellowed rot, the Throne's red.

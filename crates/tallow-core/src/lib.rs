@@ -20,6 +20,7 @@ pub mod geom;
 pub mod grid;
 pub mod inventory;
 pub mod item;
+pub mod leavings;
 pub mod map;
 pub mod monster;
 mod nightmare;

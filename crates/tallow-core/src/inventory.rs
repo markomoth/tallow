@@ -45,7 +45,7 @@ impl World {
             .iter()
             .map(|it| self.content.item(it.kind).weight * it.count)
             .sum();
-        items + self.player.candle.tallow() / TALLOW_PER_TENTH
+        items + self.player.candle.tallow() / TALLOW_PER_TENTH + self.leaving_load()
     }
 
     pub fn burden(&self) -> Burden {
@@ -179,10 +179,12 @@ impl World {
                 true
             }
         });
-        if found.is_empty() {
+        let leavings_here = self.floor.leavings.iter().any(|&(at, _)| at == here);
+        if found.is_empty() && !leavings_here {
             return vec![Event::NothingToPickUp];
         }
         let mut events = Vec::new();
+        self.take_leavings(&mut events);
         for f in found {
             if self.add_to_pack(f.item) {
                 events.push(Event::PickedUp {
@@ -431,11 +433,20 @@ impl World {
     /// Flies a projectile toward `target`. Phantoms it passes through come
     /// apart; the first real creature takes a roll to hit.
     fn launch(&mut self, shot: Shot, projectile: Item, target: Point, events: &mut Vec<Event>) {
-        let path = self.flight(target, shot.range, |p| {
+        let mut path = self.flight(target, shot.range, |p| {
             self.floor
                 .monster_at(p)
                 .is_some_and(|id| !self.floor.monsters[id].phantom)
         });
+        // An anomaly on the way catches the throw and shows itself.
+        if let Some(index) = path.iter().position(|&p| self.anomaly_at(p).is_some()) {
+            path.truncate(index + 1);
+            let caught = self
+                .probe(&path, events)
+                .expect("an anomaly is on the path");
+            self.land(shot, projectile, caught, events);
+            return;
+        }
         for &p in &path {
             if let Some(id) = self
                 .floor

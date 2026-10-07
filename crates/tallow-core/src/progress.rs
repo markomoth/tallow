@@ -226,6 +226,7 @@ impl World {
             _ => {}
         }
         self.trigger(Trigger::Kill, events);
+        self.wake_leavings(crate::leavings::Wake::OnKill, events);
         if let Source::Melee(Some(family)) = source {
             self.trigger(Trigger::KillWith(family), events);
         }

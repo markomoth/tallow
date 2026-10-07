@@ -330,6 +330,15 @@ Inspired by the Zone in *Roadside Picnic*: things the nightmare leaves behind wh
   3. Any lethal effect gives a warning turn before it fires, and dropping the item stops it.
 - Target for v1: ~20 rules generated from ~8 triggers, ~15 effects, ~8 costs, plus 4 hand-made named Leavings for mini-bosses.
 
+### As built (M9)
+
+- **Seep rooms:** one small room on 40% of floors 2–10, and always on floor 11. Its floor shimmers; the first sight of it logs a warning; Look says to throw something through. It holds a Leaving in the middle and 3–6 invisible anomalies clustered around it. 3–5 stones lie just outside, on the side nearest the arrival stair.
+- **Anomalies** (revealed `:` violet): a heat well burns 4–7; a snare does 2–3 and holds you 3 turns; a time pocket loses you 10 turns; a swap point throws you elsewhere on the floor. An anomaly's own damage never takes your last health. Anything thrown or fired through one stops there and reveals it (a swap point throws it somewhere else in the room). Creatures never step on anomalies. Walking into a revealed one needs a second step.
+- **Leavings** (`*`, colored by tier: green mild, amber strange, red deadly). Rules come from 6 triggers (on use, every N turns while carried, on kill, when hurt, when dread turns frayed, when your candle goes out) × 14 effects (swap with the nearest creature, stop time for everything in view, pull, push, see in the dark, duplicate a stack, mend, calm, kindle tallow, blink, fire all around, reveal the floor, holy ground, banish the nearest of the Dreaming) × 5 prices (health, dread, tallow, weight, or the attention of a faction). Generated names come from word lists in `assets/leavings.ron`.
+- **Telegraphs:** the tier and a tell are shown from the start; the first Leaving you take comes with a warning; the rule is learned when it first wakes. A price that would kill you warns first ("Drop it now"): an involuntary one takes it next turn unless dropped; one you use takes it on the next use. Effects with nothing to act on stay quiet and cost nothing.
+- **Named:** the Sexton's spade (when you kill: mend 4, 4 dread), the Provost's ring (use: everything in view loses 3 actions, 4 health), the Choir's tuning fork (candle goes out: see in the dark 40 turns, 6 dread), and a wick that remembers (floor 11's seep: every 60 turns, +60 tallow, 3 health). Bosses drop theirs where they die.
+- Pack screen (`i`): Leavings are listed under their own heading; press a number to open one (`a` use, `d` drop).
+
 ---
 
 ## 9. Monsters (starter roster)
@@ -543,7 +552,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | # | Milestone | Done when you can… | Est. |
 |---|---|---|---|
 | M8 ✅ | Biomes & content | Descend all 12 floors through 4 biomes, beat 3 mini-bosses | 5–6 h |
-| M9 | Leavings | Throw a stone into a Seep room, find an anomaly, take a Leaving, survive its warning | 3–4 h |
+| M9 ✅ | Leavings | Throw a stone into a Seep room, find an anomaly, take a Leaving, survive its warning | 3–4 h |
 | M10 | Beelzebub & ascent | Beat 3 phases, take the candle, outrun the Following, win at the altar | 5–6 h |
 | M11 | Polish & balance | Save/quit/resume, Journal persists, help screen, sim shows ~0 softlocks | 4–6 h |
 

@@ -414,6 +414,7 @@ impl World {
                 self.player.candle.eat(amount);
                 events.push(Event::CandleEaten { kind, amount });
                 self.witness(kind, Trait::EatsLight);
+                self.wake_leavings(crate::leavings::Wake::EnteringDarkness, events);
             }
         }
     }
@@ -430,6 +431,7 @@ impl World {
             && self.floor.monster_at(p).is_none()
             && tile != Tile::DoorSealed
             && tile != Tile::RottenFloor
+            && self.anomaly_at(p).is_none()
             && (tile != Tile::DeepWater || heedless || def.has(|t| *t == Trait::Swims))
             && (tile != Tile::DoorClosed || def.faction.opens_doors())
             && (heedless || !self.floor.is_burning(p))

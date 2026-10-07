@@ -105,6 +105,27 @@ impl Widget for MapView<'_> {
                 } else {
                     bg
                 };
+                // Seep rooms shimmer, very slightly, wherever you've seen them.
+                let bg = if floor.is_seep(p) && floor.is_explored(p) && map.is_walkable(p) {
+                    let ripple = 0.75 + 0.25 * (self.time * 3.0 + (p.x + p.y) as f32 * 0.7).sin();
+                    let base = palette::SEEP_BG.map(|c| (f32::from(c) * ripple) as u8);
+                    if floor.is_visible(p) {
+                        base
+                    } else {
+                        remember_bg(base)
+                    }
+                } else {
+                    bg
+                };
+                let anomaly = self
+                    .world
+                    .anomaly_at(p)
+                    .filter(|a| a.revealed && floor.is_explored(p));
+                let leaving = floor
+                    .leavings()
+                    .iter()
+                    .find(|&&(at, _)| at == p && floor.is_explored(p))
+                    .map(|&(_, id)| id);
                 let decoy = floor.decoy().filter(|d| d.at == p && floor.is_visible(p));
                 let corpse = floor.corpse_at(p).filter(|_| floor.is_explored(p));
                 let monster = floor
@@ -130,6 +151,19 @@ impl Widget for MapView<'_> {
                     if monster.compelled > 0 {
                         cell.modifier.insert(Modifier::UNDERLINED);
                     }
+                } else if let Some(id) = leaving {
+                    let color = palette::tier_color(self.world.leaving(id).tier());
+                    let fg = if floor.is_visible(p) {
+                        color
+                    } else {
+                        remember(color)
+                    };
+                    cell.set_char('*').set_fg(rgb(fg)).set_bg(rgb(bg));
+                    cell.modifier.insert(Modifier::BOLD);
+                } else if anomaly.is_some() {
+                    let shimmer = 0.7 + 0.3 * (self.time * 7.0 + p.x as f32).sin();
+                    let fg = palette::ANOMALY_FG.map(|c| (f32::from(c) * shimmer) as u8);
+                    cell.set_char(':').set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else if fire {
                     // Flames flicker through three colors and two shapes.
                     let i = (frame as usize + (p.x * 7 + p.y * 3) as usize) % 3;

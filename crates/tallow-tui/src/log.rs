@@ -686,6 +686,68 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             format!("The {} is finished. The floor goes very quiet.", name(kind)),
             Good,
         ),
+        Event::SeepSpotted => (
+            "The air in a room ahead ripples like heat over a road. Something is wrong in there. Throw something through it before you walk in.".into(),
+            Danger,
+        ),
+        Event::SpottedLeaving { id } => (
+            format!("Something lies there that should not be: {}.", crate::names::leaving_name(world, id)),
+            Normal,
+        ),
+        Event::LeavingTaken { id, first: true } => (
+            format!(
+                "You take {}. This is a Leaving: it will wake, it will do something, and it will take something. Look at it in your pack (i, then its number). Dropping it stops it.",
+                crate::names::leaving_name(world, id)
+            ),
+            Danger,
+        ),
+        Event::LeavingTaken { id, first: false } => (
+            format!("You take {}.", crate::names::leaving_name(world, id)),
+            Normal,
+        ),
+        Event::LeavingDropped { id } => (
+            format!("You put down {}.", crate::names::leaving_name(world, id)),
+            Normal,
+        ),
+        Event::LeavingWontWake { id } => (
+            format!("{} does not answer when you will it.", capitalize(&crate::names::leaving_name(world, id))),
+            Normal,
+        ),
+        Event::LeavingResting { .. } => ("It is quiet. It will answer again soon.".into(), Normal),
+        Event::LeavingThreatens { id } => (
+            format!(
+                "{} grows heavy and cold. Its price would kill you. Drop it now, or it takes it next turn!",
+                capitalize(&crate::names::leaving_name(world, id))
+            ),
+            Danger,
+        ),
+        Event::LeavingWoke { id, learned } => {
+            let name = capitalize(&crate::names::leaving_name(world, id));
+            if learned {
+                (format!("{name} wakes. Now you know it: {}", crate::names::leaving_rule(world, id)), Dread)
+            } else {
+                (format!("{name} wakes."), Dread)
+            }
+        }
+        Event::Duplicated { kind } => (format!("There is one more {} than there was.", thing(kind, 1)), Good),
+        Event::DarkSightFaded => ("The dark closes over your eyes again.".into(), Normal),
+        Event::AnomalyRevealed { kind, .. } => (
+            format!("It stops in mid-air. There is {} there.", crate::names::anomaly_text(kind).0),
+            Good,
+        ),
+        Event::AnomalyStruck { kind, damage } => (
+            match kind {
+                tallow_core::leavings::AnomalyKind::Heat => format!("The air itself burns you ({damage})!"),
+                tallow_core::leavings::AnomalyKind::Snare => format!("Something seizes you and bears down ({damage}). You can't move!"),
+                tallow_core::leavings::AnomalyKind::Pocket => "Everything goes still. When it lets go, time has passed without you.".into(),
+                tallow_core::leavings::AnomalyKind::Swap => "The room turns inside out, and you are somewhere else.".into(),
+            },
+            Danger,
+        ),
+        Event::AnomalyAhead { .. } => (
+            "An anomaly is there. Step that way again to walk into it.".into(),
+            Danger,
+        ),
         Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => return None,
     };
     Some((text, tone))

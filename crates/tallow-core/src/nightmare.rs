@@ -44,6 +44,7 @@ impl World {
             events.push(Event::SightReturns);
         }
         self.tick_rites(events);
+        self.tick_leavings(events);
         self.tick_corpses(events);
         self.tick_fire(events);
         self.tick_seals(events);
@@ -57,7 +58,10 @@ impl World {
         } {
             Some(BurnWarning::Low) => events.push(Event::CandleLow),
             Some(BurnWarning::Guttering) => events.push(Event::CandleGuttering),
-            Some(BurnWarning::BurnedOut) => events.push(Event::CandleBurnedOut),
+            Some(BurnWarning::BurnedOut) => {
+                events.push(Event::CandleBurnedOut);
+                self.wake_leavings(crate::leavings::Wake::EnteringDarkness, events);
+            }
             None => {}
         }
 
