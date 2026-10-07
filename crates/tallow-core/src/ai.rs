@@ -15,6 +15,10 @@ use crate::world::World;
 const PACK_RADIUS: i32 = 4;
 /// Chance an unaware monster shuffles somewhere on its action.
 const WANDER_CHANCE: f64 = 0.3;
+/// With your candle out, how close something must be to notice you.
+const DARK_NOTICE: i32 = 2;
+/// Tallow a light-eating bite takes.
+const TALLOW_BITTEN: u32 = 15;
 
 impl World {
     pub(crate) fn monster_act(&mut self, id: MonsterId, events: &mut Vec<Event>) {
@@ -23,8 +27,30 @@ impl World {
         let def = content.monster(m.kind);
         let kind = m.kind;
         let player = self.player.pos;
-        let sees =
-            self.floor.in_sight(m.pos) && m.pos.distance_squared(player) <= def.sight * def.sight;
+
+        if m.phantom {
+            // Phantoms come for you and come apart before they touch you.
+            if m.pos.chebyshev(player) <= 1 {
+                self.floor.monsters.remove(id);
+                if self.floor.is_visible(m.pos) {
+                    events.push(Event::PhantomFaded {
+                        kind,
+                        struck: false,
+                    });
+                }
+            } else {
+                self.step_toward(id, player);
+            }
+            return;
+        }
+
+        // Your candle (or a brazier) shows you from afar. In the dark, only
+        // something close by notices you.
+        let conspicuous = self.player.candle.is_lit() || self.floor.ambient_light(player).is_lit();
+        let in_range = m.pos.distance_squared(player) <= def.sight * def.sight;
+        let close = m.pos.chebyshev(player) <= DARK_NOTICE;
+        let sees = def.has(|t| *t == Trait::Relentless)
+            || (self.floor.in_sight(m.pos) && in_range && (conspicuous || close));
 
         // A raised blow is held until you've had a turn, then comes down on the
         // tile it was aimed at.
@@ -148,6 +174,12 @@ impl World {
         });
         if let Some(damage) = damage {
             self.hurt_player(damage, Cause::Attack(kind), events);
+            if def.has(|t| *t == Trait::EatsLight) && self.player.candle.is_lit() {
+                let amount = TALLOW_BITTEN.min(self.player.candle.tallow());
+                self.player.candle.eat(amount);
+                events.push(Event::CandleEaten { kind, amount });
+                self.witness(kind, Trait::EatsLight);
+            }
         }
     }
 

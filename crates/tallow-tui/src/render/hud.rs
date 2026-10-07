@@ -3,17 +3,21 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Color;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Widget, Wrap};
-use tallow_core::{Biome, MAX_DEPTH, Mind, MonsterInfo, Point, Tile, Trait, World};
+use tallow_core::candle::{LOW_AT, START_TALLOW};
+use tallow_core::{
+    Biome, CandleState, DreadBand, MAX_DEPTH, Mind, MonsterInfo, Point, Tile, Trait, World,
+};
 
 use super::palette::{self, rgb};
 use crate::app::{App, Mode};
 use crate::log::capitalize;
 
 const BAR_WIDTH: usize = 10;
-const MAX_IN_VIEW: usize = 5;
+const MAX_IN_VIEW: usize = 4;
 
 pub struct Hud<'a> {
     app: &'a App,
@@ -58,7 +62,28 @@ impl Widget for Hud<'_> {
             ),
             Line::default(),
             Line::styled("Acolyte", text()),
-            health_bar(player.health, player.max_health),
+            bar(
+                "Health",
+                player.health,
+                player.max_health,
+                palette::HEALTH,
+                palette::HEALTH_EMPTY,
+            ),
+            bar(
+                "Candle",
+                player.candle.tallow(),
+                START_TALLOW,
+                palette::CANDLE,
+                palette::CANDLE_EMPTY,
+            ),
+            bar(
+                "Dread ",
+                player.dread.value(),
+                100,
+                palette::DREAD,
+                palette::DREAD_EMPTY,
+            ),
+            conditions(world),
             Line::styled(format!("Floor {depth} of {MAX_DEPTH}"), text()),
             Line::styled(biome_name(Biome::for_depth(depth)), dim()),
             Line::styled(format!("Turn {}", world.turn()), dim()),
@@ -88,18 +113,47 @@ impl Widget for Hud<'_> {
     }
 }
 
-fn health_bar(health: u32, max: u32) -> Line<'static> {
-    let filled = (health as usize * BAR_WIDTH)
-        .div_ceil(max.max(1) as usize)
+fn bar(label: &'static str, value: u32, full: u32, fill: Color, empty: Color) -> Line<'static> {
+    let filled = (value as usize * BAR_WIDTH)
+        .div_ceil(full.max(1) as usize)
         .min(BAR_WIDTH);
     Line::from(vec![
-        Span::styled("█".repeat(filled), Style::new().fg(palette::HEALTH)),
-        Span::styled(
-            "░".repeat(BAR_WIDTH - filled),
-            Style::new().fg(palette::HEALTH_EMPTY),
-        ),
-        Span::styled(format!(" {health}/{max}"), text()),
+        Span::styled(format!("{label} "), dim()),
+        Span::styled("█".repeat(filled), Style::new().fg(fill)),
+        Span::styled("░".repeat(BAR_WIDTH - filled), Style::new().fg(empty)),
+        Span::styled(format!(" {value}"), text()),
     ])
+}
+
+/// One line naming anything unusual about the candle and the mind.
+fn conditions(world: &World) -> Line<'static> {
+    let player = world.player();
+    let mut spans = Vec::new();
+    let candle = match player.candle.state() {
+        CandleState::Lit if player.candle.tallow() < LOW_AT => {
+            Some(("candle low", palette::DANGER))
+        }
+        CandleState::Lit => None,
+        CandleState::Guttering => Some(("guttering!", palette::DANGER)),
+        CandleState::Snuffed => Some(("snuffed", palette::TEXT_DIM)),
+        CandleState::Out => Some(("no light", palette::DANGER)),
+    };
+    let mind = match player.dread.band() {
+        DreadBand::Calm => None,
+        DreadBand::Uneasy => Some("uneasy"),
+        DreadBand::Frayed => Some("frayed"),
+        DreadBand::Manifest => Some("hunted"),
+    };
+    if let Some((word, color)) = candle {
+        spans.push(Span::styled(word, Style::new().fg(color)));
+    }
+    if let Some(word) = mind {
+        if !spans.is_empty() {
+            spans.push(Span::styled(" · ", dim()));
+        }
+        spans.push(Span::styled(word, Style::new().fg(palette::DREAD)));
+    }
+    Line::from(spans)
 }
 
 fn in_view(world: &World) -> Vec<Line<'static>> {
@@ -146,18 +200,18 @@ fn in_view(world: &World) -> Vec<Line<'static>> {
 fn keys() -> Vec<Line<'static>> {
     let key = |k: &'static str, what: &'static str| {
         Line::from(vec![
-            Span::styled(format!("{k:<6}"), text()),
+            Span::styled(format!("{k:<11}"), text()),
             Span::styled(what, dim()),
         ])
     };
     vec![
         Line::styled("─ keys ─", dim()),
-        key("hjkl", "move"),
-        key("yubn", "diagonal"),
+        key("hjkl yubn", "move"),
         key("HJKL", "run"),
-        key(". >", "wait, descend"),
-        key("x", "look"),
-        key("q", "quit"),
+        key(". R", "wait, rest"),
+        key("c", "candle"),
+        key(">", "descend"),
+        key("x q", "look, quit"),
     ]
 }
 
@@ -177,7 +231,20 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
     let mut lines = vec![Line::styled("─ look ─", dim())];
     let monster = floor.monster_at(cursor).and_then(|id| world.inspect(id));
 
-    if let Some(info) = monster {
+    if let Some(info) = monster.as_ref().filter(|info| info.phantom) {
+        let def = world.content().monster(info.kind);
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{} ", def.glyph),
+                Style::new().fg(rgb(def.color)).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(capitalize(&def.name), text().add_modifier(Modifier::BOLD)),
+        ]));
+        lines.push(Line::styled(
+            "It casts no shadow in your light. It isn't really there.",
+            Style::new().fg(palette::DREAD),
+        ));
+    } else if let Some(info) = monster {
         let def = world.content().monster(info.kind);
         lines.push(Line::from(vec![
             Span::styled(
@@ -222,6 +289,17 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             "You. Acolyte of the Low Bell, a candle in one hand.",
             text(),
         ));
+    } else if let Some(tallow) = floor
+        .tallow_at(cursor)
+        .filter(|_| floor.is_explored(cursor))
+    {
+        lines.push(Line::styled(
+            format!(
+                "Tallow, enough for about {} turns of light. Walk over it to take it.",
+                tallow.amount
+            ),
+            text(),
+        ));
     } else if !floor.is_explored(cursor) {
         lines.push(Line::styled("You don't know what is there.", dim()));
     } else {
@@ -240,6 +318,8 @@ fn trait_line(t: &Trait) -> String {
         Trait::PackCourage => "flees when no packmate is near.".into(),
         Trait::Pleads => "speaks. It may still be someone.".into(),
         Trait::ShunsLight => "won't cross brazier light.".into(),
+        Trait::EatsLight => "its bite snuffs your candle and eats tallow.".into(),
+        Trait::Relentless => "always knows where you are.".into(),
         Trait::HeavyBlow {
             damage: (lo, hi), ..
         } => {
@@ -256,7 +336,8 @@ fn tile_line(tile: Tile) -> &'static str {
         Tile::StairsDown => "Stairs down. There is no coming back up.",
         Tile::StairsUp => "The way you came. Sealed now.",
         Tile::Brazier => {
-            "A brazier, burning without fuel. Some things in the dark will not cross its light."
+            "A brazier, burning without fuel. Some things in the dark will not cross its light. \
+             Rest here with your candle snuffed: dread ebbs and your tallow keeps."
         }
     }
 }

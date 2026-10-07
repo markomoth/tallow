@@ -11,6 +11,8 @@ pub enum Action {
     Wait,
     Descend,
     Ascend,
+    Candle,
+    Rest,
     Look,
     NextTarget,
     Cancel,
@@ -37,6 +39,8 @@ pub fn map_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('.' | '5') => Some(Action::Wait),
         KeyCode::Char('>') => Some(Action::Descend),
         KeyCode::Char('<') => Some(Action::Ascend),
+        KeyCode::Char('c') => Some(Action::Candle),
+        KeyCode::Char('R') => Some(Action::Rest),
         KeyCode::Char('x') => Some(Action::Look),
         KeyCode::Tab => Some(Action::NextTarget),
         KeyCode::Esc => Some(Action::Cancel),
@@ -111,6 +115,8 @@ mod tests {
         assert_eq!(press(KeyCode::Char('>')), Some(Action::Descend));
         assert_eq!(press(KeyCode::Char('<')), Some(Action::Ascend));
         assert_eq!(press(KeyCode::Char('x')), Some(Action::Look));
+        assert_eq!(press(KeyCode::Char('c')), Some(Action::Candle));
+        assert_eq!(press(KeyCode::Char('R')), Some(Action::Rest));
         assert_eq!(press(KeyCode::Tab), Some(Action::NextTarget));
         assert_eq!(press(KeyCode::Esc), Some(Action::Cancel));
         assert_eq!(press(KeyCode::Enter), Some(Action::Confirm));

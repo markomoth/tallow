@@ -29,6 +29,26 @@ pub struct Floor {
     visible: Grid<bool>,
     explored: Grid<bool>,
     pub(crate) monsters: SlotMap<MonsterId, Monster>,
+    pub(crate) tallow: Vec<Tallow>,
+}
+
+/// A lump or stub of tallow lying on the floor. Walk over it to take it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tallow {
+    pub at: Point,
+    /// Turns of burning it adds.
+    pub amount: u32,
+    seen: bool,
+}
+
+impl Tallow {
+    pub fn new(at: Point, amount: u32) -> Self {
+        Self {
+            at,
+            amount,
+            seen: false,
+        }
+    }
 }
 
 impl Floor {
@@ -53,6 +73,7 @@ impl Floor {
             visible: Grid::new(w, h, false),
             explored: Grid::new(w, h, false),
             monsters: SlotMap::with_key(),
+            tallow: Vec::new(),
         }
     }
 
@@ -116,11 +137,27 @@ impl Floor {
         self.explored.at(p)
     }
 
-    /// Landmarks in view right now.
+    /// Tallow lying on this floor.
+    pub fn tallow(&self) -> &[Tallow] {
+        &self.tallow
+    }
+
+    pub fn tallow_at(&self, p: Point) -> Option<&Tallow> {
+        self.tallow.iter().find(|t| t.at == p)
+    }
+
+    /// Landmarks and tallow in view right now: things worth stopping a run for.
     pub fn visible_landmarks(&self) -> impl Iterator<Item = Point> + '_ {
-        self.map
+        let tiles = self
+            .map
             .points()
-            .filter(|&p| self.is_visible(p) && self.map.tile(p).is_landmark())
+            .filter(|&p| self.is_visible(p) && self.map.tile(p).is_landmark());
+        let tallow = self
+            .tallow
+            .iter()
+            .map(|t| t.at)
+            .filter(|&p| self.is_visible(p));
+        tiles.chain(tallow)
     }
 
     /// Recomputes light and sight from `eye`, carrying an optional light of its own.
@@ -154,6 +191,12 @@ impl Floor {
                 if tile.is_landmark() {
                     events.push(Event::Spotted { tile, at: p });
                 }
+            }
+        }
+        for tallow in &mut self.tallow {
+            if !tallow.seen && self.visible.at(tallow.at) {
+                tallow.seen = true;
+                events.push(Event::SpottedTallow { at: tallow.at });
             }
         }
         events

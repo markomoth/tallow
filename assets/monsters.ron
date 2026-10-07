@@ -4,6 +4,7 @@
 // speed: 10 is normal; 12 acts 20% more often, 8 20% less.
 // threat: spawn budget cost per creature. group: (min, max) spawned together.
 // depth: (min, max) floors where it appears.
+// natural: false for creatures that never spawn with a floor (default true).
 [
     (
         id: "gnawer",
@@ -70,7 +71,7 @@
         group: (1, 1),
         threat: 3,
         weight: 6,
-        traits: [ShunsLight],
+        traits: [ShunsLight, EatsLight],
         barks: [],
     ),
     (
@@ -92,6 +93,28 @@
         threat: 4,
         weight: 5,
         traits: [HeavyBlow(damage: (9, 12), cooldown: 3)],
+        barks: [],
+    ),
+    (
+        id: "manifestation",
+        name: "Manifestation",
+        plural: "Manifestations",
+        glyph: 'M',
+        color: (204, 112, 232),
+        faction: Dreaming,
+        description: "Your own dread, given a body and your face. It always knows where you are. Kill it, or leave this floor.",
+        health: 18,
+        speed: 11,
+        accuracy: 65,
+        defense: 20,
+        damage: (2, 4),
+        sight: 99,
+        depth: (1, 12),
+        group: (1, 1),
+        threat: 1,
+        weight: 1,
+        natural: false,
+        traits: [Relentless],
         barks: [],
     ),
 ]

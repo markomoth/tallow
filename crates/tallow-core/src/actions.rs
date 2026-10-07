@@ -15,4 +15,8 @@ pub enum Command {
     Descend,
     /// Try the stairs up, if standing on them.
     Ascend,
+    /// Snuff the candle, or light it again.
+    ToggleCandle,
+    /// Wait until healed or until something happens.
+    Rest,
 }

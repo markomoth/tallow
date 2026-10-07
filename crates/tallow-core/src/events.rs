@@ -4,6 +4,7 @@
 //! Logic code never builds display strings.
 
 use crate::content::KindId;
+use crate::dread::DreadBand;
 use crate::geom::Point;
 use crate::map::Tile;
 
@@ -49,8 +50,55 @@ pub enum Event {
     StairsSealed {
         depth: u8,
     },
-    /// A run was refused because something hostile is in view. Costs no time.
+    /// A run or rest was refused because something hostile is in view. Costs no time.
     RunRefused,
+    /// Rest was asked for with nothing to recover. Costs no time.
+    NothingToRest,
+    /// A rest ended after this many turns.
+    Rested {
+        turns: u32,
+    },
+
+    /// Tallow came into view for the first time.
+    SpottedTallow {
+        at: Point,
+    },
+    /// The player picked up tallow.
+    TallowFound {
+        amount: u32,
+    },
+    CandleLow,
+    CandleGuttering,
+    CandleBurnedOut,
+    CandleSnuffed,
+    CandleLit,
+    /// Tried to light a candle with no tallow left. Costs no time.
+    CandleSpent,
+    /// A creature's bite put the candle out and ate tallow.
+    CandleEaten {
+        kind: KindId,
+        amount: u32,
+    },
+
+    /// Dread crossed into a new band.
+    DreadChanged {
+        band: DreadBand,
+    },
+    /// Something only the uneasy hear. `seed` picks the line.
+    Whisper {
+        seed: u32,
+    },
+    /// A phantom came apart. `struck` if the player swung at it.
+    PhantomFaded {
+        kind: KindId,
+        struck: bool,
+    },
+    /// Dread took form near the player.
+    Manifested,
+    /// The Manifestation was killed. Dread eases.
+    ManifestationBanished,
+    /// The player left the floor with the Manifestation still on it. Dread eases.
+    ManifestationEscaped,
 
     /// The first time this run the player sees a kind of creature.
     FirstSighting {

@@ -12,7 +12,7 @@ use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
 use tallow_core::{Cause, MAX_DEPTH, World};
 
 use crate::app::{App, Mode};
-use crate::log::{MessageLog, with_article};
+use crate::log::{MessageLog, Tone, with_article};
 
 /// How many log lines the death screen replays.
 const LAST_MOMENTS: usize = 5;
@@ -135,11 +135,7 @@ fn draw_log(frame: &mut Frame, area: Rect, log: &MessageLog) {
         if lines.len() >= rows {
             break;
         }
-        let color = if age == 0 {
-            palette::TEXT
-        } else {
-            palette::TEXT_DIM
-        };
+        let color = tone_color(entry.tone, age == 0);
         let text = if entry.count > 1 {
             format!("{} (×{})", entry.text, entry.count)
         } else {
@@ -153,6 +149,33 @@ fn draw_log(frame: &mut Frame, area: Rect, log: &MessageLog) {
     lines.reverse();
 
     frame.render_widget(Paragraph::new(lines).block(block), area);
+}
+
+/// Log colors: each tone has a bright form for the newest line and a dim one after.
+fn tone_color(tone: Tone, newest: bool) -> ratatui::style::Color {
+    let bright = match tone {
+        Tone::Normal => palette::TEXT,
+        Tone::Dread => palette::DREAD,
+        Tone::Danger => palette::DANGER,
+        Tone::Good => palette::GOOD,
+    };
+    if newest {
+        bright
+    } else if tone == Tone::Normal {
+        palette::TEXT_DIM
+    } else {
+        dim(bright)
+    }
+}
+
+fn dim(color: ratatui::style::Color) -> ratatui::style::Color {
+    match color {
+        ratatui::style::Color::Rgb(r, g, b) => {
+            let f = |c: u8| (u16::from(c) * 3 / 5) as u8;
+            ratatui::style::Color::Rgb(f(r), f(g), f(b))
+        }
+        other => other,
+    }
 }
 
 /// Greedy word wrap to `width` columns. Words longer than a line are split.

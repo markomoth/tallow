@@ -4,29 +4,32 @@ use std::collections::HashSet;
 
 use crate::actions::Command;
 use crate::biome::MAX_DEPTH;
+use crate::candle::{self, Candle};
 use crate::combat::{self, PLAYER_ACCURACY, PLAYER_DAMAGE, PLAYER_DEFENSE, PLAYER_HEALTH};
-use crate::content::{Content, KindId, Trait};
+use crate::content::{Content, Faction, KindId, Trait};
+use crate::dread::{self, Dread};
 use crate::events::{Cause, Event, Who};
-use crate::floor::Floor;
+use crate::floor::{Floor, Tallow};
 use crate::geom::{Direction, Point};
-use crate::map::light::{LightSource, Rgb};
+use crate::map::light::LightSource;
 use crate::map::{Map, Tile, generate};
 use crate::monster::{Mind, Monster, MonsterId};
 use crate::rng::{self, GameRng, Stream};
 use crate::spawn;
-use crate::time::{ACTION_COST, PLAYER_SPEED, REGEN_TURNS, TICKS_PER_TURN};
-
-pub const CANDLE_RADIUS: i32 = 6;
-pub const CANDLE_COLOR: Rgb = [255, 196, 128];
+use crate::time::{ACTION_COST, PLAYER_SPEED, TICKS_PER_TURN};
 
 /// Safety stop for runs across very long halls.
 const MAX_RUN_STEPS: u32 = 120;
+/// Safety stop for one rest.
+const MAX_REST_TURNS: u32 = 200;
 
 #[derive(Debug, Clone)]
 pub struct Player {
     pub pos: Point,
     pub health: u32,
     pub max_health: u32,
+    pub candle: Candle,
+    pub dread: Dread,
     pub(crate) energy: i32,
 }
 
@@ -54,6 +57,8 @@ pub struct MonsterInfo {
     /// Tricks you have seen this kind of creature use this run.
     pub known_traits: Vec<Trait>,
     pub winding_up: Option<Point>,
+    /// Not really there. Only Look can tell.
+    pub phantom: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +71,8 @@ pub struct World {
     ticks: u64,
     pub(crate) combat_rng: GameRng,
     pub(crate) ai_rng: GameRng,
+    /// The kind dread takes form as.
+    pub(crate) manifestation: KindId,
     sighted: HashSet<KindId>,
     witnessed: HashSet<(KindId, Trait)>,
     death: Option<Death>,
@@ -97,12 +104,17 @@ impl World {
                 pos: floor.arrival(),
                 health: PLAYER_HEALTH,
                 max_health: PLAYER_HEALTH,
+                candle: Candle::default(),
+                dread: Dread::default(),
                 energy: ACTION_COST,
             },
             floor,
             ticks: 0,
             combat_rng: rng::stream(seed, Stream::Combat),
             ai_rng: rng::stream(seed, Stream::Ai),
+            manifestation: content
+                .kind_by_id("manifestation")
+                .expect("monsters.ron defines the manifestation"),
             sighted: HashSet::new(),
             witnessed: HashSet::new(),
             death: None,
@@ -116,12 +128,17 @@ impl World {
         let mut rng = rng::floor_rng(seed, depth);
         let layout = generate::crypt(&mut rng, depth < MAX_DEPTH);
         let spawns = spawn::populate(&mut rng, content, &layout.map, layout.start, depth);
+        let tallow = spawn::place_tallow(&mut rng, &layout.map, layout.start);
         let mut floor = Floor::new(layout.map, layout.start);
         for (kind, pos) in spawns {
             floor
                 .monsters
                 .insert(Monster::new(kind, content.monster(kind), pos));
         }
+        floor.tallow = tallow
+            .into_iter()
+            .map(|(at, amount)| Tallow::new(at, amount))
+            .collect();
         floor
     }
 
@@ -134,6 +151,12 @@ impl World {
             .insert(Monster::new(kind, self.content.monster(kind), pos));
         self.update_view();
         id
+    }
+
+    /// Drops tallow on the current floor. For tests and scripted scenes.
+    pub fn place_tallow(&mut self, at: Point, amount: u32) {
+        self.floor.tallow.push(Tallow::new(at, amount));
+        self.update_view();
     }
 
     /// Removes every monster from the current floor. For tests and scripted scenes.
@@ -199,6 +222,7 @@ impl World {
                 .filter(|t| self.witnessed.contains(&(m.kind, *t)))
                 .collect(),
             winding_up: m.winding_up,
+            phantom: m.phantom,
         })
     }
 
@@ -221,6 +245,8 @@ impl World {
                 events
             }
             Command::Descend => self.descend(),
+            Command::ToggleCandle => self.toggle_candle(),
+            Command::Rest => self.rest(),
             Command::Ascend => match self.map().tile(self.player.pos) {
                 Tile::StairsUp => vec![Event::StairsSealed { depth: self.depth }],
                 _ => vec![Event::NoStairsHere],
@@ -241,14 +267,71 @@ impl World {
             }
             self.player.pos = target;
             events.push(Event::PlayerMoved { to: target });
+            if let Some(i) = self.floor.tallow.iter().position(|t| t.at == target) {
+                let found = self.floor.tallow.swap_remove(i);
+                self.player.candle.add(found.amount);
+                events.push(Event::TallowFound {
+                    amount: found.amount,
+                });
+            }
         }
         self.pass_time(&mut events);
         events
     }
 
+    fn toggle_candle(&mut self) -> Vec<Event> {
+        let mut events = Vec::new();
+        if self.player.candle.is_lit() {
+            self.player.candle.snuff();
+            events.push(Event::CandleSnuffed);
+        } else if self.player.candle.light() {
+            events.push(Event::CandleLit);
+        } else {
+            return vec![Event::CandleSpent];
+        }
+        self.pass_time(&mut events);
+        events
+    }
+
+    /// Waits until healed (and, by a brazier, calm), or until something happens.
+    fn rest(&mut self) -> Vec<Event> {
+        if !self.floor.visible_monsters(self.player.pos).is_empty() {
+            return vec![Event::RunRefused];
+        }
+        if self.rested() {
+            return vec![Event::NothingToRest];
+        }
+        let mut events = Vec::new();
+        let mut turns = 0;
+        while turns < MAX_REST_TURNS && !self.rested() {
+            let mut step = vec![Event::PlayerWaited];
+            self.pass_time(&mut step);
+            turns += 1;
+            let disturbed = step.iter().any(|e| !is_routine(e));
+            events.extend(step);
+            if disturbed || !self.floor.visible_monsters(self.player.pos).is_empty() {
+                return events;
+            }
+        }
+        events.push(Event::Rested { turns });
+        events
+    }
+
+    /// Nothing left to recover here: full health, and calm unless by a brazier.
+    fn rested(&self) -> bool {
+        let by_brazier = self.floor.ambient_light(self.player.pos).is_lit();
+        self.player.health == self.player.max_health
+            && (self.player.dread.value() == 0 || !by_brazier)
+    }
+
     fn player_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
         let monster = &self.floor.monsters[id];
         let (kind, at) = (monster.kind, monster.pos);
+        if monster.phantom {
+            self.floor.monsters.remove(id);
+            events.push(Event::PhantomFaded { kind, struck: true });
+            return;
+        }
         let def = self.content.monster(kind);
         let chance = combat::hit_chance(PLAYER_ACCURACY, def.defense);
         let damage = combat::roll_attack(&mut self.combat_rng, chance, PLAYER_DAMAGE);
@@ -269,6 +352,10 @@ impl World {
             if monster.health == 0 {
                 self.floor.monsters.remove(id);
                 events.push(Event::MonsterDied { kind, at });
+                if kind == self.manifestation {
+                    events.push(Event::ManifestationBanished);
+                    self.ease_dread(events);
+                }
             }
         }
     }
@@ -285,8 +372,26 @@ impl World {
         }
     }
 
+    pub(crate) fn sighted_kinds(&self) -> impl Iterator<Item = KindId> + '_ {
+        self.sighted.iter().copied()
+    }
+
     pub(crate) fn witness(&mut self, kind: KindId, t: Trait) {
         self.witnessed.insert((kind, t));
+    }
+
+    pub(crate) fn shift_dread(&mut self, hundredths: i32, events: &mut Vec<Event>) {
+        if let Some(band) = self.player.dread.shift(hundredths) {
+            events.push(Event::DreadChanged { band });
+        }
+    }
+
+    /// After a Manifestation is dealt with: dread settles and phantoms go.
+    fn ease_dread(&mut self, events: &mut Vec<Event>) {
+        if let Some(band) = self.player.dread.set(dread::AFTER_MANIFESTATION) {
+            events.push(Event::DreadChanged { band });
+        }
+        self.clear_phantoms(events);
     }
 
     /// After an action that costs time: the world moves until the player can act again.
@@ -304,10 +409,10 @@ impl World {
         events.extend(self.note_sightings());
     }
 
-    fn tick(&mut self, events: &mut Vec<Event>) {
+    pub(crate) fn tick(&mut self, events: &mut Vec<Event>) {
         self.ticks += 1;
-        if self.ticks.is_multiple_of(TICKS_PER_TURN * REGEN_TURNS) {
-            self.player.health = (self.player.health + 1).min(self.player.max_health);
+        if self.ticks.is_multiple_of(TICKS_PER_TURN) {
+            self.on_turn(events);
         }
         let ids: Vec<MonsterId> = self.floor.monsters.keys().collect();
         for id in ids {
@@ -354,12 +459,7 @@ impl World {
                 break;
             }
             let step_events = self.player_step(dir);
-            let disturbed = step_events.iter().any(|e| {
-                !matches!(
-                    e,
-                    Event::PlayerMoved { .. } | Event::Spotted { .. } | Event::PlayerWaited
-                )
-            });
+            let disturbed = step_events.iter().any(|e| !is_routine(e));
             events.extend(step_events);
 
             let underfoot = self.map().tile(self.player.pos);
@@ -400,10 +500,18 @@ impl World {
         if self.map().tile(self.player.pos) != Tile::StairsDown {
             return vec![Event::NoStairsHere];
         }
+        let fled = self
+            .floor
+            .monsters()
+            .any(|(_, m)| m.kind == self.manifestation);
         self.depth += 1;
         self.floor = Self::generate_floor(self.content, self.seed, self.depth);
         self.player.pos = self.floor.arrival();
         let mut events = vec![Event::Descended { depth: self.depth }];
+        if fled {
+            events.push(Event::ManifestationEscaped);
+            self.ease_dread(&mut events);
+        }
         self.pass_time(&mut events);
         events
     }
@@ -411,12 +519,12 @@ impl World {
     /// Recomputes light and sight. Returns newly spotted landmarks and, when
     /// time has passed, first sightings of creatures.
     fn update_view(&mut self) -> Vec<Event> {
-        let candle = LightSource {
+        let candle = self.player.candle.radius().map(|radius| LightSource {
             at: self.player.pos,
-            radius: CANDLE_RADIUS,
-            color: CANDLE_COLOR,
-        };
-        self.floor.update_view(self.player.pos, Some(candle))
+            radius,
+            color: candle::COLOR,
+        });
+        self.floor.update_view(self.player.pos, candle)
     }
 
     /// First sightings of creature kinds now in view. Reported from actions only,
@@ -424,17 +532,43 @@ impl World {
     fn note_sightings(&mut self) -> Vec<Event> {
         let mut events = Vec::new();
         for id in self.floor.visible_monsters(self.player.pos) {
-            let kind = self.floor.monsters[id].kind;
-            if self.sighted.insert(kind) {
-                events.push(Event::FirstSighting { kind });
-                // Some tricks are plain to see.
-                if self.content.monster(kind).has(|t| *t == Trait::ShunsLight) {
-                    self.witness(kind, Trait::ShunsLight);
-                }
+            let monster = &self.floor.monsters[id];
+            let kind = monster.kind;
+            if monster.phantom || !self.sighted.insert(kind) {
+                continue;
+            }
+            events.push(Event::FirstSighting { kind });
+            let def = self.content.monster(kind);
+            // Some tricks are plain to see.
+            if def.has(|t| *t == Trait::ShunsLight) {
+                self.witness(kind, Trait::ShunsLight);
+            }
+            if def.has(|t| *t == Trait::Relentless) {
+                self.witness(kind, Trait::Relentless);
+            }
+            let shock = match def.faction {
+                Faction::Dreaming => dread::FIRST_SIGHT_OF_DREAMING,
+                _ => dread::FIRST_SIGHT,
+            };
+            if kind != self.manifestation {
+                self.shift_dread(shock, &mut events);
             }
         }
         events
     }
+}
+
+/// Events that don't interrupt a run or a rest.
+fn is_routine(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::PlayerMoved { .. }
+            | Event::PlayerWaited
+            | Event::Spotted { .. }
+            | Event::SpottedTallow { .. }
+            | Event::TallowFound { .. }
+            | Event::Whisper { .. }
+    )
 }
 
 #[cfg(test)]
@@ -887,6 +1021,7 @@ mod tests {
 
     #[test]
     fn health_regenerates_slowly() {
+        use crate::time::REGEN_TURNS;
         let mut world = small_world();
         world.player.health = 10;
         for _ in 0..REGEN_TURNS {

@@ -20,6 +20,8 @@ cargo run --release -- --seed 42   # replay a specific dungeon
 | Shift + direction | Run |
 | `>` | Descend stairs |
 | `x` | Look (Tab cycles creatures) |
+| `c` | Snuff / light your candle |
+| `R` | Rest |
 | `.` / `5` | Wait |
 | `q` | Quit |
 

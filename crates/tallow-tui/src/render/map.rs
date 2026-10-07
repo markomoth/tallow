@@ -82,15 +82,28 @@ impl Widget for MapView<'_> {
                     .monster_at(p)
                     .filter(|_| floor.is_visible(p))
                     .and_then(|id| floor.monster(id));
+                let tallow = floor.tallow_at(p).filter(|_| floor.is_explored(p));
                 if p == player {
                     cell.set_char('@').set_fg(palette::PLAYER).set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
                 } else if let Some(monster) = monster {
                     let def = content.monster(monster.kind);
-                    cell.set_char(def.glyph)
-                        .set_fg(rgb(def.color))
-                        .set_bg(rgb(bg));
+                    // Phantoms shimmer, very slightly. Look tells for sure.
+                    let color = if monster.phantom {
+                        let shimmer = 0.8 + 0.2 * (self.time * 5.0 + p.x as f32).sin();
+                        def.color.map(|c| (f32::from(c) * shimmer) as u8)
+                    } else {
+                        def.color
+                    };
+                    cell.set_char(def.glyph).set_fg(rgb(color)).set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
+                } else if tallow.is_some() {
+                    let fg = if floor.is_visible(p) {
+                        shade(palette::TALLOW_FG, floor.light(p), global_flicker)
+                    } else {
+                        remember(palette::TALLOW_FG)
+                    };
+                    cell.set_char(',').set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else {
                     cell.set_char(look.glyph).set_fg(rgb(fg)).set_bg(rgb(bg));
                 }

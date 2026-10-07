@@ -29,6 +29,10 @@ pub enum Trait {
     Pleads,
     /// Will not step onto ground lit by braziers.
     ShunsLight,
+    /// Its bite snuffs your candle and eats some tallow.
+    EatsLight,
+    /// Always knows where you are.
+    Relentless,
     /// Winds up for one action, then strikes a marked tile hard.
     HeavyBlow { damage: (u32, u32), cooldown: u32 },
 }
@@ -52,8 +56,15 @@ pub struct MonsterDef {
     pub group: (u32, u32),
     pub threat: u32,
     pub weight: u32,
+    /// Spawns with floors. Manifestations and other summoned things don't.
+    #[serde(default = "natural_default")]
+    pub natural: bool,
     pub traits: Vec<Trait>,
     pub barks: Vec<String>,
+}
+
+fn natural_default() -> bool {
+    true
 }
 
 impl MonsterDef {

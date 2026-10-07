@@ -28,6 +28,12 @@ pub const TELEGRAPH: Rgb = [150, 34, 26];
 pub const HEALTH: Color = Color::Rgb(178, 64, 52);
 pub const HEALTH_EMPTY: Color = Color::Rgb(58, 30, 28);
 pub const DANGER: Color = Color::Rgb(232, 96, 72);
+pub const DREAD: Color = Color::Rgb(176, 140, 214);
+pub const DREAD_EMPTY: Color = Color::Rgb(44, 36, 56);
+pub const GOOD: Color = Color::Rgb(168, 196, 138);
+pub const CANDLE: Color = Color::Rgb(232, 176, 92);
+pub const CANDLE_EMPTY: Color = Color::Rgb(56, 44, 30);
+pub const TALLOW_FG: Rgb = [240, 220, 168];
 
 pub const TEXT: Color = Color::Rgb(196, 186, 170);
 pub const TEXT_DIM: Color = Color::Rgb(110, 102, 92);

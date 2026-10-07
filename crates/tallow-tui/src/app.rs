@@ -3,7 +3,7 @@
 use tallow_core::{Command, MonsterId, Point, World};
 
 use crate::input::Action;
-use crate::log::{MessageLog, narrate};
+use crate::log::{MessageLog, Tone, narrate};
 
 /// How far a Shift+direction moves the Look cursor.
 const LOOK_JUMP: i32 = 5;
@@ -30,8 +30,14 @@ pub struct App {
 impl App {
     pub fn new(seed: u64) -> Self {
         let mut log = MessageLog::default();
-        log.push("You pry up the floorboards behind the altar and climb down.");
-        log.push("The air tastes of tallow and old water. Somewhere below, a bell.");
+        log.push(
+            "You pry up the floorboards behind the altar and climb down.",
+            Tone::Normal,
+        );
+        log.push(
+            "The air tastes of tallow and old water. Somewhere below, a bell.",
+            Tone::Normal,
+        );
         Self {
             world: World::new(seed),
             log,
@@ -81,6 +87,8 @@ impl App {
             Action::Wait => Command::Wait,
             Action::Descend => Command::Descend,
             Action::Ascend => Command::Ascend,
+            Action::Candle => Command::ToggleCandle,
+            Action::Rest => Command::Rest,
             Action::Look => {
                 let cursor = self
                     .visible_monsters()
@@ -98,8 +106,8 @@ impl App {
         };
         let content = self.world.content();
         for event in self.world.apply(command) {
-            if let Some(text) = narrate(&event, content) {
-                self.log.push(text);
+            if let Some((text, tone)) = narrate(&event, content) {
+                self.log.push(text, tone);
             }
         }
         if self.world.death().is_some() {
@@ -141,7 +149,9 @@ impl App {
                 self.mode = Mode::Play;
                 return;
             }
-            Action::Wait | Action::Descend | Action::Ascend => cursor,
+            Action::Wait | Action::Descend | Action::Ascend | Action::Candle | Action::Rest => {
+                cursor
+            }
         };
         self.mode = Mode::Look { cursor };
     }

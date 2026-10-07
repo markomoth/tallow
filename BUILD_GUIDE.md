@@ -100,10 +100,12 @@ Two linked resources, both always on screen.
 ### Candle (tallow)
 
 - Your candle is your light radius (6 tiles) and your clock.
-- Burns 1 tallow per turn. Start: ~600 turns lit + 2 spare lumps.
-- **Guttering:** in the last 10%, radius drops to 3 and the HUD warns you.
-- **Snuff** (`c`): radius 0, tallow saved, light-seeking monsters lose you, dread rises faster.
-- **Sources:** candles and lumps on floors, braziers (light them, sit by them), and **rendering corpses** into tallow.
+- Burns 1 tallow per turn. Start: 900 turns of tallow.
+- **Warnings:** the log and HUD warn below 200 ("candle low"). Below 60 it **gutters**: radius drops to 3.
+- **Snuff** (`c`, one turn): radius 0, tallow saved, dread rises faster. In the dark, monsters only notice you within 2 tiles (unless you stand in brazier light).
+- **Sources:** every floor has one guaranteed lump (180–260) plus 0–2 stubs (50–90), shown as `,`. Walk over tallow to take it. Later: braziers you light (M7) and **rendering corpses** (M6).
+- **Lantern-eaters** bite your flame: the candle goes out and loses 15 tallow.
+- Tallow is a counter for now. It gains weight when inventory arrives (M4).
 - Deep water puts out your candle. Always telegraphed (tile color + confirm prompt).
 
 ### Dread (0–100)
@@ -115,8 +117,13 @@ Two linked resources, both always on screen.
 | Frayed | 70–99 | Hallucinated creatures (harmless, detectable with Look). Rites at 1.5×. |
 | **Manifestation** | 100 | Your nightmare takes form as a strong hunter near you. Kill it or escape the floor. Dread resets to 50. Never an instant death. |
 
-**Raises dread:** time in light (slow), time in darkness (fast), first sight of a new horror, casting rites.
-**Lowers dread:** resting by a lit brazier, consecrated rooms, incense, killing your Manifestation.
+**Raises dread:** time in candlelight (+1 per 20 turns), time in darkness (+1 per 4 turns), first sight of a new kind of creature (+5, or +8 for the Dreaming), casting rites (M6).
+**Lowers dread:** standing in brazier light (−1 per ~3 turns), consecrated rooms, incense, killing or escaping your Manifestation (dread settles at 50).
+
+- **Whispers** (Uneasy and up) are flavor only, in violet. They never hint at real threats.
+- **Phantoms** (Frayed) take the shape of creatures you've met. They hunt you, never attack, and come apart when they reach you or are struck. Look says plainly that they aren't there; they also shimmer very slightly.
+- **The Manifestation** (`M`, 18 health, a little faster than you) always knows where you are. While it lives, dread stays at 100.
+- **Rest** (`R`) waits until healed (and, by a brazier, until calm). It stops for anything that happens and won't start with company in view.
 
 The key tension: **rites cost dread, and dread makes rites stronger.** Players dial their own risk.
 
@@ -302,7 +309,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Glyphs:** ASCII. `@` you, `#` wall, `.` floor, `+` door, `>` `<` stairs, `&` brazier, letters for creatures, `!` tinctures, `?` texts, `*` Leavings, `~` water, `"` vestments, `/` `|` `)` weapons.
+- **Glyphs:** ASCII. `@` you, `#` wall, `.` floor, `+` door, `>` `<` stairs, `&` brazier, `,` tallow, letters for creatures, `!` tinctures, `?` texts, `*` Leavings, `~` water, `"` vestments, `/` `|` `)` weapons.
 - **Lighting:** per-tile light value blended into foreground and background. Warm amber falloff from the candle; braziers orange; holy light pale gold; darkness near-black.
 - **Flicker:** small per-frame jitter on candle light (visual only, never affects rules).
 - **Remembered tiles:** desaturated blue-grey.
@@ -325,6 +332,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `x` | Look (cursor; Tab cycles creatures, Esc leaves) |
 | `s` | Study / render corpse |
 | `c` | Snuff / relight candle |
+| `R` | Rest until healed (or calm, by a brazier) |
 | `o` | Auto-explore |
 | `J` | Journal |
 | `?` | Help |
@@ -432,7 +440,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | M0 ✅ | Skeleton | Run `cargo run`, see `@` on a map, move, quit | 1–2 h |
 | M1 ✅ | Map & sight | Walk procedurally generated floors with FOV, candlelight falloff, fog, stairs down | 3–4 h |
 | M2 ✅ | Combat & monsters | Fight 4 crypt monsters with energy-based turns, see the log, die, see death recap | 3–4 h |
-| M3 | Candle & dread | Watch the candle burn, snuff it, gain dread, trigger a Manifestation | 2–3 h |
+| M3 ✅ | Candle & dread | Watch the candle burn, snuff it, gain dread, trigger a Manifestation | 2–3 h |
 
 ### Phase B: Depth (~2–3 days)
 

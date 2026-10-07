@@ -10,6 +10,12 @@ use crate::map::{Map, Tile, path};
 /// No monster starts closer than this many steps to the arrival stair.
 const SAFE_RADIUS: u32 = 12;
 
+/// Every floor has one lump this big (BUILD_GUIDE.md §1: a guaranteed tallow source).
+pub const LUMP: (u32, u32) = (180, 260);
+/// Plus up to `MAX_STUBS` small stubs.
+pub const STUB: (u32, u32) = (50, 90);
+const MAX_STUBS: u32 = 2;
+
 /// Spawn budget in threat points for a depth.
 pub fn budget(depth: u8) -> u32 {
     3 + 2 * u32::from(depth)
@@ -25,14 +31,14 @@ pub fn populate<R: Rng + ?Sized>(
 ) -> Vec<(KindId, Point)> {
     let in_range: Vec<KindId> = content
         .kinds()
-        .filter(|(_, d)| d.depth.0 <= depth && depth <= d.depth.1)
+        .filter(|(_, d)| d.natural && d.depth.0 <= depth && depth <= d.depth.1)
         .map(|(k, _)| k)
         .collect();
     // Until deeper biomes get their own creatures, the deepest known ones stand in.
     let eligible = if in_range.is_empty() {
         content
             .kinds()
-            .filter(|(_, d)| d.depth.0 <= depth)
+            .filter(|(_, d)| d.natural && d.depth.0 <= depth)
             .map(|(k, _)| k)
             .collect()
     } else {
@@ -91,6 +97,25 @@ pub fn populate<R: Rng + ?Sized>(
     placed
 }
 
+/// Places a floor's tallow: one guaranteed lump and a few stubs, on plain floor.
+pub fn place_tallow<R: Rng + ?Sized>(rng: &mut R, map: &Map, start: Point) -> Vec<(Point, u32)> {
+    let dist = path::distances(map, start);
+    let mut spots: Vec<Point> = map
+        .points()
+        .filter(|&p| map.tile(p) == Tile::Floor && dist.at(p).is_some_and(|d| d >= 4))
+        .collect();
+    let mut placed = Vec::new();
+    let stubs = rng.random_range(0..=MAX_STUBS);
+    for amount in std::iter::once(LUMP).chain((0..stubs).map(|_| STUB)) {
+        if spots.is_empty() {
+            break;
+        }
+        let at = spots.swap_remove(rng.random_range(0..spots.len()));
+        placed.push((at, rng.random_range(amount.0..=amount.1)));
+    }
+    placed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,6 +142,38 @@ mod tests {
                 spots.sort();
                 spots.dedup();
                 assert_eq!(spots.len(), spawns.len(), "two monsters on one tile");
+            }
+        }
+    }
+
+    #[test]
+    fn every_floor_has_a_reachable_lump_of_tallow() {
+        for seed in 0..200 {
+            let mut r = rng::floor_rng(seed, 1);
+            let layout = generate::crypt(&mut r, true);
+            let tallow = place_tallow(&mut r, &layout.map, layout.start);
+            let dist = path::distances(&layout.map, layout.start);
+            assert!(
+                tallow.iter().any(|&(_, amount)| amount >= LUMP.0),
+                "seed {seed}"
+            );
+            for &(at, _) in &tallow {
+                assert!(dist.at(at).is_some(), "seed {seed}: tallow out of reach");
+                assert_eq!(layout.map.tile(at), Tile::Floor);
+            }
+        }
+    }
+
+    #[test]
+    fn manifestations_never_spawn_with_a_floor() {
+        let content = Content::bundled();
+        let manifestation = content.kind_by_id("manifestation").unwrap();
+        for seed in 0..60 {
+            for depth in 1..=crate::MAX_DEPTH {
+                let mut r = rng::floor_rng(seed, depth);
+                let layout = generate::crypt(&mut r, true);
+                let spawns = populate(&mut r, content, &layout.map, layout.start, depth);
+                assert!(spawns.iter().all(|&(k, _)| k != manifestation));
             }
         }
     }

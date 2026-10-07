@@ -34,6 +34,8 @@ pub struct Monster {
     pub(crate) blow_ready: bool,
     /// Actions until it can wind up again.
     pub cooldown: u32,
+    /// A hallucination: looks real, can't hurt anyone, and Look sees through it.
+    pub phantom: bool,
 }
 
 impl Monster {
@@ -48,6 +50,7 @@ impl Monster {
             winding_up: None,
             blow_ready: false,
             cooldown: 0,
+            phantom: false,
         }
     }
 }
