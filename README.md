@@ -11,7 +11,10 @@ Needs [Rust](https://rustup.rs) and a truecolor terminal of at least 100×30.
 ```sh
 cargo run --release
 cargo run --release -- --seed 42   # replay a specific dungeon
+cargo run --release -- --simple    # plain terminal colors on your own background, no animation
 ```
+
+`--simple` is for terminals without truecolor, light themes, transparent backgrounds, screen readers or recordings: it uses only the 16 standard colors, leaves the background to your terminal, and redraws only when you press a key.
 
 | Key | Action |
 |---|---|

@@ -13,6 +13,7 @@ cargo clippy --workspace --all-targets     # must be warning-free
 cargo fmt --all                            # format before committing
 cargo run -p tallow-core --example floor -- <seed> <depth>   # print a generated floor as ASCII
 cargo run -- --seed 7                      # replay a specific dungeon
+cargo run -- --simple                      # 16 standard colors, terminal background, no animation
 cargo run --release -p tallow-sim -- 500   # whole-run bot: softlocks, unreachable stairs, where runs end
 SIM_TRACE=17 cargo run --release -p tallow-sim   # the last commands of one seed's run
 cargo run -p tallow-core --example route -- <seed> <depth> <x> <y> <stop>   # vi keys from the arrival stair to within <stop> of a tile

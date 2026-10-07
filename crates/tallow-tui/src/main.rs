@@ -19,8 +19,13 @@ use crate::app::App;
 
 /// Redraw at least this often so candlelight can flicker.
 const FRAME: Duration = Duration::from_millis(80);
+/// In simple mode, wait for input this long before redrawing anyway.
+const IDLE: Duration = Duration::from_secs(5);
 
-const USAGE: &str = "usage: tallow [--seed <number>]";
+const USAGE: &str = "usage: tallow [--seed <number>] [--simple]
+
+  --seed <number>   play (or replay) a particular dungeon
+  --simple          plain terminal colors on your own background, no animation";
 
 /// Testing aids, not for play: start deeper, know every rite.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -32,6 +37,8 @@ struct Options {
     dev_level: Option<u32>,
     dev_near_stairs: bool,
     dev_ascent: Option<u8>,
+    /// Plain terminal colors, the terminal's own background, no animation.
+    simple: bool,
 }
 
 fn main() -> Result<()> {
@@ -69,7 +76,10 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         None => App::new(seed),
     };
     app.set_journal(journal.clone());
+    app.set_simple(options.simple);
     let mut recorded = false;
+    // Simple mode doesn't animate, so it only needs to redraw on input.
+    let frame = if options.simple { IDLE } else { FRAME };
     if let Some(depth) = options.dev_depth {
         app.world_mut().dev_skip_to(depth);
     }
@@ -100,6 +110,7 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         if app.wants_restart() {
             app = App::new(random_seed());
             app.set_journal(journal.clone());
+            app.set_simple(options.simple);
             recorded = false;
         }
         // A finished run goes into the journal once.
@@ -113,7 +124,7 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         }
         let time = started.elapsed().as_secs_f32();
         terminal.draw(|frame| render::draw(frame, &app, time))?;
-        if event::poll(FRAME)?
+        if event::poll(frame)?
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
@@ -153,6 +164,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
                 options.dev_depth = Some(value.parse().context("bad depth")?);
             }
             "--dev-rites" => options.dev_rites = true,
+            "--simple" => options.simple = true,
             "--dev-kit" => options.dev_kit = true,
             "--dev-near-stairs" => options.dev_near_stairs = true,
             "--dev-ascent" => {
@@ -194,6 +206,12 @@ mod tests {
         assert!(seed(&["--seed"]).is_err());
         assert!(seed(&["--seed", "x"]).is_err());
         assert!(seed(&["--nope"]).is_err());
+    }
+
+    #[test]
+    fn simple_flag() {
+        assert!(parse_args(args(&["--simple"])).unwrap().simple);
+        assert!(!parse_args(args(&[])).unwrap().simple);
     }
 
     #[test]

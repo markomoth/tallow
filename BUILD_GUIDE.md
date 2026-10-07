@@ -419,6 +419,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 - **Flicker:** small per-frame jitter on candle light (visual only, never affects rules).
 - **Remembered tiles:** desaturated blue-grey.
 - **Truecolor** with automatic 256-color fallback.
+- **Simple mode** (`tallow --simple`): the 16 standard terminal colors on the terminal's own (possibly transparent) background, no flicker, pulse or shimmer, and a redraw only on input. The screen is drawn as usual, then each cell is mapped (`render/simple.rs`): dark and grey backgrounds become the terminal's own; backgrounds that carry meaning (a raised blow's red tiles, the aim line, holy ground) stay as plain dark colors; every foreground becomes its nearest standard color, dim ones dark grey.
 - **Animations:** short and skippable: projectile trails, fire spread, swarm movement.
 
 ### Controls

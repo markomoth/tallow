@@ -5,6 +5,7 @@ mod map;
 mod pack;
 mod palette;
 mod sheet;
+mod simple;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -26,6 +27,15 @@ const LOG_HEIGHT: u16 = 6;
 
 /// Draws one frame. `time` is seconds since start, for visual effects only.
 pub fn draw(frame: &mut Frame, app: &App, time: f32) {
+    // Simple mode holds still: no flicker, pulse or shimmer.
+    let time = if app.simple() { 0.0 } else { time };
+    draw_screen(frame, app, time);
+    if app.simple() {
+        simple::simplify(frame.buffer_mut());
+    }
+}
+
+fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
     let area = frame.area();
     frame.render_widget(Block::new().style(Style::new().bg(palette::VOID)), area);
 
@@ -569,6 +579,26 @@ mod tests {
         assert_eq!(app.mode(), Mode::Won);
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(screen.contains("The Vigil Candle burns on the altar."));
+    }
+
+    #[test]
+    fn simple_mode_uses_plain_colors_and_the_terminals_background() {
+        let mut app = scene("pallbearer");
+        app.set_simple(true);
+        let mut terminal = Terminal::new(TestBackend::new(MIN_WIDTH, MIN_HEIGHT)).unwrap();
+        terminal.draw(|frame| draw(frame, &app, 3.7)).unwrap();
+        for cell in terminal.backend().buffer().content() {
+            assert!(
+                !matches!(cell.fg, ratatui::style::Color::Rgb(..)),
+                "{cell:?}"
+            );
+            assert!(
+                !matches!(cell.bg, ratatui::style::Color::Rgb(..)),
+                "{cell:?}"
+            );
+        }
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("T A L L O W") && screen.contains('@'));
     }
 
     #[test]

@@ -75,6 +75,8 @@ pub struct App {
     /// Every command given, for the save.
     commands: Vec<Command>,
     journal: Journal,
+    /// `--simple`: plain terminal colors, no animation.
+    simple: bool,
 }
 
 impl App {
@@ -96,6 +98,7 @@ impl App {
             restart: false,
             commands: Vec::new(),
             journal: Journal::default(),
+            simple: false,
         }
     }
 
@@ -119,6 +122,14 @@ impl App {
             seed: self.world.seed(),
             commands: self.commands.clone(),
         }
+    }
+
+    pub fn simple(&self) -> bool {
+        self.simple
+    }
+
+    pub fn set_simple(&mut self, simple: bool) {
+        self.simple = simple;
     }
 
     pub fn journal(&self) -> &Journal {
