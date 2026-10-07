@@ -22,10 +22,59 @@ const WHISPER_ODDS: u32 = 45;
 /// One in this many turns, the frayed see something.
 const PHANTOM_ODDS: u32 = 30;
 const MAX_PHANTOMS: usize = 2;
+/// Every this many turns your candle burns on a floor, the light draws one
+/// more creature onto it, up to `MAX_DRAWN`. Darkness draws nothing.
+pub const LIGHT_DRAW_TURNS: u32 = 120;
+const MAX_DRAWN: u32 = 3;
+/// A drawn creature arrives at least this many steps away, out of sight.
+const DRAWN_DISTANCE: u32 = 15;
 /// Steps from the player where phantoms and Manifestations appear.
 const LURK_DISTANCE: (u32, u32) = (6, 14);
 
 impl World {
+    /// A lit candle is seen from far off. Burn it long enough on one floor and
+    /// something new comes looking, and says so.
+    fn tick_light_drawing(&mut self, events: &mut Vec<Event>) {
+        let showing = self.player.candle.is_lit() && !self.shrouded() && !self.player.vigil;
+        if !showing
+            || self.stage() != crate::throne::Stage::Descent
+            || self.depth() >= crate::MAX_DEPTH
+        {
+            return;
+        }
+        self.floor.lit_turns += 1;
+        if !self.floor.lit_turns.is_multiple_of(LIGHT_DRAW_TURNS) || self.floor.drawn >= MAX_DRAWN {
+            return;
+        }
+        let here = self.player.pos;
+        let dist = path::distances(self.map(), here);
+        let spots: Vec<Point> = self
+            .map()
+            .points()
+            .filter(|&p| {
+                self.map().tile(p) == crate::map::Tile::Floor
+                    && !self.floor.in_sight(p)
+                    && self.floor.monster_at(p).is_none()
+                    && dist.at(p).is_some_and(|d| d >= DRAWN_DISTANCE)
+            })
+            .collect();
+        let kinds = crate::spawn::eligible(self.content, self.depth());
+        let content = self.content;
+        let (Some(&at), Ok(&kind)) = (
+            spots.choose(&mut self.ai_rng),
+            kinds.choose_weighted(&mut self.ai_rng, |&k| content.monster(k).weight),
+        ) else {
+            return;
+        };
+        let id = self
+            .floor
+            .monsters
+            .insert(Monster::new(kind, content.monster(kind), at));
+        self.floor.monsters[id].mind = Mind::Hunting { last_seen: here };
+        self.floor.drawn += 1;
+        events.push(Event::LightDrawn);
+    }
+
     pub(crate) fn on_turn(&mut self, events: &mut Vec<Event>) {
         let regen = if self.has_passive(Passive::QuickMending) {
             QUICK_REGEN_TURNS
@@ -68,25 +117,20 @@ impl World {
             None => {}
         }
 
+        self.tick_light_drawing(events);
+
         // While your dread walks the floor, it holds you at the top.
         if !self.manifestation_present() {
-            let rate = if self.floor.ambient_light(self.player.pos).is_lit() {
-                let kin = if self.has_passive(Passive::BrazierKin) {
-                    2
+            let lit =
+                self.player.candle.is_lit() || self.floor.ambient_light(self.player.pos).is_lit();
+            if !lit {
+                let rate = if self.has_passive(Passive::DarkFed) {
+                    dread::PER_TURN_IN_DARKNESS_FED
                 } else {
-                    1
+                    dread::PER_TURN_IN_DARKNESS
                 };
-                dread::PER_TURN_BY_BRAZIER * kin
-            } else if self.player.candle.is_lit() {
-                if self.has_passive(Passive::CalmInLight) {
-                    dread::PER_TURN_IN_CANDLELIGHT / 2
-                } else {
-                    dread::PER_TURN_IN_CANDLELIGHT
-                }
-            } else {
-                dread::PER_TURN_IN_DARKNESS
-            };
-            self.shift_dread(rate, events);
+                self.shift_dread(rate, events);
+            }
         }
 
         let band = self.player.dread.band();
@@ -204,6 +248,7 @@ impl World {
 
 #[cfg(test)]
 mod tests {
+    use super::LIGHT_DRAW_TURNS;
     use crate::actions::Command;
     use crate::candle::{self, CandleState};
     use crate::content::{Content, KindId, Trait};
@@ -211,6 +256,7 @@ mod tests {
     use crate::events::Event;
     use crate::geom::{Direction, Point};
     use crate::map::prefab;
+    use crate::monster::Mind;
     use crate::world::World;
 
     fn world_from(text: &str) -> World {
@@ -339,19 +385,47 @@ mod tests {
     }
 
     #[test]
-    fn darkness_breeds_dread_faster_than_candlelight_and_braziers_ease_it() {
+    fn only_darkness_breeds_dread() {
         let mut lit = hall();
         wait(&mut lit, 40);
         let mut dark = hall();
         dark.apply(Command::ToggleCandle);
         wait(&mut dark, 40);
-        assert_eq!(lit.player().dread.value(), 2);
+        assert_eq!(lit.player().dread.value(), 0);
         assert!(dark.player().dread.value() >= 9);
 
+        // Brazier light is light: no dread, but none taken away either.
         let mut warm = world_from("#######\n#@.&..#\n#######");
+        warm.apply(Command::ToggleCandle);
         warm.player.dread.set(30);
         wait(&mut warm, 30);
-        assert!(warm.player().dread.value() < 30);
+        assert_eq!(warm.player().dread.value(), 30);
+    }
+
+    #[test]
+    fn a_long_burning_candle_draws_creatures_and_says_so() {
+        let mut world = World::new(3);
+        world.despawn_all();
+        let mut drawn = 0;
+        for _ in 0..LIGHT_DRAW_TURNS {
+            drawn += world
+                .apply(Command::Wait)
+                .iter()
+                .filter(|e| **e == Event::LightDrawn)
+                .count();
+        }
+        assert_eq!(drawn, 1);
+        let (_, m) = world.floor().monsters().next().expect("something came");
+        assert!(matches!(m.mind, Mind::Hunting { .. }));
+        assert!(!world.floor().in_sight(m.pos), "it arrives out of sight");
+
+        // Snuffed, the dark draws nothing.
+        let mut world = World::new(3);
+        world.despawn_all();
+        world.apply(Command::ToggleCandle);
+        for _ in 0..LIGHT_DRAW_TURNS * 2 {
+            assert!(!world.apply(Command::Wait).contains(&Event::LightDrawn));
+        }
     }
 
     #[test]

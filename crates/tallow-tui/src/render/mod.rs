@@ -510,8 +510,8 @@ mod tests {
         assert!(screen.contains("iron candlestick (in hand)"));
         assert!(screen.contains("cassock (worn)"));
         assert!(screen.contains("mending tincture (untried)"));
-        assert!(screen.contains("tallow, 900 turns of light"));
-        assert!(screen.contains("Load 14.3"));
+        assert!(screen.contains("tallow, 300 turns of light"));
+        assert!(screen.contains("Load 8.3"));
     }
 
     #[test]
@@ -578,7 +578,7 @@ mod tests {
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(screen.contains(" Rites "));
         assert!(screen.contains("Compel"));
-        assert!(screen.contains("dread +15 · range 6 · 12 actions"));
+        assert!(screen.contains("costs 15 dread · range 6 · 12 actions"));
     }
 
     #[test]

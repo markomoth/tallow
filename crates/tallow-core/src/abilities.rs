@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn the_sexton_raises_the_dead() {
         let mut world = hall();
-        world.leave_corpse(kind("parishioner"), Point::new(6, 2));
+        world.leave_corpse(kind("parishioner"), Point::new(6, 2), &mut Vec::new());
         let sexton = world.spawn_monster(kind("sexton"), Point::new(9, 2));
         world.floor.monsters[sexton].mind = Mind::Hunting {
             last_seen: world.player().pos,

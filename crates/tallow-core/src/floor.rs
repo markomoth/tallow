@@ -32,6 +32,11 @@ pub struct Floor {
     explored: Grid<bool>,
     pub(crate) monsters: SlotMap<MonsterId, Monster>,
     pub(crate) tallow: Vec<Tallow>,
+    /// Turns your candle has burned on this floor, and how many creatures
+    /// the light has drawn here so far.
+    pub(crate) writings: Vec<Writing>,
+    pub(crate) lit_turns: u32,
+    pub(crate) drawn: u32,
     pub(crate) items: Vec<FloorItem>,
     pub(crate) corpses: Vec<crate::corpse::Corpse>,
     /// Holy ground: the turn each sanctified tile stops being holy (0 = never was).
@@ -79,6 +84,16 @@ impl FloorItem {
             seen: true,
         }
     }
+}
+
+/// Letters scratched into a wall that glow faintly, and only in the dark:
+/// candlelight washes them out. Walk into them in the dark to read them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Writing {
+    /// The wall they are on.
+    pub at: Point,
+    pub seen: bool,
+    pub read: bool,
 }
 
 /// A lump or stub of tallow lying on the floor. Walk over it to take it.
@@ -134,6 +149,9 @@ impl Floor {
             explored: Grid::new(w, h, false),
             monsters: SlotMap::with_key(),
             tallow: Vec::new(),
+            writings: Vec::new(),
+            lit_turns: 0,
+            drawn: 0,
             items: Vec::new(),
             corpses: Vec::new(),
             sanctified: Grid::new(w, h, 0),
@@ -311,6 +329,41 @@ impl Floor {
     }
 
     /// Tallow lying on this floor.
+    pub fn writings(&self) -> &[Writing] {
+        &self.writings
+    }
+
+    /// Glowing letters you can make out right now: in sight, with no light on them.
+    pub fn writing_glows(&self, at: Point, candle_lit: bool) -> bool {
+        !candle_lit && self.in_sight(at) && !self.light(at).is_lit()
+    }
+
+    /// With your candle out, things that glow are seen in the dark wherever
+    /// you have a line to them: unread writing, Leavings, and the Dreaming
+    /// (at `glowing`). Returns a `WritingSpotted` for writing seen the first time.
+    pub(crate) fn see_glows(&mut self, glowing: &[Point]) -> Vec<Event> {
+        let mut events = Vec::new();
+        let leavings: Vec<Point> = self.leavings.iter().map(|&(at, _)| at).collect();
+        for &at in glowing.iter().chain(&leavings) {
+            if self.in_sight(at) {
+                self.visible.set(at, true);
+                self.explored.set(at, true);
+            }
+        }
+        for i in 0..self.writings.len() {
+            let w = self.writings[i];
+            if !w.read && self.writing_glows(w.at, false) {
+                self.visible.set(w.at, true);
+                self.explored.set(w.at, true);
+                if !w.seen {
+                    self.writings[i].seen = true;
+                    events.push(Event::WritingSpotted { at: w.at });
+                }
+            }
+        }
+        events
+    }
+
     pub fn tallow(&self) -> &[Tallow] {
         &self.tallow
     }

@@ -3,14 +3,20 @@
 use crate::map::light::Rgb;
 
 /// Tallow at the start of a run, in turns of burning.
-pub const START_TALLOW: u32 = 900;
+pub const START_TALLOW: u32 = 300;
+/// The candle itself holds this much. Tallow past it is carried as lumps,
+/// which weigh twice as much, and melt into the candle as it burns.
+pub const CAP: u32 = 400;
+/// Tallow in the candle per tenth of weight; lumps weigh twice that.
+pub const CANDLE_PER_TENTH: u32 = 10;
+pub const LUMP_PER_TENTH: u32 = 5;
 pub const RADIUS: i32 = 6;
 /// Light radius once the candle is nearly spent.
 pub const GUTTER_RADIUS: i32 = 3;
 pub const COLOR: Rgb = [255, 196, 128];
 
 /// Below this the HUD and log warn you.
-pub const LOW_AT: u32 = 200;
+pub const LOW_AT: u32 = 120;
 /// Below this the flame shrinks to `GUTTER_RADIUS`.
 pub const GUTTER_AT: u32 = 60;
 
@@ -52,6 +58,16 @@ impl Candle {
     /// Turns of burning left.
     pub fn tallow(&self) -> u32 {
         self.tallow
+    }
+
+    /// Tallow carried as lumps, past what the candle holds.
+    pub fn spare(&self) -> u32 {
+        self.tallow.saturating_sub(CAP)
+    }
+
+    /// What all this tallow weighs, in tenths.
+    pub fn weight(&self) -> u32 {
+        weight_of(self.tallow)
     }
 
     pub fn is_lit(&self) -> bool {
@@ -116,6 +132,11 @@ impl Candle {
     }
 }
 
+/// The weight of `tallow`, in tenths: the candle's share, then the lumps.
+pub fn weight_of(tallow: u32) -> u32 {
+    tallow.min(CAP) / CANDLE_PER_TENTH + tallow.saturating_sub(CAP) / LUMP_PER_TENTH
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,6 +178,17 @@ mod tests {
         assert_eq!(candle.tallow(), START_TALLOW);
         assert!(candle.light());
         assert!(candle.is_lit());
+    }
+
+    #[test]
+    fn tallow_past_the_cap_is_heavier() {
+        assert_eq!(weight_of(400), 40);
+        assert_eq!(weight_of(500), 60, "100 in lumps weighs 2.0");
+        let candle = Candle {
+            tallow: 450,
+            lit: true,
+        };
+        assert_eq!(candle.spare(), 50);
     }
 
     #[test]

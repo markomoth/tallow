@@ -115,10 +115,12 @@ Two linked resources, both always on screen.
 ### Candle (tallow)
 
 - Your candle is your light radius (6 tiles) and your clock.
-- Burns 1 tallow per turn. Start: 900 turns of tallow.
-- **Warnings:** the log and HUD warn below 200 ("candle low"). Below 60 it **gutters**: radius drops to 3.
-- **Snuff** (`c`, one turn): radius 0, tallow saved, dread rises faster. In the dark, monsters only notice you within 2 tiles (unless you stand in brazier light).
-- **Sources:** every floor has one guaranteed lump (180–260) plus 0–2 stubs (50–90), shown as `,`. Walk over tallow to take it. Later: braziers you light (M7) and **rendering corpses** (M6).
+- Burns 1 tallow per turn. Start: 300 turns of tallow.
+- **Warnings:** the log and HUD warn below 120 ("candle low"). Below 60 it **gutters**: radius drops to 3.
+- **Snuff** (`c`, one turn): radius 0, tallow saved, and you start gathering dread. In the dark, monsters only notice you within 2 tiles (unless you stand in brazier light).
+- **Sources:** tallow is farmed from creatures, not found. Every floor has one stub (50–90) on the ground, 25% of floors a second, shown as `,`. Walk over tallow to take it. The rest comes from **rendering bodies** (see below) and from the Dreaming, who leave a little **grave-wax** (2 × health, 8–60) where they come apart.
+- **Cap:** the candle holds 400. Tallow past that is carried as **lumps** that weigh twice as much (2.0 per 100) and melt into the candle as it burns. You can't hoard light without being slowed by it.
+- **Light is seen from afar** (M12): a lit candle is noticed 4 tiles beyond a creature's own sight, and the Dreaming come to it from 8 beyond. Every 120 turns your candle burns on one floor, the light draws a new creature onto it (up to 3 per floor), arriving out of sight and hunting you; the log says so in red. Darkness draws nothing. Not on the throne floor, the ascent, or under Shroud.
 - **Lantern-eaters** bite your flame: the candle goes out and loses 15 tallow.
 - Tallow is a counter for now. It gains weight when inventory arrives (M4).
 - Deep water puts out your candle. Always telegraphed (tile color + confirm prompt).
@@ -132,21 +134,30 @@ Two linked resources, both always on screen.
 | Frayed | 70–99 | Hallucinated creatures (harmless, detectable with Look). Rites at 1.5×. |
 | **Manifestation** | 100 | Your nightmare takes form as a strong hunter near you. Kill it or escape the floor. Dread resets to 50. Never an instant death. |
 
-**Raises dread:** time in candlelight (+1 per 20 turns), time in darkness (+1 per 4 turns), first sight of a new kind of creature (+5, or +8 for the Dreaming), casting rites (M6).
-**Lowers dread:** standing in brazier light (−1 per ~3 turns), consecrated rooms, incense, killing or escaping your Manifestation (dread settles at 50).
+**Dread is power (M12).** Rites are paid for in dread, so it is something you gather, hold and spend, and the more you hold the stronger your rites. Holding a lot is a gamble: whispers, then phantoms, then at 100 the Manifestation.
+
+**Raises dread:** time in darkness (+1 per 4 turns; no light of any kind on your tile), every blow struck or taken in the dark (+2), first sight of a new kind of creature (+5, or +8 for the Dreaming), some creatures' songs and chants. Light, candle or brazier, breeds none.
+**Lowers dread:** casting rites (the cost), **offering it to a lit brazier** (walk into one: 3 dread mends 1 health, only as much as your wounds need), Steadying tinctures, Transference, killing or escaping your Manifestation (dread settles at 50).
 
 - **Whispers** (Uneasy and up) are flavor only, in violet. They never hint at real threats.
 - **Phantoms** (Frayed) take the shape of creatures you've met. They hunt you, never attack, and come apart when they reach you or are struck. Look says plainly that they aren't there; they also shimmer very slightly.
 - **The Manifestation** (`M`, 18 health, a little faster than you) always knows where you are. While it lives, dread stays at 100.
-- **Rest** (`R`) waits until healed (and, by a brazier, until calm). It stops for anything that happens and won't start with company in view.
+- **Rest** (`R`) waits until healed. It stops for anything that happens and won't start with company in view.
 
-The key tension: **rites cost dread, and dread makes rites stronger.** Players dial their own risk.
+The key tension: **travel in the dark, fight in the light.** The dark saves tallow and gathers the dread rites are bought with, but in it you strike worse and they strike harder. Light lets you fight, but it is seen from afar and draws things to you.
+
+### Only in the dark (M12)
+
+With your candle out (and the tile itself unlit), some things glow wherever you have a line of sight to them:
+- **Writing** on a wall (`?`, pale blue-green), on 60% of floors below the first. Walk into it in the dark to trace it: it teaches a rite you don't know (or gives Insight). Candlelight washes it out; walking into it lit says so.
+- **Leavings** lying on the floor.
+- **The Dreaming**: you see them coming.
 
 ### Corpses are a decision
 
 Every corpse offers three choices (stand on it, press `s`):
 - **Study** (10 + 2 × threat turns, at most 20): the first study of a kind reveals all its tricks in Look and gives 10 Insight. Some kinds teach a rite (`teaches` in `monsters.ron`: parishioner → Exorcise, pallbearer → Kneel, gnawer → Unsee, Proctor → Sanctify). A kind with nothing left to teach is refused at once, costing nothing. Later: journal entry.
-- **Render** (10 turns): tallow, 4 × the creature's health (12–90).
+- **Render** (10 turns): tallow by faction. The Taken were people and render rich (6 × health, 20–140); the Remnant 3 × (10–80); swarms are mostly shell, 2 × (4–40). Starting on a fresh body, the smell carries 10 steps and whatever hears it comes (the log says so).
 - **Leave it:** at 70 turns it visibly swells (log + Look), at 100 it rots. Bodies of creatures with 8+ health hatch a fly swarm; smaller ones just go. Fire also removes it (M7).
 - Both tasks are refused with a hostile in view and stop the moment anything happens. Progress stays on the body, so you can come back to it.
 - The Dreaming and swarms leave no body.
@@ -191,6 +202,7 @@ No attributes. No skill trees. No classes. Your build is what you do.
 ### Combat basics
 
 - **Hit chance** = attacker accuracy − defender defense, clamped to 5–95%. Look shows the exact numbers.
+- **The dark** (M12): striking at something on a tile no light reaches costs you 20 accuracy (10 with Night Eyes). A creature standing in the dark gets +10 accuracy and +1 damage at both ends. Look shows the adjusted numbers and says "In the dark". Each blow struck or taken there adds 2 dread.
 - **Speed:** 10 is one action per turn. Energy-based: faster creatures act more often.
 - **Health:** the acolyte starts with 24 and regains 1 every 12 turns. The candle clock keeps resting honest.
 - **Telegraphs:** a raised heavy blow marks its target tile in pulsing red and always waits for your next action.
@@ -203,7 +215,7 @@ No attributes. No skill trees. No classes. Your build is what you do.
 - **Insight** (the in-game word for XP) comes from: first sight of a creature kind (8), each new floor (12), kills (6 × the creature's threat; a Manifestation 20; kills by your thrall count), learning a tincture (5), first study of a kind (10), learning a rite (10), reading a text with nothing new (6), freeing one of the Taken (10).
 - Level `L` → `L+1` at `15 × L × (L+1)` total Insight (30, 90, 180, 300, …). A diving bot ends runs around level 5–6.
 - Each level: +3 health, then a **draft of 3 boons** pops up. Press 1, 2 or 3. Choosing takes no time.
-- Boons are either **passive** (Steady Hand: +5 accuracy; Slow Wick: the candle burns a quarter slower; Night Eyes: feel two tiles in the dark; Hearth-Kin; Broad Back; …) or **trigger × reward** ("When you kill with bludgeons, gain 12 tallow"; "When you snuff your candle, the nearest hunter loses your trail"). Rare triggers pay more.
+- Boons are either **passive** (Steady Hand: +5 accuracy; Slow Wick: the candle burns a quarter slower; Night Eyes: feel two tiles in the dark and strike half as badly there; Dark-Fed: the dark breeds dread half again as fast; Hearth-Kin: braziers mend twice as much per dread; Tallow Thief: found and rendered tallow +25%; Broad Back; …) or **trigger × reward** ("When you kill with bludgeons, gain 12 tallow"; "When you snuff your candle, gain 3 dread"). Dread rewards *give* dread (M12). Rare triggers pay more.
 - The draft is weighted toward skills you actually use, never repeats a unique boon, and never offers a dead pick: no blade boons before you've used a blade, no snuff boons before you've snuffed, and so on.
 - Rite boons: Familiar Words (rites cost a quarter less dread; offered once you know a rite), Answered Prayer ("when you cast a rite, …"; after your first cast), Scholar's Reward ("when you finish studying a body, …"; after your first study).
 - Later: "Thrown flasks shatter in a cross".
@@ -223,7 +235,7 @@ Target for v1: 16 rites (4 per school). No damage-only spells. Every rite change
 
 **How rites work (M6):**
 - `z` lists known rites with their current numbers; pick a letter, then a target if the rite needs one. Rites are defined in `assets/rites.ron`.
-- **Cost:** the dread listed, minus the school's Quiet Rites and the Familiar Words boon. The list warns when a cast would take dread to 100. A failed cast (no target, out of range, wrong kind) costs nothing.
+- **Cost:** the dread listed, minus the school's Quiet Rites and the Familiar Words boon, **paid out of the dread you hold** (M12). Without enough, the cast is refused (free) and the list marks it. A failed cast (no target, out of range, wrong kind) costs nothing.
 - **Potency:** calm 1.0×, uneasy 1.25×, frayed or worse 1.5×, times the school's Deep Rites. Potency scales durations and amounts.
 - **Learning:** texts (`?`) teach a random unknown rite of their school; studying bodies teaches their kind's rites. Floor 1 always has a text. Rites last the run only.
 - **Bosses** resist Binding (durations ÷ 3) and can't be freed by Exorcise (it burns them instead). Your Manifestation ignores Compel, Unsee and Transference.
@@ -262,8 +274,8 @@ All 16 v1 rites exist as of M7.
   - **Unburdened:** up to 25.0. Normal.
   - **Burdened:** over 25.0. Moving costs 1.5× time. (Tallow burns per turn, so this matters.)
   - **Overloaded:** over 38.0. Cannot move until you drop something.
-- Tallow weighs 1.0 per 100 turns of light. A full candle is a real weight; it lightens as it burns.
-- **Starting kit:** iron candlestick (in hand), cassock (worn), one mending tincture. Load 14.3.
+- Tallow weighs 1.0 per 100 turns of light in the candle (up to 400), and 2.0 per 100 carried as lumps past that. It lightens as it burns.
+- **Starting kit:** iron candlestick (in hand), cassock (worn), one mending tincture. Load 8.3.
 - The pack holds up to 26 kinds of thing (one letter each); stackables share a slot.
 - Each floor has 3–5 loose items, chosen by depth from `assets/items.ron`.
 
@@ -314,7 +326,7 @@ The room is a weapon. All of these must be readable on screen.
 - **Fire** (`^` flickering): fuel by tile, shelves 10 turns, pews and doors 6, oil 5, bare floor 3 (a flask only). Each turn fire may catch a neighbor: shelves and pews 30%, doors 15%, oil 70%. What burns away becomes open floor. Fire lights its surroundings (radius 2), burns bodies, and does 2–4 a turn to whatever stands in it (the Swarm ×2; the Swarm also won't step next to it). Creatures won't walk into fire unless Beckoned. Walking into fire yourself needs a second step in the same direction.
 - **Oil:** dark yellow floor. 25% of steps onto it slip and lose an action (you and creatures). It catches fire fast.
 - **Noise:** a bell rope (`|` on a wall, pull it by walking into it) is heard 18 steps away; a handbell 12; a fight 5 (not under Hush). Creatures that hear it come to look. The Taken within 4 steps of a bell cower for 4 actions instead. Relentless hunters and creatures already fighting ignore noise.
-- **Braziers:** 40% start cold (grey `&`). Walk into one with your candle lit to light it. Braziers keep lantern-eaters off and ease dread.
+- **Braziers:** 40% start cold (grey `&`). Walk into one with your candle lit to light it. Braziers keep lantern-eaters off. Walk into a lit one to **offer it dread for health** (M12). Their light breeds no dread, and takes none away by itself.
 - **Furniture:** Collegium floors and deeper (4+) get libraries: rows of shelves (`#` in brown) with floor all around each row, so they never cut a floor in two. Crypt floors get chapels with pews (`=`, walkable). Most floors have one bell rope.
 
 ---
@@ -441,7 +453,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `s` | Study / render corpse |
 | `c` | Snuff / relight candle |
 | `C` | Shut the open doors beside you |
-| `R` | Rest until healed (or calm, by a brazier) |
+| `R` | Rest until healed |
 | `o` | Auto-explore (stops when anything new is in view; skips fire, deep water, rotten boards, seep rooms) |
 | `@` | Character sheet: skills, techniques, boons |
 | `M` | Journal (`J` is taken by running south) |
@@ -577,6 +589,14 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | M9 ✅ | Leavings | Throw a stone into a Seep room, find an anomaly, take a Leaving, survive its warning | 3–4 h |
 | M10 ✅ | Beelzebub & ascent | Beat 3 phases, take the candle, outrun the Following, win at the altar | 5–6 h |
 | M11 ✅ | Polish & balance | Save/quit/resume, Journal persists, help screen, sim shows ~0 softlocks | 4–6 h |
+
+### Phase D: Light and dark
+
+| # | Milestone | Done when you can… | Est. |
+|---|---|---|---|
+| M12 ✅ | Scarce tallow, dread as power | Run low on tallow and render a Taken for it; gather dread in the dark and spend it on a rite; offer dread to a brazier to heal; read glowing writing with your candle out; see the log warn that your light drew something | 3–4 h |
+
+**As built (M12), sim over 500 seeds** (the bot now walks dark below 150 tallow, lights up to fight, hunts and renders while under 350): 108 wins, the candle ran dry 4 times, 1.3 Manifestations per run, 0 softlocks. The bot sees every creature on the floor, so it hunts better than a person can; treat its numbers as an upper bound.
 
 Total: roughly 40–55 hours of build + playtest time.
 

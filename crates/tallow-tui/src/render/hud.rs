@@ -7,7 +7,7 @@ use ratatui::style::Color;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Widget, Wrap};
-use tallow_core::candle::{LOW_AT, START_TALLOW};
+use tallow_core::candle::{CAP, LOW_AT};
 use tallow_core::item::LIGHT_LOAD;
 use tallow_core::{
     Biome, Burden, CandleState, DreadBand, MAX_DEPTH, Mind, MonsterInfo, Point, Tile, Trait, World,
@@ -128,7 +128,7 @@ impl Widget for Hud<'_> {
             bar(
                 "Candle",
                 player.candle.tallow(),
-                START_TALLOW,
+                CAP,
                 palette::CANDLE,
                 palette::CANDLE_EMPTY,
             ),
@@ -407,6 +407,12 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             format!("It hits you  {}% · {lo}–{hi}", info.its_hit_chance),
             text(),
         ));
+        if info.in_the_dark {
+            lines.push(Line::styled(
+                "In the dark: you strike worse, it strikes harder.",
+                Style::new().fg(palette::DREAD),
+            ));
+        }
         if info.winding_up.is_some() {
             lines.push(Line::styled(
                 "Its blow is raised. Get off the red tile!",
@@ -684,7 +690,7 @@ fn tile_line(tile: Tile) -> &'static str {
         }
         Tile::DoorSealed => "A door held shut by your Seal. Only you can open it.",
         Tile::ColdBrazier => {
-            "A cold brazier. Walk into it with your candle lit to light it: braziers keep the Dreaming off and ease dread."
+            "A cold brazier. Walk into it with your candle lit to light it: braziers keep the Dreaming off, and take dread for health."
         }
         Tile::Bookshelf => "Shelves of crumbling books. They would burn well.",
         Tile::Pew => "A wooden pew. You can climb over it. It would burn.",
@@ -708,7 +714,7 @@ fn tile_line(tile: Tile) -> &'static str {
         }
         Tile::Brazier => {
             "A brazier, burning without fuel. Some things in the dark will not cross its light. \
-             Rest here with your candle snuffed: dread ebbs and your tallow keeps."
+             Walk into it to offer it your dread: it mends you for it. Its light breeds no dread, and your tallow keeps."
         }
     }
 }

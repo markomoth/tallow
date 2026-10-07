@@ -102,6 +102,8 @@ pub struct MonsterInfo {
     /// Percent chance its ordinary blow lands on you, and for how much.
     pub its_hit_chance: u32,
     pub its_damage: (u32, u32),
+    /// It stands where no light reaches: you strike worse, it strikes harder.
+    pub in_the_dark: bool,
     /// Tricks you have seen this kind of creature use this run.
     pub known_traits: Vec<Trait>,
     pub winding_up: Option<Point>,
@@ -306,6 +308,7 @@ impl World {
         let tallow = spawn::place_tallow(&mut rng, &layout.map, layout.start);
         let items = spawn::place_items(&mut rng, content, &layout.map, layout.start, depth);
         let bosses = spawn::place_boss(&mut rng, content, &layout.map, depth);
+        let writing = spawn::place_writing(&mut rng, &layout.map, layout.start, depth);
         let remains = spawn::place_remains(&mut rng, content, &layout.map, layout.start, depth);
         let seep = layout.seep.map(|room| {
             spawn::fill_seep(&mut rng, content, &layout.map, room, layout.start, depth)
@@ -321,7 +324,15 @@ impl World {
             .into_iter()
             .map(|(at, k, n)| (outside(at), k, n))
             .collect();
+        let writing = writing.filter(|&(_, front)| outside(front) == front);
         let mut floor = Floor::new(layout.map, layout.start);
+        floor
+            .writings
+            .extend(writing.map(|(at, _)| crate::floor::Writing {
+                at,
+                seen: false,
+                read: false,
+            }));
         if let Some(seep) = seep {
             floor.seep = layout.seep;
             floor.anomalies = seep.anomalies;
@@ -480,6 +491,11 @@ impl World {
         self.player.rites = self.content.rite_ids().collect();
     }
 
+    /// Sets dread directly, to pay for rites. For tests and the dev flags.
+    pub fn dev_set_dread(&mut self, value: u32) {
+        self.player.dread.set(value);
+    }
+
     /// Removes every monster from the current floor. For tests and scripted scenes.
     pub fn despawn_all(&mut self) {
         self.floor.monsters.clear();
@@ -533,9 +549,16 @@ impl World {
             health: m.health,
             max_health: m.max_health,
             mind: m.mind,
-            your_hit_chance: combat::hit_chance(self.player_accuracy(), def.defense),
-            its_hit_chance: combat::hit_chance(def.accuracy, self.player_defense()),
-            its_damage: def.damage,
+            your_hit_chance: combat::hit_chance(
+                self.player_accuracy() - self.dark_penalty(m.pos),
+                def.defense,
+            ),
+            its_hit_chance: combat::hit_chance(
+                self.monster_strength(m.kind, m.pos).0,
+                self.player_defense(),
+            ),
+            its_damage: self.monster_strength(m.kind, m.pos).1,
+            in_the_dark: self.in_the_dark(m.pos),
             known_traits: def
                 .traits
                 .iter()
@@ -684,11 +707,7 @@ impl World {
             }
             if let Some(i) = self.floor.tallow.iter().position(|t| t.at == target) {
                 let found = self.floor.tallow.swap_remove(i);
-                let amount = if self.has_passive(Passive::TallowThief) {
-                    found.amount * 5 / 4
-                } else {
-                    found.amount
-                };
+                let amount = self.thieving(found.amount);
                 events.push(Event::TallowFound { amount });
                 self.gain_tallow(amount, &mut events);
             }
@@ -718,7 +737,7 @@ impl World {
         events
     }
 
-    /// Waits until healed (and, by a brazier, calm), or until something happens.
+    /// Waits until healed, or until something happens.
     fn rest(&mut self) -> Vec<Event> {
         if !self.hostiles_in_view().is_empty() {
             return vec![Event::RunRefused];
@@ -742,11 +761,9 @@ impl World {
         events
     }
 
-    /// Nothing left to recover here: full health, and calm unless by a brazier.
+    /// Nothing left to recover: full health.
     fn rested(&self) -> bool {
-        let by_brazier = self.floor.ambient_light(self.player.pos).is_lit();
         self.player.health == self.player.max_health
-            && (self.player.dread.value() == 0 || !by_brazier)
     }
 
     /// A creature two tiles away in `dir` that a long-reach weapon can strike,
@@ -780,7 +797,12 @@ impl World {
             return;
         }
         let def = self.content.monster(kind);
-        let chance = combat::hit_chance(self.player_accuracy() + bonus, def.defense);
+        let at = monster.pos;
+        let accuracy = self.player_accuracy() + bonus - self.dark_penalty(at);
+        let chance = combat::hit_chance(accuracy, def.defense);
+        if self.in_the_dark(at) {
+            self.shift_dread(crate::dread::DARK_BLOW, events);
+        }
         let weapon = self.player_damage();
         let health_before = self.floor.monsters[id].health;
         let family = self.wielded_family();
@@ -807,6 +829,34 @@ impl World {
             let kind = monster.kind;
             self.floor.monsters[id].energy -= ACTION_COST;
             events.push(Event::Staggered { kind });
+        }
+    }
+
+    /// No light reaches this tile: not your candle, not a brazier, not fire.
+    pub fn in_the_dark(&self, p: Point) -> bool {
+        !self.floor.light(p).is_lit()
+    }
+
+    /// What striking at something on `p` costs your accuracy.
+    pub fn dark_penalty(&self, p: Point) -> i32 {
+        match (self.in_the_dark(p), self.has_passive(Passive::DarkSight)) {
+            (false, _) => 0,
+            (true, false) => combat::DARK_ACCURACY,
+            (true, true) => combat::DARK_ACCURACY / 2,
+        }
+    }
+
+    /// A creature's accuracy and damage, standing on `p`: the dark makes it worse.
+    pub fn monster_strength(&self, kind: KindId, p: Point) -> (i32, (u32, u32)) {
+        let def = self.content.monster(kind);
+        if self.in_the_dark(p) {
+            let (lo, hi) = def.damage;
+            (
+                def.accuracy + combat::DARK_FURY_ACCURACY,
+                (lo + combat::DARK_FURY_DAMAGE, hi + combat::DARK_FURY_DAMAGE),
+            )
+        } else {
+            (def.accuracy, def.damage)
         }
     }
 
@@ -850,7 +900,7 @@ impl World {
         if self.floor.is_visible(at) {
             events.push(Event::MonsterDied { kind, at });
         }
-        self.leave_corpse(kind, at);
+        self.leave_corpse(kind, at, events);
         self.on_monster_death(kind, at, events);
         if self
             .player
@@ -1138,8 +1188,29 @@ impl World {
             .rite_state
             .borrowed
             .and_then(|(id, _, radius)| Some((self.floor.monsters.get(id)?.pos, radius)));
-        self.floor
-            .update_view(self.player.pos, candle, feel, borrowed)
+        let mut events = self
+            .floor
+            .update_view(self.player.pos, candle, feel, borrowed);
+        if !self.player.candle.is_lit() && !blind {
+            let glowing: Vec<Point> = self
+                .floor
+                .monsters
+                .values()
+                .filter(|m| !m.phantom && self.content.monster(m.kind).faction == Faction::Dreaming)
+                .map(|m| m.pos)
+                .collect();
+            events.extend(self.floor.see_glows(&glowing));
+        }
+        events
+    }
+
+    /// Tallow found or rendered, with Tallow Thief's quarter more.
+    pub(crate) fn thieving(&self, amount: u32) -> u32 {
+        if self.has_passive(Passive::TallowThief) {
+            amount * 5 / 4
+        } else {
+            amount
+        }
     }
 
     /// Adds tallow to your candle. What you can't carry without being stuck
@@ -1151,8 +1222,24 @@ impl World {
         if load <= max {
             return;
         }
-        let excess = (load - max) * crate::item::TALLOW_PER_TENTH;
-        let spill = excess.min(amount).min(self.player.candle.tallow());
+        // The least tallow that brings the load back within limits (lumps go first,
+        // being heavier), but never more than was just gained.
+        let tallow = self.player.candle.tallow();
+        let excess = load - max;
+        let lighter = |spill: u32| {
+            crate::candle::weight_of(tallow) - crate::candle::weight_of(tallow - spill) >= excess
+        };
+        let most = amount.min(tallow);
+        let (mut lo, mut hi) = (0, most);
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            if lighter(mid) {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        let spill = lo;
         if spill == 0 {
             return;
         }
@@ -1379,19 +1466,60 @@ mod tests {
         );
         assert_eq!(world.turn(), 0);
 
-        // Out of candle range in a dark hall: the run starts, then stops when it's seen.
+        // Out of candle range in a dark hall: the run starts, then stops when it's
+        // seen, or (a lit candle carrying farther than you can see) when it notices you.
         let mut world = world_from(
             "##########################\n#@.......................#\n##########################",
         );
         world.spawn_monster(kind("parishioner"), Point::new(20, 1));
-        world.apply(Command::Run(Direction::E));
+        let events = world.apply(Command::Run(Direction::E));
         assert!(world.player().pos.x < 19);
         assert!(
             !world
                 .floor()
                 .visible_monsters(world.player().pos)
                 .is_empty()
+                || events.iter().any(|e| matches!(e, Event::Noticed { .. }))
         );
+    }
+
+    #[test]
+    fn the_dark_makes_you_worse_and_them_worse_still() {
+        let mut world = world_from("##########\n#@.......#\n##########");
+        let id = world.spawn_monster(kind("parishioner"), Point::new(2, 1));
+        let lit = world.inspect(id).unwrap();
+        assert!(!lit.in_the_dark);
+        world.apply(Command::ToggleCandle);
+        let dark = world.inspect(id).expect("felt beside you");
+        assert!(dark.in_the_dark);
+        assert_eq!(
+            dark.your_hit_chance,
+            lit.your_hit_chance - combat::DARK_ACCURACY as u32
+        );
+        assert_eq!(
+            dark.its_hit_chance,
+            lit.its_hit_chance + combat::DARK_FURY_ACCURACY as u32
+        );
+        assert_eq!(
+            dark.its_damage.1,
+            lit.its_damage.1 + combat::DARK_FURY_DAMAGE
+        );
+        let before = world.player().dread.value();
+        world.apply(Command::Move(Direction::E));
+        assert!(
+            world.player().dread.value() >= before + 2,
+            "blows in the dark feed dread"
+        );
+    }
+
+    #[test]
+    fn the_dreaming_leave_grave_wax() {
+        let mut world = world_from("##########\n#@.......#\n##########");
+        let at = Point::new(4, 1);
+        world.leave_corpse(kind("inkling"), at, &mut Vec::new());
+        let wax = world.floor().tallow_at(at).expect("wax left");
+        assert_eq!(wax.amount, crate::corpse::wax_yield(7));
+        assert!(world.floor().corpse_at(at).is_none(), "no body");
     }
 
     #[test]

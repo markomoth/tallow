@@ -406,6 +406,17 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             "You stop what you're doing. Your work will keep.".into(),
             Danger,
         ),
+        Event::RenderSmell => (
+            "The smell of rendering fat drifts through the halls. Something will come to it.".into(),
+            Danger,
+        ),
+        Event::WaxLeft { kind, amount } => (
+            format!(
+                "Where the {} came apart, a little grave-wax is left ({amount} tallow).",
+                name(kind)
+            ),
+            Normal,
+        ),
         Event::Rendered { kind, tallow } => (
             format!(
                 "You render the {} down. Grim work, but it will burn (+{tallow} tallow).",
@@ -462,6 +473,9 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
                 }
                 RiteFailure::NotDoor => "It needs a door you know, with nothing in the doorway.",
                 RiteFailure::NotDreaming => "Only the Dreaming can be sent back into the dark.",
+                RiteFailure::NotEnoughDread => {
+                    "You haven't the dread to pay for it. Rites are bought with fear: go into the dark."
+                }
             }
             .into(),
             Normal,
@@ -577,6 +591,41 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             Normal,
         ),
         Event::NeedFlame => ("You need a lit candle to light it.".into(), Normal),
+        Event::Offered { dread, health } => (
+            format!(
+                "You give the brazier your fear. It takes {dread} dread and mends {health} health."
+            ),
+            Good,
+        ),
+        Event::NothingToOffer => (
+            "The brazier wants dread, and you have too little to give. Gather some in the dark."
+                .into(),
+            Normal,
+        ),
+        Event::WholeAlready => (
+            "You are whole. The brazier would take your dread for nothing.".into(),
+            Normal,
+        ),
+        Event::LightDrawn => (
+            "Somewhere on this floor, something has seen your light, and is coming to it.".into(),
+            Danger,
+        ),
+        Event::WritingSpotted { .. } => (
+            "In the dark, letters glow faintly on a wall. Walk into them to trace them, before you relight.".into(),
+            Good,
+        ),
+        Event::WritingWashedOut => (
+            "Your candlelight washes the letters out. They can only be read in the dark.".into(),
+            Normal,
+        ),
+        Event::WritingRead { learned } => (
+            if learned {
+                "You trace the glowing letters with your fingers. They are words of a rite.".into()
+            } else {
+                "You trace the glowing letters. A rite you already know, said another way.".into()
+            },
+            Good,
+        ),
         Event::BrazierLit { .. } => (
             "You touch your flame to the brazier. It roars up, warm and steady.".into(),
             Good,

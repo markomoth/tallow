@@ -198,7 +198,7 @@ pub fn draw_rites(frame: &mut Frame, area: Rect, world: &World) {
     let mut lines = vec![
         Line::styled(
             format!(
-                "Dread {dread} · rites at {}% strength. Dread pays for rites, and dread makes them stronger.",
+                "Dread {dread} · rites at {}% strength. Rites are paid in dread, and the more you hold, the stronger they are.",
                 world
                     .known_rites()
                     .first()
@@ -211,10 +211,10 @@ pub fn draw_rites(frame: &mut Frame, area: Rect, world: &World) {
     for (i, &rite) in world.known_rites().iter().enumerate() {
         let def = world.content().rite(rite);
         let letter = (b'a' + i as u8) as char;
-        let after = dread + world.rite_cost(rite);
-        let warn = if after >= 100 {
+        let cost = world.rite_cost(rite);
+        let warn = if dread < cost {
             Span::styled(
-                "  (dread would reach 100: a Manifestation comes)",
+                format!("  (needs {cost} dread; gather it in the dark)"),
                 Style::new().fg(palette::DANGER),
             )
         } else {
@@ -264,13 +264,13 @@ pub fn draw_corpse(frame: &mut Frame, area: Rect, world: &World) {
         Line::styled(
             format!(
                 "r  render it ({left} turns): +{} tallow. The body is gone after.",
-                render_yield(def.health)
+                render_yield(def.faction, def.health)
             ),
             text(),
         ),
         Line::default(),
         Line::styled(
-            "Left alone it rots, and big bodies hatch flies. Either task stops if anything appears; your work keeps.",
+            "Rendering smells: things nearby come to it. Left alone a body rots, and big ones hatch flies. Either task stops if anything appears; your work keeps.",
             dim(),
         ),
         Line::styled("Esc: leave it", dim()),
@@ -307,15 +307,19 @@ pub fn draw_help(frame: &mut Frame, area: Rect) {
         Line::default(),
         Line::styled("─ how it works ─", dim()),
         Line::styled(
-            "Your candle is your light and your clock: it burns a turn of tallow each turn. Find tallow, render bodies, snuff it to save it.",
+            "Your candle is your light and your clock: a turn of tallow each turn. Little lies about; render bodies for it (the Taken render richest). Past 400 it is carried as heavy lumps.",
             dim(),
         ),
         Line::styled(
-            "Dread rises in the dark and when you cast. It brings whispers, then phantoms, then a Manifestation that hunts you. Braziers calm it.",
+            "Light is seen from afar: burn it long on one floor and new things come looking. In the dark you strike worse and they strike harder.",
             dim(),
         ),
         Line::styled(
-            "Rites cost dread, and dread makes them stronger. Read pages and study bodies to learn them.",
+            "Dread gathers in the dark and in fights there. Rites are paid in dread, and the more you hold the stronger they are. At 100, a Manifestation hunts you.",
+            dim(),
+        ),
+        Line::styled(
+            "Walk into a lit brazier to give it dread for health. With your candle out, some things glow: letters on walls, Leavings, the Dreaming.",
             dim(),
         ),
         Line::styled(

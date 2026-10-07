@@ -2,7 +2,7 @@
 //! render it for tallow, or leave it to rot into a fly swarm.
 
 use crate::boons::Trigger;
-use crate::content::KindId;
+use crate::content::{Faction, KindId};
 use crate::events::Event;
 use crate::geom::Point;
 use crate::item::ItemClass;
@@ -59,9 +59,23 @@ pub fn study_turns(threat: u32) -> u32 {
     (10 + 2 * threat).min(20)
 }
 
-/// Tallow a rendered body gives.
-pub fn render_yield(max_health: u32) -> u32 {
-    (max_health * 4).clamp(12, 90)
+/// How far the smell of rendering fat carries, in steps. Scavengers come.
+pub const RENDER_SMELL: u32 = 10;
+
+/// Tallow a rendered body gives. The Taken were people, and render rich;
+/// the Remnant are dry things; swarms are mostly shell.
+pub fn render_yield(faction: Faction, max_health: u32) -> u32 {
+    match faction {
+        Faction::Taken => (max_health * 6).clamp(20, 140),
+        Faction::Remnant => (max_health * 3).clamp(10, 80),
+        Faction::Swarm => (max_health * 2).clamp(4, 40),
+        Faction::Dreaming => wax_yield(max_health),
+    }
+}
+
+/// The Dreaming leave no body, only a little grave-wax where they came apart.
+pub fn wax_yield(max_health: u32) -> u32 {
+    (max_health * 2).clamp(8, 60)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,11 +149,21 @@ impl World {
         let Some(corpse) = self.corpse_here().copied() else {
             return vec![Event::NoCorpse];
         };
-        let (mut events, done) = self.work(Work::Render, RENDER_TURNS);
+        // Starting on a fresh body: the smell carries, and things come to it.
+        let mut smell = Vec::new();
+        if corpse.rendered == 0 && self.hostiles_in_view().is_empty() {
+            let here = self.player.pos;
+            if self.make_noise(here, RENDER_SMELL, crate::environment::Noise::Fight) > 0 {
+                smell.push(Event::RenderSmell);
+            }
+        }
+        let (events, done) = self.work(Work::Render, RENDER_TURNS);
+        let mut events = [smell, events].concat();
         if done {
             let here = self.player.pos;
             self.floor.corpses.retain(|c| c.at != here);
-            let tallow = render_yield(self.content.monster(corpse.kind).health);
+            let def = self.content.monster(corpse.kind);
+            let tallow = self.thieving(render_yield(def.faction, def.health));
             events.push(Event::Rendered {
                 kind: corpse.kind,
                 tallow,
@@ -222,9 +246,24 @@ impl World {
         events
     }
 
-    /// Leaves a body where a creature died, if its kind leaves one.
-    pub(crate) fn leave_corpse(&mut self, kind: KindId, at: Point) {
-        if self.content.monster(kind).corpse {
+    /// Leaves a body where a creature died, if its kind leaves one. The
+    /// Dreaming leave grave-wax instead.
+    pub(crate) fn leave_corpse(&mut self, kind: KindId, at: Point, events: &mut Vec<Event>) {
+        let def = self.content.monster(kind);
+        if def.faction == Faction::Dreaming && !def.corpse {
+            let amount = wax_yield(def.health);
+            match self.floor.tallow.iter_mut().find(|t| t.at == at) {
+                Some(pile) => pile.amount += amount,
+                None => self
+                    .floor
+                    .tallow
+                    .push(crate::floor::Tallow::new(at, amount)),
+            }
+            if self.floor.is_visible(at) {
+                events.push(Event::WaxLeft { kind, amount });
+            }
+        }
+        if def.corpse {
             let died = self.turn();
             self.floor.corpses.retain(|c| c.at != at);
             self.floor.corpses.push(Corpse {
@@ -360,12 +399,15 @@ mod tests {
         body(&mut world, "parishioner");
         let before = world.player().candle.tallow();
         let events = world.apply(Command::Render);
-        assert!(events.contains(&Event::Rendered {
-            kind: kind("parishioner"),
-            tallow: 40
-        }));
+        assert!(
+            events.contains(&Event::Rendered {
+                kind: kind("parishioner"),
+                tallow: 60
+            }),
+            "the Taken render rich"
+        );
         assert!(world.corpse_here().is_none());
-        assert_eq!(world.player().candle.tallow(), before + 40 - RENDER_TURNS);
+        assert_eq!(world.player().candle.tallow(), before + 60 - RENDER_TURNS);
     }
 
     #[test]

@@ -17,7 +17,7 @@ cargo run -- --simple                      # 16 standard colors, terminal backgr
 cargo run --release -p tallow-sim -- 500   # whole-run bot: softlocks, unreachable stairs, where runs end
 SIM_TRACE=17 cargo run --release -p tallow-sim   # the last commands of one seed's run
 cargo run -p tallow-core --example route -- <seed> <depth> <x> <y> <stop>   # vi keys from the arrival stair to within <stop> of a tile
-cargo run -- --seed 54 --dev-depth 4 --dev-rites --dev-kit   # testing aids: start deeper, know every rite, flasks + handbell
+cargo run -- --seed 54 --dev-depth 4 --dev-rites --dev-kit   # testing aids: start deeper, know every rite (with 60 dread to pay for them), flasks + handbell
 cargo run -- --seed 261 --dev-depth 3 --dev-level 6 --dev-near-stairs   # stand near a floor's boss, levelled up
 cargo run -- --seed 5 --dev-ascent 1      # start on ascent floor 1 (5 = the church) with the Vigil Candle
 SHOW_SCREEN=1 cargo test -p tallow-tui -- --nocapture   # print rendered test screens

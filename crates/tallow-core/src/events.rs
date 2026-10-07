@@ -275,6 +275,13 @@ pub enum Event {
         kind: KindId,
         tallow: u32,
     },
+    /// You began rendering, and the smell drew something.
+    RenderSmell,
+    /// One of the Dreaming came apart and left grave-wax.
+    WaxLeft {
+        kind: KindId,
+        amount: u32,
+    },
     /// A body has begun to swell. It will rot soon.
     CorpseSwelling {
         kind: KindId,
@@ -408,6 +415,27 @@ pub enum Event {
     },
     /// A cold brazier needs a lit candle. Costs no time.
     NeedFlame,
+    /// You gave dread to a lit brazier and it mended you.
+    Offered {
+        dread: u32,
+        health: u32,
+    },
+    /// The brazier wants dread, and you have none to give.
+    NothingToOffer,
+    /// You are already whole; the brazier takes nothing.
+    WholeAlready,
+    /// Your light was seen: something new has come onto the floor to find it.
+    LightDrawn,
+    /// Letters on a wall, seen only in the dark.
+    WritingSpotted {
+        at: Point,
+    },
+    /// You traced the letters in the dark.
+    WritingRead {
+        learned: bool,
+    },
+    /// Candlelight washes the letters out; they can only be read in the dark.
+    WritingWashedOut,
     BrazierLit {
         at: Point,
     },

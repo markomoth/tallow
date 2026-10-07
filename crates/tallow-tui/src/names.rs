@@ -166,7 +166,7 @@ pub fn school_name(school: School) -> &'static str {
     skill_name(school.skill())
 }
 
-/// A rite's numbers right now, at the current potency: "dread +15 · range 6 · 12 actions".
+/// A rite's numbers right now, at the current potency: "costs 15 dread · range 6 · 12 actions".
 pub fn rite_numbers(world: &World, rite: RiteId) -> String {
     let def = world.content().rite(rite);
     let p = world.rite_potency(rite);
@@ -205,7 +205,7 @@ pub fn rite_numbers(world: &World, rite: RiteId) -> String {
             format!("range {}", def.range)
         }
     };
-    format!("dread +{} · {reach} · {what}", world.rite_cost(rite))
+    format!("costs {} dread · {reach} · {what}", world.rite_cost(rite))
 }
 
 fn family_noun(family: Family) -> &'static str {
@@ -241,15 +241,16 @@ pub fn boon_text(boon: Boon) -> (String, String) {
                 }
                 Passive::DarkSight => (
                     "Night Eyes",
-                    "In the dark you feel two tiles around you, not one.".into(),
+                    "In the dark you feel two tiles around you, not one, and strike half as badly."
+                        .into(),
                 ),
-                Passive::CalmInLight => (
-                    "Candle Calm",
-                    "Candlelight breeds less than half the dread.".into(),
+                Passive::DarkFed => (
+                    "Dark-Fed",
+                    "The dark breeds dread in you half again as fast.".into(),
                 ),
                 Passive::BrazierKin => (
                     "Hearth-Kin",
-                    "Brazier light eases dread twice as fast.".into(),
+                    "Braziers mend twice as much for the dread you offer them.".into(),
                 ),
                 Passive::StrongMedicine => (
                     "Strong Medicine",
@@ -257,7 +258,7 @@ pub fn boon_text(boon: Boon) -> (String, String) {
                 ),
                 Passive::TallowThief => (
                     "Tallow Thief",
-                    "Tallow you find is worth a quarter more.".into(),
+                    "Tallow you find or render is worth a quarter more.".into(),
                 ),
                 Passive::PackMule => (
                     "Broad Back",
@@ -297,7 +298,7 @@ pub fn boon_text(boon: Boon) -> (String, String) {
             };
             let result = match then {
                 Reward::Heal(n) => format!("mend {n} health"),
-                Reward::EaseDread(n) => format!("dread eases by {n}"),
+                Reward::Dread(n) => format!("gain {n} dread"),
                 Reward::Tallow(n) => format!("gain {n} tallow"),
                 Reward::LoseTrail => "the nearest hunter loses your trail".into(),
             };

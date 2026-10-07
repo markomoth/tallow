@@ -89,6 +89,8 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
     }
     if options.dev_rites {
         app.world_mut().dev_learn_all_rites();
+        // Rites are paid in dread: enough to try a few.
+        app.world_mut().dev_set_dread(60);
     }
     if let Some(floor) = options.dev_ascent {
         app.world_mut().dev_ascent(floor);

@@ -24,9 +24,9 @@ pub enum Passive {
     CandleThrift,
     /// In the dark you feel two tiles around you, not one.
     DarkSight,
-    /// Candlelight breeds less than half the dread.
-    CalmInLight,
-    /// Brazier light eases dread twice as fast.
+    /// The dark breeds dread half again as fast.
+    DarkFed,
+    /// Braziers mend twice as much for what you offer them.
     BrazierKin,
     /// Mending tinctures mend half again as much.
     StrongMedicine,
@@ -78,7 +78,8 @@ pub enum Trigger {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Reward {
     Heal(u32),
-    EaseDread(u32),
+    /// Dread to spend on rites.
+    Dread(u32),
     Tallow(u32),
     /// The nearest creature hunting you loses your trail.
     LoseTrail,
@@ -109,17 +110,17 @@ const FAMILIES: [Family; 3] = [Family::Blade, Family::Bludgeon, Family::Reach];
 
 /// How big a reward is for a trigger: rare triggers pay more.
 fn rewards(when: Trigger) -> Vec<Reward> {
-    use Reward::{EaseDread, Heal, LoseTrail, Tallow};
+    use Reward::{Dread, Heal, LoseTrail, Tallow};
     match when {
-        Trigger::Kill => vec![Heal(1), EaseDread(2), Tallow(8)],
-        Trigger::KillWith(_) => vec![Heal(2), EaseDread(3), Tallow(12)],
-        Trigger::MissileHit => vec![Heal(1), EaseDread(1), Tallow(6)],
-        Trigger::Snuff => vec![EaseDread(3), LoseTrail],
-        Trigger::Descend => vec![Heal(6), EaseDread(10), Tallow(60)],
-        Trigger::Drink => vec![Heal(4), EaseDread(6)],
-        Trigger::DodgeHeavyBlow => vec![Heal(3), EaseDread(5), Tallow(20)],
-        Trigger::Cast => vec![Heal(2), EaseDread(4), Tallow(10)],
-        Trigger::Study => vec![Heal(4), EaseDread(6), Tallow(25)],
+        Trigger::Kill => vec![Heal(1), Dread(2), Tallow(8)],
+        Trigger::KillWith(_) => vec![Heal(2), Dread(3), Tallow(12)],
+        Trigger::MissileHit => vec![Heal(1), Dread(1), Tallow(6)],
+        Trigger::Snuff => vec![Dread(3), LoseTrail],
+        Trigger::Descend => vec![Heal(6), Dread(10), Tallow(60)],
+        Trigger::Drink => vec![Heal(4), Dread(6)],
+        Trigger::DodgeHeavyBlow => vec![Heal(3), Dread(5), Tallow(20)],
+        Trigger::Cast => vec![Heal(2), Dread(4), Tallow(10)],
+        Trigger::Study => vec![Heal(4), Dread(6), Tallow(25)],
     }
 }
 
@@ -134,7 +135,7 @@ fn candidates(ctx: &DraftContext) -> Vec<(Boon, u32)> {
         (Passive::MaxHealth(4), 6),
         (Passive::CandleThrift, 5),
         (Passive::DarkSight, 4),
-        (Passive::CalmInLight, 5),
+        (Passive::DarkFed, 5),
         (Passive::BrazierKin, 4),
         (Passive::StrongMedicine, 4),
         (Passive::TallowThief, 4),

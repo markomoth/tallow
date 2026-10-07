@@ -135,6 +135,14 @@ impl Widget for MapView<'_> {
                     .and_then(|id| floor.monster(id));
                 let tallow = floor.tallow_at(p).filter(|_| floor.is_explored(p));
                 let item = floor.items_at(p).last().filter(|_| floor.is_explored(p));
+                // Unread writing: glowing while you're in the dark, a faint
+                // memory of letters while your candle washes it out.
+                let candle_lit = self.world.player().candle.is_lit();
+                let writing = floor
+                    .writings()
+                    .iter()
+                    .find(|w| w.at == p && w.seen && !w.read)
+                    .map(|w| floor.writing_glows(w.at, candle_lit));
                 if p == player {
                     cell.set_char('@').set_fg(palette::PLAYER).set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
@@ -152,6 +160,14 @@ impl Widget for MapView<'_> {
                     if monster.compelled > 0 {
                         cell.modifier.insert(Modifier::UNDERLINED);
                     }
+                } else if let Some(glowing) = writing {
+                    let fg = if glowing {
+                        let pulse = 0.8 + 0.2 * (self.time * 2.3).sin();
+                        palette::WRITING_FG.map(|c| (f32::from(c) * pulse) as u8)
+                    } else {
+                        remember(palette::WRITING_FG)
+                    };
+                    cell.set_char('?').set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else if let Some(id) = leaving {
                     let color = palette::tier_color(self.world.leaving(id).tier());
                     let fg = if floor.is_visible(p) {

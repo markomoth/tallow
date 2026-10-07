@@ -22,6 +22,10 @@ const PACK_RADIUS: i32 = 4;
 const WANDER_CHANCE: f64 = 0.3;
 /// With your candle out, how close something must be to notice you.
 const DARK_NOTICE: i32 = 2;
+/// A lit candle is seen this much farther than a creature's own sight...
+const LIGHT_REACH: i32 = 4;
+/// ...and the Dreaming come to it like moths from farther still.
+const LIGHT_REACH_DREAMING: i32 = 8;
 /// Tallow a light-eating bite takes.
 const TALLOW_BITTEN: u32 = 15;
 /// A creature gives up on a foe farther away than this.
@@ -114,7 +118,18 @@ impl World {
         let relentless = def.has(|t| *t == Trait::Relentless);
         let conspicuous = !self.shrouded()
             && (self.player.candle.is_lit() || self.floor.ambient_light(player).is_lit());
-        let in_range = m.pos.distance_squared(player) <= def.sight * def.sight;
+        // A lit candle carries: it is seen from beyond a creature's own sight.
+        let reach = def.sight
+            + if self.player.candle.is_lit() && !self.shrouded() {
+                if def.faction == Faction::Dreaming {
+                    LIGHT_REACH_DREAMING
+                } else {
+                    LIGHT_REACH
+                }
+            } else {
+                0
+            };
+        let in_range = m.pos.distance_squared(player) <= reach * reach;
         let close = m.pos.chebyshev(player) <= DARK_NOTICE;
         let sees = relentless
             || (m.unseeing == 0
@@ -391,10 +406,14 @@ impl World {
     }
 
     fn monster_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
-        let kind = self.floor.monsters[id].kind;
+        let (kind, at) = (self.floor.monsters[id].kind, self.floor.monsters[id].pos);
         let def = self.content.monster(kind);
-        let chance = combat::hit_chance(def.accuracy, self.player_defense());
-        let damage = combat::roll_attack(&mut self.combat_rng, chance, def.damage);
+        let (accuracy, damage) = self.monster_strength(kind, at);
+        let chance = combat::hit_chance(accuracy, self.player_defense());
+        let damage = combat::roll_attack(&mut self.combat_rng, chance, damage);
+        if self.in_the_dark(at) {
+            self.shift_dread(crate::dread::DARK_BLOW, events);
+        }
         events.push(Event::Attack {
             attacker: Who::Monster(kind),
             defender: Who::Player,

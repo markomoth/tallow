@@ -9,6 +9,14 @@ pub const BASE_DEFENSE: i32 = 7;
 /// Damage with nothing in hand.
 pub const FISTS: (u32, u32) = (1, 2);
 
+/// Striking at something that stands in the dark: your accuracy drops by this
+/// much (half with the Night Eyes boon).
+pub const DARK_ACCURACY: i32 = 20;
+/// A creature standing in the dark strikes this much more surely, and
+/// one harder at both ends of its damage.
+pub const DARK_FURY_ACCURACY: i32 = 10;
+pub const DARK_FURY_DAMAGE: u32 = 1;
+
 /// Percent chance to land a blow.
 pub fn hit_chance(accuracy: i32, defense: i32) -> u32 {
     (accuracy - defense).clamp(5, 95) as u32

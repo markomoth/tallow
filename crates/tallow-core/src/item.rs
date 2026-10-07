@@ -219,8 +219,6 @@ pub const fn tincture_amount(effect: TinctureEffect, potency: Potency) -> u32 {
 /// Carrying limits, in tenths.
 pub const LIGHT_LOAD: u32 = 250;
 pub const MAX_LOAD: u32 = 380;
-/// Tallow weighs 1.0 per 100 turns of light.
-pub const TALLOW_PER_TENTH: u32 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Burden {

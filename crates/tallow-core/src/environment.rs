@@ -2,8 +2,11 @@
 //! braziers, holy ground.
 
 use rand::RngExt;
+use rand::seq::SliceRandom;
 
+use crate::boons::Passive;
 use crate::content::{Faction, Trait};
+use crate::dread;
 use crate::events::{Cause, Event, Who};
 use crate::geom::{Direction, Point};
 use crate::map::{Tile, path};
@@ -251,6 +254,9 @@ impl World {
     /// Walking into something that isn't open floor: doors, bell ropes,
     /// cold braziers. Returns `None` if it's just in the way.
     pub(crate) fn use_tile(&mut self, at: Point) -> Option<Vec<Event>> {
+        if let Some(events) = self.read_writing(at) {
+            return Some(events);
+        }
         let mut events = Vec::new();
         match self.map().tile(at) {
             Tile::DoorClosed => {
@@ -279,10 +285,68 @@ impl World {
                 self.floor.set_tile(at, Tile::Brazier);
                 events.push(Event::BrazierLit { at });
             }
+            Tile::Brazier => {
+                if let Err(refusal) = self.offer(&mut events) {
+                    return Some(vec![refusal]);
+                }
+            }
             _ => return None,
         }
         self.pass_time(&mut events);
         Some(events)
+    }
+
+    /// Unread writing you've seen, on the wall at `at`: traced in the dark, it
+    /// teaches a rite you don't know. Candlelight washes it out.
+    fn read_writing(&mut self, at: Point) -> Option<Vec<Event>> {
+        let i = self
+            .floor
+            .writings
+            .iter()
+            .position(|w| w.at == at && w.seen && !w.read)?;
+        if self.player.candle.is_lit() {
+            return Some(vec![Event::WritingWashedOut]);
+        }
+        self.floor.writings[i].read = true;
+        let mut schools = crate::rites::School::ALL;
+        schools.shuffle(&mut self.rite_rng);
+        let rite = schools.into_iter().find_map(|s| self.unknown_rite(s));
+        let mut events = vec![Event::WritingRead {
+            learned: rite.is_some(),
+        }];
+        match rite {
+            Some(rite) => self.learn_rite(rite, &mut events),
+            None => self.gain_insight(crate::rites::INSIGHT_OLD_TEXT, &mut events),
+        }
+        self.pass_time(&mut events);
+        Some(events)
+    }
+
+    /// Gives dread to a lit brazier, which mends you for it: power traded for
+    /// safety. Takes only what your wounds need.
+    fn offer(&mut self, events: &mut Vec<Event>) -> Result<(), Event> {
+        let missing = self.player.max_health - self.player.health;
+        if missing == 0 {
+            return Err(Event::WholeAlready);
+        }
+        let kin = if self.has_passive(Passive::BrazierKin) {
+            2
+        } else {
+            1
+        };
+        let dread = self.player.dread.value();
+        let health = missing.min(dread * kin / dread::OFFER_PER_HEALTH);
+        if health == 0 {
+            return Err(Event::NothingToOffer);
+        }
+        let spent = (health * dread::OFFER_PER_HEALTH).div_ceil(kin);
+        events.push(Event::Offered {
+            dread: spent,
+            health,
+        });
+        self.shift_dread(-(spent as i32) * 100, events);
+        self.player.health += health;
+        Ok(())
     }
 
     /// Steps onto oil may slip. True if this step slipped.
@@ -487,6 +551,59 @@ mod tests {
     }
 
     #[test]
+    fn a_lit_brazier_takes_dread_for_health() {
+        let mut world = world_from("#######\n#@&...#\n#######");
+        assert_eq!(
+            world.apply(Command::Move(Direction::E)),
+            vec![Event::WholeAlready]
+        );
+        world.player.health = 10;
+        assert_eq!(
+            world.apply(Command::Move(Direction::E)),
+            vec![Event::NothingToOffer]
+        );
+        assert_eq!(world.turn(), 0, "refusals cost nothing");
+        world.player.dread.set(31);
+        let events = world.apply(Command::Move(Direction::E));
+        assert!(events.contains(&Event::Offered {
+            dread: 30,
+            health: 10
+        }));
+        assert_eq!(world.player().health, 20);
+        assert_eq!(world.player().dread.value(), 1);
+        assert_eq!(world.turn(), 1);
+    }
+
+    #[test]
+    fn writing_glows_in_the_dark_and_is_read_there() {
+        let mut world = world_from("#######\n#@....#\n#######");
+        let wall = Point::new(1, 0);
+        world.floor.writings.push(crate::floor::Writing {
+            at: wall,
+            seen: false,
+            read: false,
+        });
+        world.apply(Command::Wait);
+        assert!(!world.floor().writings()[0].seen, "candlelight hides it");
+        assert!(matches!(
+            world.apply(Command::Move(Direction::N))[..],
+            [Event::PlayerBlocked { .. }]
+        ));
+        let events = world.apply(Command::ToggleCandle);
+        assert!(events.contains(&Event::WritingSpotted { at: wall }));
+        world.apply(Command::ToggleCandle);
+        assert_eq!(
+            world.apply(Command::Move(Direction::N)),
+            vec![Event::WritingWashedOut]
+        );
+        world.apply(Command::ToggleCandle);
+        let events = world.apply(Command::Move(Direction::N));
+        assert!(events.contains(&Event::WritingRead { learned: true }));
+        assert_eq!(world.known_rites().len(), 1);
+        assert!(world.floor().writings()[0].read);
+    }
+
+    #[test]
     fn the_taken_cower_from_a_close_bell() {
         let mut world = world_from("#########\n#@......#\n####|####");
         let man = world.spawn_monster(kind("parishioner"), Point::new(5, 1));
@@ -544,6 +661,8 @@ mod tests {
              ##############################",
         );
         let eater = world.spawn_monster(kind("lantern_eater"), Point::new(18, 1));
+        // In the dark, so it is the bell it comes to and not your light.
+        world.apply(Command::ToggleCandle);
         let bell = give(&mut world, "handbell");
         let events = world.apply(Command::Throw {
             item: bell,

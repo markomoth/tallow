@@ -5,7 +5,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Padding, Paragraph, Wrap};
-use tallow_core::item::{LIGHT_LOAD, MAX_LOAD, TALLOW_PER_TENTH};
+use tallow_core::item::{LIGHT_LOAD, MAX_LOAD};
 use tallow_core::{ItemClass, ItemId, World};
 
 use super::palette::{self, rgb};
@@ -109,14 +109,17 @@ fn list(world: &World, purpose: PackPurpose) -> Vec<Line<'static>> {
             Span::styled(
                 format!(
                     "{:<44}",
-                    format!("tallow, {} turns of light", player.candle.tallow())
+                    match player.candle.spare() {
+                        0 => format!("tallow, {} turns of light", player.candle.tallow()),
+                        spare => format!(
+                            "tallow, {} turns of light ({spare} in heavy lumps)",
+                            player.candle.tallow()
+                        ),
+                    }
                 ),
                 dim(),
             ),
-            Span::styled(
-                format!("{:>5}", tenths(player.candle.tallow() / TALLOW_PER_TENTH)),
-                dim(),
-            ),
+            Span::styled(format!("{:>5}", tenths(player.candle.weight())), dim()),
         ]));
     }
     if lines.len() == 2 {

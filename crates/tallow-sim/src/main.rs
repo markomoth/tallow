@@ -72,6 +72,21 @@ fn trace(seed: u64) {
     for line in lines {
         println!("{line}");
     }
+    for id in world.hostiles_in_view() {
+        let m = world.floor().monster(id).unwrap();
+        println!(
+            "in view: {} at {:?} {:?} phantom {}",
+            world.content().monster(m.kind).id,
+            m.pos,
+            m.mind,
+            m.phantom
+        );
+    }
+    println!(
+        "tallow {} corpse here {:?}",
+        world.player().candle.tallow(),
+        world.corpse_here()
+    );
     let here = world.player().pos;
     for d in Direction::ALL {
         let p = here + d;
@@ -232,8 +247,16 @@ fn print(r: &Report, structural: &[String]) {
     }
 }
 
-/// The bot: pick a boon, step off marked tiles, fight what's beside it, rest
-/// when hurt, grab tallow in view, then head for wherever the run goes next.
+/// Below this much tallow the bot walks in the dark when nothing is near.
+const SNUFF_BELOW: u32 = 150;
+/// It goes out of its way for bodies to render while it has less than this.
+const RENDER_BELOW: u32 = 350;
+/// Creatures within this many tiles, in line of sight, make it light up.
+const DANGER_NEAR: i32 = 7;
+
+/// The bot: pick a boon, step off marked tiles, fight what's beside it (lit),
+/// rest when hurt, render bodies and grab tallow, walk dark when low, then
+/// head for wherever the run goes next.
 fn choose(world: &World) -> Command {
     if world.pending_draft().is_some() {
         return Command::ChooseBoon(0);
@@ -273,17 +296,66 @@ fn choose(world: &World) -> Command {
                 .is_some_and(|m| m.compelled == 0 && Some(m.kind) != following)
         })
         .min_by_key(|&(_, id)| floor.monster(id).map_or(0, |m| m.health));
+    // Light to fight; walk dark to save tallow when it runs low and nothing is near.
+    let player = world.player();
+    let danger = floor.monsters().any(|(_, m)| {
+        !m.phantom
+            && m.compelled == 0
+            && m.pos.chebyshev(here) <= DANGER_NEAR
+            && floor.in_sight(m.pos)
+    });
+    let tallow = player.candle.tallow();
+    let lit = player.candle.is_lit();
+    if !player.vigil && tallow > 0 {
+        let want_lit = danger || hostile_beside.is_some() || tallow >= SNUFF_BELOW;
+        if want_lit != lit {
+            return Command::ToggleCandle;
+        }
+    }
     if let Some((dir, _)) = hostile_beside {
         return Command::Move(dir);
     }
-    let player = world.player();
+    // Short of tallow, it hunts: renders the body underfoot, or goes after
+    // whatever it can see (which also keeps rendering from being refused).
+    let short = tallow < RENDER_BELOW && world.stage() == Stage::Descent;
+    if short && world.corpse_here().is_some() && !rendering_refused(world) {
+        return Command::Render;
+    }
+    // The nearest creature it could walk to: a stable target, seen or not.
+    let chase = short
+        .then(|| {
+            // Walk only where it walks: no seep rooms.
+            let mut solid = safe_map(world.map());
+            for p in world.map().points() {
+                if floor.is_seep(p) {
+                    solid.set(p, Tile::Wall);
+                }
+            }
+            let dist = path::distances(&solid, here);
+            floor
+                .monsters()
+                .filter(|(_, m)| {
+                    !m.phantom && m.compelled == 0 && !world.content().monster(m.kind).boss
+                })
+                .filter_map(|(_, m)| {
+                    Direction::ALL
+                        .into_iter()
+                        .filter_map(|d| dist.at(m.pos + d))
+                        .min()
+                        .filter(|&d| d <= 20)
+                        .map(|d| (d, m.pos))
+                })
+                .min()
+                .map(|(_, at)| at)
+        })
+        .flatten();
     if player.health * 5 < player.max_health * 2
         && world.hostiles_in_view().is_empty()
         && player.dread.value() < 90
     {
         return Command::Rest;
     }
-    let Some(mut goal) = goal(world) else {
+    let Some(mut goal) = chase.or_else(|| goal(world)) else {
         return Command::Wait;
     };
     let reachable = |goal: Point| {
@@ -334,6 +406,11 @@ fn choose(world: &World) -> Command {
         .map_or(Command::Wait, Command::Move)
 }
 
+/// Rendering the body underfoot would be refused right now.
+fn rendering_refused(world: &World) -> bool {
+    world.clone().apply(Command::Render) == [Event::RunRefused]
+}
+
 /// Where the bot wants to be next.
 fn goal(world: &World) -> Option<Point> {
     let floor = world.floor();
@@ -360,8 +437,9 @@ fn goal(world: &World) -> Option<Point> {
                 .min_by_key(|p| p.distance_squared(world.player().pos))
         }
         Stage::Descent => {
-            // Tallow it has seen and can walk to soon; walking distance only
-            // shrinks on the way, so it doesn't dither between goals.
+            // Tallow it has seen and can walk to soon, or a body to render
+            // while it's short; walking distance only shrinks on the way, so
+            // it doesn't dither between goals.
             let here = world.player().pos;
             let dist = path::distances(&safe_map(world.map()), here);
             let light = world.burden() == tallow_core::Burden::Light;
@@ -369,10 +447,19 @@ fn goal(world: &World) -> Option<Point> {
                 .tallow()
                 .iter()
                 .filter(|t| light && floor.is_explored(t.at) && t.at != here)
-                .filter_map(|t| dist.at(t.at).map(|d| (d, t.at)))
+                .map(|t| t.at);
+            let short = world.player().candle.tallow() < RENDER_BELOW;
+            let bodies = floor
+                .corpses()
+                .iter()
+                .filter(|c| short && light && floor.is_explored(c.at) && c.at != here)
+                .map(|c| c.at);
+            tallow
+                .chain(bodies)
+                .filter_map(|at| dist.at(at).filter(|&d| d <= 25).map(|d| (d, at)))
                 .min()
-                .map(|(_, at)| at);
-            tallow.or_else(|| world.map().find(Tile::StairsDown).next())
+                .map(|(_, at)| at)
+                .or_else(|| world.map().find(Tile::StairsDown).next())
         }
     }
 }

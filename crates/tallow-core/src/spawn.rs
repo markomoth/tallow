@@ -10,11 +10,11 @@ use crate::map::{Map, Tile, path};
 /// No monster starts closer than this many steps to the arrival stair.
 const SAFE_RADIUS: u32 = 12;
 
-/// Every floor has one lump this big (BUILD_GUIDE.md §1: a guaranteed tallow source).
-pub const LUMP: (u32, u32) = (180, 260);
-/// Plus up to `MAX_STUBS` small stubs.
+/// Every floor has one stub this big (BUILD_GUIDE.md §1: a guaranteed tallow
+/// source). Most of your light comes from bodies, not the floor.
 pub const STUB: (u32, u32) = (50, 90);
-const MAX_STUBS: u32 = 2;
+/// Percent chance of a second stub.
+const SECOND_STUB: u32 = 25;
 
 /// Spawn budget in threat points for a depth.
 pub fn budget(depth: u8) -> u32 {
@@ -29,22 +29,7 @@ pub fn populate<R: Rng + ?Sized>(
     start: Point,
     depth: u8,
 ) -> Vec<(KindId, Point)> {
-    let in_range: Vec<KindId> = content
-        .kinds()
-        .filter(|(_, d)| d.natural && d.depth.0 <= depth && depth <= d.depth.1)
-        .map(|(k, _)| k)
-        .collect();
-    // Until deeper biomes get their own creatures, the deepest known ones stand in.
-    let eligible = if in_range.is_empty() {
-        content
-            .kinds()
-            .filter(|(_, d)| d.natural && d.depth.0 <= depth)
-            .map(|(k, _)| k)
-            .collect()
-    } else {
-        in_range
-    };
-
+    let eligible = eligible(content, depth);
     let dist = path::distances(map, start);
     let open: Vec<Point> = map
         .points()
@@ -95,6 +80,53 @@ pub fn populate<R: Rng + ?Sized>(
         placed.extend(group.into_iter().map(|p| (kind, p)));
     }
     placed
+}
+
+/// The creatures that live at a depth.
+pub fn eligible(content: &Content, depth: u8) -> Vec<KindId> {
+    let in_range: Vec<KindId> = content
+        .kinds()
+        .filter(|(_, d)| d.natural && d.depth.0 <= depth && depth <= d.depth.1)
+        .map(|(k, _)| k)
+        .collect();
+    // Until deeper biomes get their own creatures, the deepest known ones stand in.
+    if in_range.is_empty() {
+        content
+            .kinds()
+            .filter(|(_, d)| d.natural && d.depth.0 <= depth)
+            .map(|(k, _)| k)
+            .collect()
+    } else {
+        in_range
+    }
+}
+
+/// Percent chance a floor below the first has writing that shows only in the dark.
+const WRITING_CHANCE: u32 = 60;
+
+/// Maybe a wall with dark-only writing on it, and the floor tile in front of it.
+pub fn place_writing<R: Rng + ?Sized>(
+    rng: &mut R,
+    map: &Map,
+    start: Point,
+    depth: u8,
+) -> Option<(Point, Point)> {
+    if depth < 2 || rng.random_range(0..100) >= WRITING_CHANCE {
+        return None;
+    }
+    let dist = path::distances(map, start);
+    let walls: Vec<(Point, Point)> = map
+        .points()
+        .filter(|&p| map.tile(p) == Tile::Wall)
+        .filter_map(|p| {
+            Direction::CARDINAL
+                .into_iter()
+                .map(|d| p + d)
+                .find(|&q| map.tile(q) == Tile::Floor && dist.at(q).is_some_and(|d| d >= 6))
+                .map(|q| (p, q))
+        })
+        .collect();
+    walls.choose(rng).copied()
 }
 
 /// A floor's mini-boss, if it has one, waiting by the stair down.
@@ -319,7 +351,7 @@ pub fn place_items<R: Rng + ?Sized>(
     placed
 }
 
-/// Places a floor's tallow: one guaranteed lump and a few stubs, on plain floor.
+/// Places a floor's tallow: one guaranteed stub, sometimes two, on plain floor.
 pub fn place_tallow<R: Rng + ?Sized>(rng: &mut R, map: &Map, start: Point) -> Vec<(Point, u32)> {
     let dist = path::distances(map, start);
     let mut spots: Vec<Point> = map
@@ -327,13 +359,13 @@ pub fn place_tallow<R: Rng + ?Sized>(rng: &mut R, map: &Map, start: Point) -> Ve
         .filter(|&p| map.tile(p) == Tile::Floor && dist.at(p).is_some_and(|d| d >= 4))
         .collect();
     let mut placed = Vec::new();
-    let stubs = rng.random_range(0..=MAX_STUBS);
-    for amount in std::iter::once(LUMP).chain((0..stubs).map(|_| STUB)) {
+    let stubs = 1 + u32::from(rng.random_range(0..100) < SECOND_STUB);
+    for _ in 0..stubs {
         if spots.is_empty() {
             break;
         }
         let at = spots.swap_remove(rng.random_range(0..spots.len()));
-        placed.push((at, rng.random_range(amount.0..=amount.1)));
+        placed.push((at, rng.random_range(STUB.0..=STUB.1)));
     }
     placed
 }
@@ -369,14 +401,14 @@ mod tests {
     }
 
     #[test]
-    fn every_floor_has_a_reachable_lump_of_tallow() {
+    fn every_floor_has_reachable_tallow() {
         for seed in 0..200 {
             let mut r = rng::floor_rng(seed, 1);
             let layout = generate::crypt(&mut r, true);
             let tallow = place_tallow(&mut r, &layout.map, layout.start);
             let dist = path::distances(&layout.map, layout.start);
             assert!(
-                tallow.iter().any(|&(_, amount)| amount >= LUMP.0),
+                tallow.iter().any(|&(_, amount)| amount >= STUB.0),
                 "seed {seed}"
             );
             for &(at, _) in &tallow {

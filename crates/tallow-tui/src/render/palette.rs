@@ -32,6 +32,8 @@ pub const DEEP_BG: Rgb = [10, 18, 40];
 pub const ROTTEN_FG: Rgb = [130, 100, 60];
 pub const SEEP_BG: Rgb = [30, 22, 34];
 pub const ANOMALY_FG: Rgb = [220, 120, 255];
+/// Letters on a wall that glow only in the dark.
+pub const WRITING_FG: Rgb = [150, 220, 230];
 pub fn tier_color(tier: tallow_core::leavings::Tier) -> Rgb {
     use tallow_core::leavings::Tier;
     match tier {

@@ -454,7 +454,8 @@ impl World {
         self.do_marvel(l.effect, events);
         match l.price {
             Price::Health { amount } => self.hurt_player(amount, Cause::Leaving, events),
-            Price::Dread { amount } => self.shift_dread(amount as i32 * 100, events),
+            // Dread is power now: the price drinks what you have gathered.
+            Price::Dread { amount } => self.shift_dread(-(amount as i32) * 100, events),
             Price::Tallow { amount } => {
                 let amount = amount.min(self.player.candle.tallow());
                 self.player.candle.eat(amount);
@@ -810,10 +811,11 @@ mod tests {
             ),
         );
         let tallow = world.player().candle.tallow();
+        world.player.dread.set(20);
         let events = world.apply(Command::UseLeaving(id));
         assert!(events.contains(&Event::LeavingWoke { id, learned: true }));
         assert_eq!(world.player().candle.tallow(), tallow + 50 - 1);
-        assert_eq!(world.player().dread.value(), 5);
+        assert_eq!(world.player().dread.value(), 15, "it drinks your dread");
         assert!(world.leaving(id).known);
         assert_eq!(
             world.apply(Command::UseLeaving(id)),

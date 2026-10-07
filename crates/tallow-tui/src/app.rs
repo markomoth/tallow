@@ -787,6 +787,7 @@ mod tests {
         let compel = app.world().content().rite_by_id("compel").unwrap();
         app.world_mut().teach_rite(shroud);
         app.world_mut().teach_rite(compel);
+        app.world_mut().dev_set_dread(39);
         app.handle(Action::Rites);
         assert_eq!(app.mode(), Mode::Rites);
         app.handle_key(key('b'));

@@ -2,10 +2,16 @@
 //!
 //! Stored in hundredths so slow rates stay exact integers.
 
-/// Change per turn, in hundredths of a point.
-pub const PER_TURN_IN_CANDLELIGHT: i32 = 5; // +1 every 20 turns
-pub const PER_TURN_IN_DARKNESS: i32 = 25; // +1 every 4 turns
-pub const PER_TURN_BY_BRAZIER: i32 = -34; // −1 about every 3 turns
+/// Change per turn in the dark, in hundredths of a point: +1 every 4 turns.
+/// Light, a candle's or a brazier's, breeds none. Rites are paid in dread, so
+/// the dark is where power is gathered.
+pub const PER_TURN_IN_DARKNESS: i32 = 25;
+/// With the Dark-Fed boon: half again as fast.
+pub const PER_TURN_IN_DARKNESS_FED: i32 = 38;
+/// Each blow struck or taken in the dark.
+pub const DARK_BLOW: i32 = 200;
+/// Dread a lit brazier takes for each point of health it mends.
+pub const OFFER_PER_HEALTH: u32 = 3;
 
 /// The first sight of a new kind of creature.
 pub const FIRST_SIGHT: i32 = 500;
@@ -87,8 +93,8 @@ mod tests {
     #[test]
     fn slow_rates_add_up_exactly_and_clamp() {
         let mut dread = Dread::default();
-        for _ in 0..20 {
-            dread.shift(PER_TURN_IN_CANDLELIGHT);
+        for _ in 0..4 {
+            dread.shift(PER_TURN_IN_DARKNESS);
         }
         assert_eq!(dread.value(), 1);
         dread.shift(-10_000);

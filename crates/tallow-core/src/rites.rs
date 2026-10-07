@@ -141,6 +141,8 @@ pub enum RiteFailure {
     NotDoor,
     /// Banish only works on the Dreaming.
     NotDreaming,
+    /// Rites are paid in dread, and you haven't enough.
+    NotEnoughDread,
 }
 
 /// A decoy light from False Flame.
@@ -264,6 +266,9 @@ impl World {
     ) -> Result<Option<MonsterId>, RiteFailure> {
         if !self.knows(rite) {
             return Err(RiteFailure::Unknown);
+        }
+        if self.player.dread.value() < self.rite_cost(rite) {
+            return Err(RiteFailure::NotEnoughDread);
         }
         let def = self.content.rite(rite);
         let here = self.player.pos;
@@ -522,7 +527,8 @@ impl World {
             }
         }
         self.maybe_bind_lord(victim, def.school, def.effect, &mut events);
-        self.shift_dread(cost as i32 * 100, &mut events);
+        // Rites are paid for in dread: the fear you have gathered, spent.
+        self.shift_dread(-(cost as i32) * 100, &mut events);
         self.train(def.school.skill(), cost.max(4), &mut events);
         self.stats.casts += 1;
         self.trigger(Trigger::Cast, &mut events);
@@ -610,9 +616,11 @@ mod tests {
         Content::bundled().rite_by_id(id).unwrap()
     }
 
+    /// Teaches a rite and gives enough dread to pay for a few casts, still calm.
     fn learn(world: &mut World, id: &str) -> RiteId {
         let r = rite(id);
         world.teach_rite(r);
+        world.player.dread.set(39);
         r
     }
 
@@ -648,10 +656,36 @@ mod tests {
             rite: shroud,
             target: world.player().pos,
         });
-        assert_eq!(world.player().dread.value(), before + 8);
+        assert_eq!(world.player().dread.value(), before - 8, "paid in dread");
         assert!(world.player().skills.xp(Skill::Veil) > 0);
         assert!(world.shrouded());
         assert_eq!(world.turn(), 1);
+    }
+
+    #[test]
+    fn rites_need_the_dread_to_pay_for_them() {
+        let mut world = hall();
+        let shroud = learn(&mut world, "shroud");
+        world.player.dread.set(7);
+        let events = world.apply(Command::Cast {
+            rite: shroud,
+            target: world.player().pos,
+        });
+        assert_eq!(
+            events,
+            vec![Event::RiteFailed {
+                rite: shroud,
+                why: RiteFailure::NotEnoughDread
+            }]
+        );
+        assert_eq!(world.turn(), 0, "a refusal costs nothing");
+        world.player.dread.set(8);
+        world.apply(Command::Cast {
+            rite: shroud,
+            target: world.player().pos,
+        });
+        assert!(world.shrouded());
+        assert_eq!(world.player().dread.value(), 0);
     }
 
     #[test]

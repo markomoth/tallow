@@ -9,8 +9,8 @@ use crate::events::Event;
 use crate::floor::FloorItem;
 use crate::geom::Point;
 use crate::item::{
-    self, BITTER_DREAD, Burden, Item, ItemClass, ItemId, ItemKindId, SideEffect, Slot,
-    TALLOW_PER_TENTH, ThrowStats, TinctureEffect,
+    self, BITTER_DREAD, Burden, Item, ItemClass, ItemId, ItemKindId, SideEffect, Slot, ThrowStats,
+    TinctureEffect,
 };
 use crate::monster::MonsterId;
 use crate::progress::Source;
@@ -45,7 +45,7 @@ impl World {
             .iter()
             .map(|it| self.content.item(it.kind).weight * it.count)
             .sum();
-        items + self.player.candle.tallow() / TALLOW_PER_TENTH + self.leaving_load()
+        items + self.player.candle.weight() + self.leaving_load()
     }
 
     pub fn burden(&self) -> Burden {
@@ -478,7 +478,8 @@ impl World {
     fn strike(&mut self, shot: Shot, id: MonsterId, events: &mut Vec<Event>) {
         let kind = self.floor.monsters[id].kind;
         let def = self.content.monster(kind);
-        let chance = combat::hit_chance(shot.accuracy, def.defense);
+        let at = self.floor.monsters[id].pos;
+        let chance = combat::hit_chance(shot.accuracy - self.dark_penalty(at), def.defense);
         let hit = self.combat_rng.random_range(0..100) < chance;
         let damage = match (hit, shot.holy) {
             (false, _) => None,
@@ -685,7 +686,7 @@ mod world_tests {
         assert!(p.equipment.melee.is_some() && p.equipment.body.is_some());
         assert_eq!(world.player_accuracy(), 85);
         assert_eq!(world.player_defense(), 10);
-        assert_eq!(world.load(), 30 + 20 + 3 + 90);
+        assert_eq!(world.load(), 30 + 20 + 3 + 30);
         assert_eq!(world.burden(), Burden::Light);
     }
 
@@ -723,6 +724,8 @@ mod world_tests {
     #[test]
     fn weight_slows_then_stops_you() {
         let mut world = hall();
+        // 400 in the candle, 500 in lumps: 4.0 + 10.0.
+        world.player.candle.add(600);
         let mut events = Vec::new();
         world.place_item(world.player().pos, item("choir_mail"), 1);
         events.extend(world.apply(Command::PickUp));
