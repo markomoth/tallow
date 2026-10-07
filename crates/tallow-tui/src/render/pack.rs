@@ -177,7 +177,7 @@ fn detail(world: &World, id: ItemId) -> Vec<Line<'static>> {
         ItemClass::Melee { .. } | ItemClass::Ranged { .. } | ItemClass::Vestment { .. } => {
             actions.push(if equipped { "e take off" } else { "e equip" });
         }
-        ItemClass::Ammo | ItemClass::Throwable => {}
+        ItemClass::Ammo | ItemClass::Throwable | ItemClass::Relic => {}
     }
     if def.thrown.is_some() {
         actions.push("t throw");

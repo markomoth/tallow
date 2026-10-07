@@ -197,7 +197,10 @@ impl World {
                         self.player.pos = step;
                         events.push(Event::Dragged { kind });
                         self.witness(kind, t);
-                        if self.map().tile(step) == Tile::DeepWater && self.player.candle.is_lit() {
+                        if self.map().tile(step) == Tile::DeepWater
+                            && self.player.candle.is_lit()
+                            && !self.player.vigil
+                        {
                             self.player.candle.snuff();
                             events.push(Event::CandleDrowned);
                         }
@@ -249,8 +252,10 @@ impl World {
                 }
             }
         }
+        self.throne_death(kind, at, events);
         let last_of_kind = !self.floor.monsters().any(|(_, m)| m.kind == kind);
-        if def.boss && last_of_kind {
+        // The mini-bosses; Beelzebub's forms announce themselves.
+        if def.boss && last_of_kind && def.boss_floor.is_some() {
             events.push(Event::BossDefeated { kind });
             let named = self
                 .content

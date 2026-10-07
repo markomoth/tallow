@@ -29,6 +29,7 @@ struct Options {
     dev_kit: bool,
     dev_level: Option<u32>,
     dev_near_stairs: bool,
+    dev_ascent: Option<u8>,
 }
 
 fn main() -> Result<()> {
@@ -49,6 +50,9 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
     }
     if options.dev_rites {
         app.world_mut().dev_learn_all_rites();
+    }
+    if let Some(floor) = options.dev_ascent {
+        app.world_mut().dev_ascent(floor);
     }
     if options.dev_near_stairs {
         app.world_mut().dev_near_stairs(8);
@@ -102,6 +106,10 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             "--dev-rites" => options.dev_rites = true,
             "--dev-kit" => options.dev_kit = true,
             "--dev-near-stairs" => options.dev_near_stairs = true,
+            "--dev-ascent" => {
+                let value = args.next().context(USAGE)?;
+                options.dev_ascent = Some(value.parse().context("bad ascent floor")?);
+            }
             "--dev-level" => {
                 let value = args.next().context(USAGE)?;
                 options.dev_level = Some(value.parse().context("bad level")?);

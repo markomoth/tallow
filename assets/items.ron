@@ -344,4 +344,17 @@
         frequency: 3,
         thrown: Some((accuracy: 0, damage: (1, 2), noise: Some(12))),
     ),
+    // ── The relic ───────────────────────────────────────────────────────
+    (
+        id: "vigil_candle",
+        name: "Vigil Candle",
+        plural: "Vigil Candles",
+        glyph: '!',
+        color: (255, 236, 170),
+        description: "The church's oldest candle. Its flame has burned for six hundred years and does not need you. Carry it up, and set it on the altar.",
+        class: Relic,
+        weight: 5,
+        depth: (12, 12),
+        frequency: 0,
+    ),
 ]

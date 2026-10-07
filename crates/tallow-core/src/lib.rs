@@ -29,6 +29,7 @@ pub mod rites;
 pub mod rng;
 pub mod skills;
 pub mod spawn;
+pub mod throne;
 pub mod time;
 pub mod world;
 
@@ -51,4 +52,5 @@ pub use map::{Map, Tile};
 pub use monster::{Mind, Monster, MonsterId};
 pub use rites::{RiteDef, RiteEffect, RiteFailure, RiteId, RiteTarget, School};
 pub use skills::{Skill, Technique};
+pub use throne::{Phase, Stage, Victory};
 pub use world::{Death, MonsterInfo, Player, RunStats, World};

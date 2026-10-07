@@ -45,12 +45,15 @@ impl World {
         }
         self.tick_rites(events);
         self.tick_leavings(events);
+        self.tick_throne(events);
         self.tick_corpses(events);
         self.tick_fire(events);
         self.tick_seals(events);
 
         // A thrifty candle skips every fourth turn of burning.
-        let thrifty = self.has_passive(Passive::CandleThrift) && self.turn().is_multiple_of(4);
+        // The Vigil Candle needs no tallow.
+        let thrifty = (self.has_passive(Passive::CandleThrift) && self.turn().is_multiple_of(4))
+            || self.player.vigil;
         match if thrifty {
             None
         } else {

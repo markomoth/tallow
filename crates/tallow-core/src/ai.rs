@@ -139,7 +139,8 @@ impl World {
                     Technique::Brace { percent } => Some(percent),
                     _ => None,
                 });
-            let damage = (player == target).then(|| {
+            let area = self.blow_area(id, target);
+            let damage = area.contains(&player).then(|| {
                 let raw = combat::roll_damage(&mut self.combat_rng, (lo, hi));
                 raw - raw * braced.unwrap_or(0) / 100
             });
@@ -409,7 +410,10 @@ impl World {
             if self.death.is_none() {
                 self.on_hit_player(id, events);
             }
-            if def.has(|t| *t == Trait::EatsLight) && self.player.candle.is_lit() {
+            if def.has(|t| *t == Trait::EatsLight)
+                && self.player.candle.is_lit()
+                && !self.player.vigil
+            {
                 let amount = TALLOW_BITTEN.min(self.player.candle.tallow());
                 self.player.candle.eat(amount);
                 events.push(Event::CandleEaten { kind, amount });
@@ -429,11 +433,14 @@ impl World {
         self.map().is_walkable(p)
             && p != self.player.pos
             && self.floor.monster_at(p).is_none()
-            && tile != Tile::DoorSealed
+            && (tile != Tile::DoorSealed || def.has(|t| *t == Trait::Gnaws))
             && tile != Tile::RottenFloor
+            && !(def.has(|t| *t == Trait::Unholy) && self.floor.is_sanctified(p))
             && self.anomaly_at(p).is_none()
             && (tile != Tile::DeepWater || heedless || def.has(|t| *t == Trait::Swims))
-            && (tile != Tile::DoorClosed || def.faction.opens_doors())
+            && (tile != Tile::DoorClosed
+                || def.faction.opens_doors()
+                || def.has(|t| *t == Trait::Gnaws))
             && (heedless || !self.floor.is_burning(p))
             && (heedless || def.faction != Faction::Swarm || !near_fire())
             && !(def.has(|t| *t == Trait::ShunsLight) && self.floor.ambient_light(p).is_lit())
@@ -492,9 +499,27 @@ impl World {
 
     /// Moves a monster one step. The Taken flinch on stepping onto holy ground.
     fn move_monster(&mut self, id: MonsterId, to: Point) {
-        // A shut door takes an action to open.
-        if self.map().tile(to) == Tile::DoorClosed {
-            self.floor.set_tile(to, Tile::Door);
+        // A shut door takes an action to open, or several to chew through.
+        let tile = self.map().tile(to);
+        if matches!(tile, Tile::DoorClosed | Tile::DoorSealed) {
+            let def = self.content.monster(self.floor.monsters[id].kind);
+            if def.has(|t| *t == Trait::Gnaws) {
+                let need = if tile == Tile::DoorSealed {
+                    crate::throne::GNAW_SEAL
+                } else {
+                    crate::throne::GNAW_DOOR
+                };
+                let m = &mut self.floor.monsters[id];
+                m.gnawed += 1;
+                if m.gnawed >= need {
+                    m.gnawed = 0;
+                    self.floor.seals.retain(|&(p, _)| p != to);
+                    self.floor.locks.retain(|&(p, _)| p != to);
+                    self.floor.set_tile(to, Tile::Floor);
+                }
+            } else {
+                self.floor.set_tile(to, Tile::Door);
+            }
             return;
         }
         if self.floor.has_oil(to) && self.slips(to) {

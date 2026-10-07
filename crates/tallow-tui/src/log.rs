@@ -88,9 +88,24 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
         Event::Spotted {
             tile: Tile::StairsDown,
             ..
-        } => ("A stair leads further down.".into(), Normal),
+        } if world.stage() == tallow_core::Stage::Descent => {
+            ("A stair leads further down.".into(), Normal)
+        }
+        Event::Spotted {
+            tile: Tile::StairsUp,
+            ..
+        } if matches!(world.stage(), tallow_core::Stage::Ascent(_)) => {
+            ("A stair leads up. The way home.".into(), Good)
+        }
+        Event::Spotted {
+            tile: Tile::Altar, ..
+        } => ("The altar. Bare, where the candle should be.".into(), Good),
         Event::Descended { depth } => (descent_line(depth).into(), Normal),
         Event::NoStairsHere => ("There are no stairs here.".into(), Normal),
+        Event::StairsSealed { depth: tallow_core::MAX_DEPTH } => (
+            "The stair up is shut by a weight of flies. Not without the candle.".into(),
+            Normal,
+        ),
         Event::StairsSealed { depth: 1 } => (
             "Above is only the church, and the dreamers. Not yet.".into(),
             Normal,
@@ -747,6 +762,76 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
         Event::AnomalyAhead { .. } => (
             "An anomaly is there. Step that way again to walk into it.".into(),
             Danger,
+        ),
+        Event::Undying { kind } => (
+            format!("Your blow passes through the {}. It cannot die. Run.", name(kind)),
+            Danger,
+        ),
+        Event::SwarmAbsorbs { left } => (
+            format!("The flies take the blow for him ({left} of his swarm left). Light thins them; fire burns them."),
+            Normal,
+        ),
+        Event::SwarmThins { left } => (
+            format!("His swarm boils off in the light ({left} left)."),
+            Good,
+        ),
+        Event::LordLeavesBody => (
+            "The body falls empty. Something leaves it, buzzing, looking for another.".into(),
+            Danger,
+        ),
+        Event::LordGathers { .. } => (
+            "Flies gather thick over one of the bodies on the floor. He will rise in it next turn.".into(),
+            Danger,
+        ),
+        Event::LordPossesses { .. } => (
+            "The body stands up, wearing him. Bind it, exorcise it, or leave him no bodies.".into(),
+            Danger,
+        ),
+        Event::LordBound => (
+            "Your rite closes on him like a fist. He is trapped in this body now.".into(),
+            Good,
+        ),
+        Event::LordRises => (
+            "Nowhere left to hide. Beelzebub rises as himself: the Lord of Flies. Watch the marked ground.".into(),
+            Danger,
+        ),
+        Event::LordFalls => (
+            "The Lord of Flies comes apart into a thousand dying flies, and then into nothing. The candle is unguarded.".into(),
+            Good,
+        ),
+        Event::CandleGuarded => (
+            "The flies around the candle will not let you near it while he lives.".into(),
+            Normal,
+        ),
+        Event::VigilTaken => (
+            "You lift the Vigil Candle. Its flame steadies, and your own stops mattering. Somewhere far above, a bell. Take it home. Something stirs behind you.".into(),
+            Good,
+        ),
+        Event::Ascended { floor } => (
+            match floor {
+                1 => "You climb. The stairs are not where they were. The labyrinth is coming apart behind you.".into(),
+                4 => "The last of the way up. You smell candle smoke from the church.".into(),
+                _ => "Up again. The walls lean in the wrong directions.".into(),
+            },
+            Normal,
+        ),
+        Event::ReachedChurch => (
+            "You climb up through the floorboards into the church. It is night, and the braziers burn low. The dreamers lie in their pews, not breathing deeply enough. The altar waits at the far end.".into(),
+            Good,
+        ),
+        Event::FollowingNear => (
+            "Below you, on the stair, a sound like a thousand wings folding. The Following is coming.".into(),
+            Danger,
+        ),
+        Event::FollowingArrives => (
+            "The Following pours up the stair behind you. It cannot be killed. Shut doors; keep to holy ground and brazier light; go.".into(),
+            Danger,
+        ),
+        Event::AltarEmpty => ("You have nothing to set on the altar.".into(), Normal),
+        Event::NoGoingBack => ("Down is behind you now. The way is up.".into(), Normal),
+        Event::Won => (
+            "You set the Vigil Candle on the altar. Its light fills the church.".into(),
+            Good,
         ),
         Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => return None,
     };

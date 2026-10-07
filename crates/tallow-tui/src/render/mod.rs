@@ -43,6 +43,7 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
         Mode::Look { cursor } | Mode::Target { cursor, .. } => Some(cursor),
         Mode::Play
         | Mode::Dead
+        | Mode::Won
         | Mode::Pack { .. }
         | Mode::Draft
         | Mode::Sheet
@@ -58,6 +59,7 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
     draw_log(frame, log_area, app.log());
     match app.mode() {
         Mode::Dead => draw_death(frame, map_area, app),
+        Mode::Won => draw_victory(frame, map_area, app),
         Mode::Pack { purpose, selected } => {
             pack::draw(frame, map_area, app.world(), purpose, selected)
         }
@@ -85,12 +87,22 @@ fn draw_death(frame: &mut Frame, area: Rect, app: &App) {
         ),
         Line::default(),
         Line::styled(
-            format!(
-                "{} on floor {} of {MAX_DEPTH}, turn {}.",
-                cause_line(world, death.cause),
-                death.depth,
-                death.turn
-            ),
+            if death.ascent > 0 {
+                format!(
+                    "{} on the way up, ascent {} of {}, turn {}.",
+                    cause_line(world, death.cause),
+                    death.ascent,
+                    tallow_core::throne::ASCENT_FLOORS,
+                    death.turn
+                )
+            } else {
+                format!(
+                    "{} on floor {} of {MAX_DEPTH}, turn {}.",
+                    cause_line(world, death.cause),
+                    death.depth,
+                    death.turn
+                )
+            },
             text,
         ),
         Line::default(),
@@ -137,13 +149,82 @@ fn draw_death(frame: &mut Frame, area: Rect, app: &App) {
     );
 }
 
+fn draw_victory(frame: &mut Frame, area: Rect, app: &App) {
+    let world = app.world();
+    let Some(v) = world.victory() else { return };
+    let text = Style::new().fg(palette::TEXT);
+    let dim = Style::new().fg(palette::TEXT_DIM);
+    let mut lines = vec![
+        Line::styled(
+            "The Vigil Candle burns on the altar.",
+            Style::new().fg(palette::GOOD).add_modifier(Modifier::BOLD),
+        ),
+        Line::default(),
+    ];
+    // The epilogue follows how you went down and came back.
+    lines.push(Line::styled(
+        "Morning comes to the parish of the Low Bell. One by one, the dreamers wake.",
+        text,
+    ));
+    if v.exorcised > 0 {
+        lines.push(Line::styled(
+            format!(
+                "{} of the Taken you freed below find their way home over the next days, thin and silent, and are taken in.",
+                v.exorcised
+            ),
+            text,
+        ));
+    } else {
+        lines.push(Line::styled(
+            "Some never come back up. The parish buries empty coffins for them, and does not talk about it.",
+            text,
+        ));
+    }
+    lines.push(Line::styled(
+        match v.dread {
+            0..=39 => "You sleep that night, and dream of nothing at all.",
+            40..=69 => "You sleep badly for a year. Then less badly.",
+            _ => "You do not sleep well again. You keep a candle lit, always, and no one asks why.",
+        },
+        text,
+    ));
+    if v.rites >= 8 {
+        lines.push(Line::styled(
+            "What you learned below stays with you. The Collegium had a new scholar, for a while, though it never knew it.",
+            text,
+        ));
+    }
+    lines.extend([
+        Line::default(),
+        Line::styled(
+            format!(
+                "Level {} · turn {} · seed {}",
+                v.level,
+                v.turn,
+                world.seed()
+            ),
+            dim,
+        ),
+        Line::styled("Enter  begin again        q  quit", text),
+    ]);
+    sheet::popup(frame, area, "Home", lines, 72);
+}
+
 fn cause_line(world: &World, cause: Cause) -> String {
-    let name = |kind| &world.content().monster(kind).name;
+    // The great ones are named, not counted: "the Sexton", not "a Sexton".
+    let who = |kind| {
+        let def = world.content().monster(kind);
+        if def.boss {
+            format!("the {}", def.name)
+        } else {
+            with_article(&def.name)
+        }
+    };
     match cause {
-        Cause::Attack(kind) => format!("Killed by {}", with_article(name(kind))),
-        Cause::HeavyBlow(kind) => format!("Crushed by {}'s heavy blow", with_article(name(kind))),
+        Cause::Attack(kind) => format!("Killed by {}", who(kind)),
+        Cause::HeavyBlow(kind) => format!("Crushed by {}'s heavy blow", who(kind)),
         Cause::Fire => "Burned to death".to_string(),
-        Cause::Chant(kind) => format!("Undone by {}'s chanted rite", with_article(name(kind))),
+        Cause::Chant(kind) => format!("Undone by {}'s chanted rite", who(kind)),
         Cause::Fall => "Killed by a fall".to_string(),
         Cause::Leaving => "Taken by a Leaving's price".to_string(),
     }
@@ -459,6 +540,31 @@ mod tests {
         assert!(screen.contains(" Rites "));
         assert!(screen.contains("Compel"));
         assert!(screen.contains("dread +15 · range 6 · 12 actions"));
+    }
+
+    #[test]
+    fn the_ascent_shows_the_following_and_the_altar_wins() {
+        let mut app = App::new(7);
+        app.world_mut().dev_ascent(1);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("Ascent 1/4"));
+        assert!(screen.contains("The Following:"));
+        app.world_mut().dev_ascent(5);
+        let world = app.world_mut();
+        let altar = world.map().find(tallow_core::Tile::Altar).next().unwrap();
+        while world.player().pos.x + 1 < altar.x {
+            world.apply(tallow_core::Command::Move(tallow_core::Direction::E));
+        }
+        let dy = (altar.y - world.player().pos.y).signum();
+        let dir = match dy {
+            -1 => tallow_core::Direction::NE,
+            1 => tallow_core::Direction::SE,
+            _ => tallow_core::Direction::E,
+        };
+        app.handle(Action::Move(dir));
+        assert_eq!(app.mode(), Mode::Won);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("The Vigil Candle burns on the altar."));
     }
 
     #[test]

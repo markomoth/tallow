@@ -38,6 +38,7 @@ fn main() {
                     Tile::DeepWater => 'W',
                     Tile::RottenFloor => ',',
                     Tile::Pit => ' ',
+                    Tile::Altar => 'A',
                     Tile::StairsDown => '>',
                     Tile::StairsUp => '<',
                     Tile::Brazier => '&',

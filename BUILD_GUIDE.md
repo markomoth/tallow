@@ -95,6 +95,17 @@ Three phases. Each phase has a force answer, a rite answer, and a room answer.
 - Ascent floors are re-rolled (not the same maps), shorter, and visibly corrupted.
 - Placing the candle on the altar wins. The epilogue varies by: Taken exorcised, dread at the end, rites learned.
 
+### As built (M10)
+
+- **The Throne (floor 12):** one great hall with two rows of pillars, six cold braziers, five old bodies and the Vigil Candle on the dais to the north. You come in from a shut door to the south. Nothing else lives there.
+- **Phase 1, the Court** ("Prince of Flies", 24 health): a coat of 12 flies. While it lasts, blows only strip it (1 + a third of the damage). It thins by 2 a turn while he stands in brazier light and by 6 in fire, and regrows by 1 every 4 turns only in true darkness. He calls flies in the dark. The HUD shows the swarm.
+- **Phase 2, the Possession:** when the Court body dies he leaves it; flies gather over the nearest body (announced), and next turn it stands up as a possessed body (14 health). Kill it and he leaps again. A Binding rite or Exorcise on a possessed body pins him there, so its death ends the phase; so does running out of bodies (render or burn them).
+- **Phase 3, the Lord** (60 health, slow): every blow is a heavy blow marked a turn ahead on a cross of five tiles (the target and the four beside it). Step diagonally out of it.
+- **The candle:** guarded until the Lord falls. Taken, it is endless light (radius 7, needs no tallow, water and lantern-eaters can't put it out) and opens the stair up.
+- **The ascent (the Unravelling):** 4 re-rolled floors (generated from the run seed and the ascent floor, built like floors 10, 7, 4 and 2, with half the creatures, tinted violet). You arrive on a stair down; the way on is a stair up. The way down is closed.
+- **The Following:** comes up the stair 30, 25, 22 and 18 turns after you arrive (HUD countdown, a warning 10 turns ahead). It cannot be killed (5–8 a hit, your speed). It can't open doors but chews through shut ones in 3 actions (sealed ones in 8), won't cross brazier light or holy ground, and ignores factions. Leaving the floor leaves it behind. Decided: the ascent shows a turn counter, not only log cues.
+- **The church:** a lit nave with pews and the altar at the far end. Walk into the altar with the candle to win. Epilogue lines follow the Taken you exorcised, your dread at the end, and whether you learned 8+ rites.
+
 ---
 
 ## 4. Core loop: Candle and Dread
@@ -417,7 +428,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | arrows / `hjklyubn` / numpad | Move, bump to attack |
 | Shift + direction (`HJKLYUBN`, ⇧arrows) | Run until something interesting: a wall, a door or stair underfoot or alongside, a new landmark in view, or a side passage in a corridor. Later: any creature or item coming into view. |
 | `.` / `5` | Wait |
-| `<` `>` | Stairs |
+| `<` `>` | Stairs (`<` only works on the way back up, with the Vigil Candle) |
 | `g` | Pick up |
 | `i` | Pack: pick a letter, then `a` drink, `e` equip / take off, `t` throw, `d` drop |
 | `z` | Cast rite |
@@ -553,7 +564,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 |---|---|---|---|
 | M8 ✅ | Biomes & content | Descend all 12 floors through 4 biomes, beat 3 mini-bosses | 5–6 h |
 | M9 ✅ | Leavings | Throw a stone into a Seep room, find an anomaly, take a Leaving, survive its warning | 3–4 h |
-| M10 | Beelzebub & ascent | Beat 3 phases, take the candle, outrun the Following, win at the altar | 5–6 h |
+| M10 ✅ | Beelzebub & ascent | Beat 3 phases, take the candle, outrun the Following, win at the altar | 5–6 h |
 | M11 | Polish & balance | Save/quit/resume, Journal persists, help screen, sim shows ~0 softlocks | 4–6 h |
 
 Total: roughly 40–55 hours of build + playtest time.
@@ -565,4 +576,4 @@ Total: roughly 40–55 hours of build + playtest time.
 - Final names: town, church, Collegium, the Following.
 - ~~In-game words for level and XP~~ Decided in M5: "Level" and "Insight".
 - Exact numbers: tallow per floor, dread rates, skill XP curve. Tune with `tallow-sim` in M11.
-- Whether the ascent should show a turn counter for the Following or only audio-style log cues.
+- ~~Whether the ascent should show a turn counter for the Following or only audio-style log cues.~~ Decided in M10: a HUD counter plus a warning 10 turns ahead.

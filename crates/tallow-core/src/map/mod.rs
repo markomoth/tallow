@@ -43,6 +43,8 @@ pub enum Tile {
     RottenFloor,
     /// Where rotten boards gave way.
     Pit,
+    /// The church altar. Walk into it with the Vigil Candle to set it there.
+    Altar,
 }
 
 impl Tile {
@@ -79,7 +81,12 @@ impl Tile {
     pub const fn is_landmark(self) -> bool {
         matches!(
             self,
-            Tile::StairsDown | Tile::Brazier | Tile::ColdBrazier | Tile::BellRope
+            Tile::StairsDown
+                | Tile::StairsUp
+                | Tile::Brazier
+                | Tile::ColdBrazier
+                | Tile::BellRope
+                | Tile::Altar
         )
     }
 

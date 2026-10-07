@@ -2,7 +2,7 @@
 //! steps of a tile. For driving the real binary in tmux.
 //!
 //! cargo run -p tallow-core --example route -- <seed> <depth> <x> <y> <stop>
-//! (x = -1 heads for the stair down)
+//! (x = -1 heads for the stair onward; depth 13–16 are the ascent floors)
 
 use tallow_core::{Direction, Point, Tile, World, map::path};
 
@@ -15,14 +15,21 @@ fn main() {
         panic!("usage: route <seed> <depth> <x> <y> <stop>");
     };
     let mut world = World::new(seed as u64);
-    world.dev_skip_to(depth as u8);
-    // x = -1: the stair down.
+    // Depths past the bottom are ascent floors (13 = the first), heading for the stair up.
+    let ascent = depth > i64::from(tallow_core::MAX_DEPTH);
+    if ascent {
+        world.dev_ascent((depth - i64::from(tallow_core::MAX_DEPTH)) as u8);
+    } else {
+        world.dev_skip_to(depth as u8);
+    }
+    // x = -1: the stair onward.
+    let onward = if ascent {
+        Tile::StairsUp
+    } else {
+        Tile::StairsDown
+    };
     let goal = if x < 0 {
-        world
-            .map()
-            .find(Tile::StairsDown)
-            .next()
-            .expect("a stair down")
+        world.map().find(onward).next().expect("a stair onward")
     } else {
         Point::new(x as i32, y as i32)
     };

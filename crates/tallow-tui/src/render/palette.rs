@@ -54,6 +54,10 @@ pub fn biome_tint(biome: tallow_core::Biome) -> [f32; 3] {
     }
 }
 
+/// The ascent: everything a little wrong, bruised violet.
+pub const UNRAVELLING_TINT: [f32; 3] = [1.05, 0.78, 1.15];
+pub const ALTAR_FG: Rgb = [255, 232, 170];
+
 pub fn tinted(base: Rgb, tint: [f32; 3]) -> Rgb {
     [0, 1, 2].map(|i| (f32::from(base[i]) * tint[i]).clamp(0.0, 255.0) as u8)
 }

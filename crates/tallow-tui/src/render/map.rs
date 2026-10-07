@@ -42,6 +42,7 @@ impl Widget for MapView<'_> {
         let content = self.world.content();
         let telegraphs: Vec<Point> = self.world.telegraphs().collect();
         let biome = tallow_core::Biome::for_depth(self.world.depth());
+        let unravelling = matches!(self.world.stage(), tallow_core::Stage::Ascent(_));
         let pulse = 0.75 + 0.25 * (self.time * 9.0).sin();
         let origin = Point::new(
             camera_origin(map.width(), area.width.into(), player.x),
@@ -57,7 +58,7 @@ impl Widget for MapView<'_> {
                 let Some(cell) = buf.cell_mut((area.x + sx, area.y + sy)) else {
                     continue;
                 };
-                let Some(look) = tile_look(floor, p, biome) else {
+                let Some(look) = tile_look(floor, p, biome, unravelling) else {
                     cell.set_char(' ')
                         .set_fg(palette::VOID)
                         .set_bg(palette::VOID);
@@ -222,12 +223,21 @@ struct Look {
 
 /// How a tile looks, or `None` if it should not be drawn: never seen, or solid
 /// rock with no open space beside it.
-fn tile_look(floor: &Floor, p: Point, biome: tallow_core::Biome) -> Option<Look> {
+fn tile_look(
+    floor: &Floor,
+    p: Point,
+    biome: tallow_core::Biome,
+    unravelling: bool,
+) -> Option<Look> {
     if !floor.is_explored(p) {
         return None;
     }
     let map = floor.map();
-    let tint = palette::biome_tint(biome);
+    let tint = if unravelling {
+        palette::UNRAVELLING_TINT
+    } else {
+        palette::biome_tint(biome)
+    };
     let floor_bg = palette::tinted(palette::FLOOR_BG, tint);
     let plain = |glyph, fg| Look {
         glyph,
@@ -250,6 +260,10 @@ fn tile_look(floor: &Floor, p: Point, biome: tallow_core::Biome) -> Option<Look>
             emissive: false,
         },
         Tile::RottenFloor => plain(',', palette::ROTTEN_FG),
+        Tile::Altar => Look {
+            emissive: true,
+            ..plain('_', palette::ALTAR_FG)
+        },
         Tile::Pit => Look {
             glyph: ' ',
             fg: palette::FLOOR_FG,

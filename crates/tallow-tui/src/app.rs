@@ -56,6 +56,8 @@ pub enum Mode {
     Leaving(tallow_core::leavings::LeavingId),
     /// The run is over; waiting for "again" or "quit".
     Dead,
+    /// The candle is home.
+    Won,
 }
 
 pub struct App {
@@ -189,7 +191,7 @@ impl App {
                     self.mode = Mode::Play;
                 }
             }
-            Mode::Dead => match action {
+            Mode::Dead | Mode::Won => match action {
                 Action::Confirm => self.restart = true,
                 Action::Quit => self.quit = true,
                 _ => {}
@@ -403,6 +405,8 @@ impl App {
         }
         if self.world.death().is_some() {
             self.mode = Mode::Dead;
+        } else if self.world.victory().is_some() {
+            self.mode = Mode::Won;
         } else if self.world.pending_draft().is_some() {
             self.mode = Mode::Draft;
         } else if self.mode == Mode::Draft {

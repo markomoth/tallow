@@ -108,6 +108,9 @@ pub fn item_stats(world: &World, kind: ItemKindId) -> Vec<String> {
         ItemClass::Bell { noise } => lines.push(format!(
             "Ring it (a) or throw it: heard {noise} steps away. The Taken close by cower."
         )),
+        ItemClass::Relic => {
+            lines.push("Endless light. Carry it up and set it on the altar.".into())
+        }
         ItemClass::Ammo | ItemClass::Throwable => {}
     }
     if let Some(thrown) = def.thrown {

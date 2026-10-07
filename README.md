@@ -18,7 +18,7 @@ cargo run --release -- --seed 42   # replay a specific dungeon
 | arrows / `hjkl` / numpad | Move |
 | `yubn` | Move diagonally |
 | Shift + direction | Run |
-| `>` | Descend stairs |
+| `>` / `<` | Down the stairs / up, once you carry the Vigil Candle |
 | `x` | Look (Tab cycles creatures) |
 | `c` | Snuff / light your candle |
 | `C` | Shut doors beside you |

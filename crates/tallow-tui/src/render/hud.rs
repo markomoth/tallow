@@ -43,6 +43,59 @@ pub fn biome_name(biome: Biome) -> &'static str {
     }
 }
 
+fn stage_name(world: &World) -> &'static str {
+    match world.stage() {
+        tallow_core::Stage::Descent => biome_name(Biome::for_depth(world.depth())),
+        tallow_core::Stage::Ascent(_) => "The Unravelling",
+        tallow_core::Stage::Church => "The Church of the Low Bell",
+    }
+}
+
+/// The fight at the bottom, or what's behind you on the way up.
+fn pursuit(world: &World) -> Line<'static> {
+    use tallow_core::Phase;
+    if world.following_present() {
+        return Line::styled(
+            "The Following is here",
+            Style::new()
+                .fg(palette::DANGER)
+                .add_modifier(Modifier::BOLD),
+        );
+    }
+    if let Some(turns) = world.following_in() {
+        return Line::styled(
+            format!("The Following: {turns} turns"),
+            Style::new().fg(palette::DREAD),
+        );
+    }
+    match world.lord() {
+        Some(lord) if world.stage() == tallow_core::Stage::Descent => match lord.phase {
+            Phase::Court => Line::styled(
+                format!("Beelzebub: the Court · swarm {}", lord.swarm),
+                Style::new().fg(palette::DANGER),
+            ),
+            Phase::Possession => Line::styled(
+                if lord.bound {
+                    "Beelzebub: bound in a body".to_string()
+                } else {
+                    "Beelzebub: the Possession".to_string()
+                },
+                Style::new().fg(palette::DANGER),
+            ),
+            Phase::Lord => Line::styled("Beelzebub: the Lord", Style::new().fg(palette::DANGER)),
+            Phase::Fallen => Line::styled(
+                if world.player().vigil {
+                    "The candle is yours. Go up."
+                } else {
+                    "Beelzebub has fallen. Take the candle."
+                },
+                Style::new().fg(palette::GOOD),
+            ),
+        },
+        _ => Line::default(),
+    }
+}
+
 fn dim() -> Style {
     Style::new().fg(palette::TEXT_DIM)
 }
@@ -95,10 +148,21 @@ impl Widget for Hud<'_> {
             ),
             conditions(world),
             Line::styled(
-                format!("Floor {depth}/{MAX_DEPTH} · Level {}", player.level),
+                match world.stage() {
+                    tallow_core::Stage::Descent => {
+                        format!("Floor {depth}/{MAX_DEPTH} · Level {}", player.level)
+                    }
+                    tallow_core::Stage::Ascent(a) => format!(
+                        "Ascent {a}/{} · Level {}",
+                        tallow_core::throne::ASCENT_FLOORS,
+                        player.level
+                    ),
+                    tallow_core::Stage::Church => format!("The Church · Level {}", player.level),
+                },
                 text(),
             ),
-            Line::styled(biome_name(Biome::for_depth(depth)), dim()),
+            Line::styled(stage_name(world), dim()),
+            pursuit(world),
             Line::default(),
         ];
         match self.app.mode() {
@@ -108,6 +172,7 @@ impl Widget for Hud<'_> {
             }
             Mode::Play
             | Mode::Dead
+            | Mode::Won
             | Mode::Pack { .. }
             | Mode::Draft
             | Mode::Sheet
@@ -599,6 +664,11 @@ fn trait_line(t: &Trait) -> String {
         Trait::Rewrites { .. } => "locks the doors around it, and sets books alight.".into(),
         Trait::Chorus => "several bodies, one life: wound one and all bleed.".into(),
         Trait::Swims => "at home in deep water.".into(),
+        Trait::Sweeps => "its blows fall on a cross of marked tiles. Step out of the cross.".into(),
+        Trait::Vessel => "a body he wears. Bind or exorcise it to trap him inside.".into(),
+        Trait::Unholy => "can't set foot on holy ground.".into(),
+        Trait::Gnaws => "chews through shut doors, slowly.".into(),
+        Trait::Undying => "cannot be killed.".into(),
     }
 }
 
@@ -624,11 +694,16 @@ fn tile_line(tile: Tile) -> &'static str {
             "Rotten boards. They will give way under you and drop you to the floor below (you'll be bruised, not killed)."
         }
         Tile::Pit => "A hole where the boards gave way. Far below, a floor.",
+        Tile::Altar => {
+            "The altar of the Low Bell, bare where the Vigil Candle stood. Walk into it to set the candle there."
+        }
         Tile::BellRope => {
             "A bell rope. Pull it (walk into it) and the bell rings out: everything within earshot comes to you. The Taken close by cower."
         }
         Tile::StairsDown => "Stairs down. There is no coming back up.",
-        Tile::StairsUp => "The way you came. Sealed now.",
+        Tile::StairsUp => {
+            "A stair up. On the way down it is sealed; with the Vigil Candle, it is the way home."
+        }
         Tile::Brazier => {
             "A brazier, burning without fuel. Some things in the dark will not cross its light. \
              Rest here with your candle snuffed: dread ebbs and your tallow keeps."

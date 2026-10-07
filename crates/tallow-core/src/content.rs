@@ -87,6 +87,16 @@ pub enum Trait {
     Chorus,
     /// At home in deep water.
     Swims,
+    /// Its heavy blows strike a cross: the marked tile and the four beside it.
+    Sweeps,
+    /// Beelzebub's borrowed body: Binding rites and Exorcise pin him in it.
+    Vessel,
+    /// Can't set foot on holy ground.
+    Unholy,
+    /// Eats its way through shut doors (3 actions; sealed ones 8).
+    Gnaws,
+    /// Can't be killed. Only slowed.
+    Undying,
 }
 
 #[derive(Debug, Clone, Deserialize)]

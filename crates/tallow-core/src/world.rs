@@ -34,6 +34,8 @@ const MAX_REST_TURNS: u32 = 200;
 const BURDENED_MOVE: i32 = ACTION_COST * 3 / 2;
 /// How far your light reaches with ink in your eyes.
 pub const BLIND_RADIUS: i32 = 2;
+/// How far the Vigil Candle lights.
+pub const VIGIL_RADIUS: i32 = 7;
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -59,6 +61,8 @@ pub struct Player {
     pub leavings: Vec<crate::leavings::LeavingId>,
     /// A Leaving lets you see in the dark until this turn.
     pub dark_sight_until: Option<u64>,
+    /// Carrying the Vigil Candle: endless light, and the way up.
+    pub vigil: bool,
     pub(crate) energy: i32,
 }
 
@@ -80,6 +84,8 @@ pub struct RunStats {
 pub struct Death {
     pub cause: Cause,
     pub depth: u8,
+    /// Ascent floor (1–4) if it happened on the way up, else 0.
+    pub ascent: u8,
     pub turn: u64,
 }
 
@@ -149,6 +155,13 @@ pub struct World {
     pub(crate) leaving_ready: HashMap<crate::leavings::LeavingId, u64>,
     /// A Leaving is waking; others don't wake from what it does.
     pub(crate) leaving_busy: bool,
+    /// Beelzebub's fight, once you reach the bottom.
+    pub(crate) lord: Option<crate::throne::Lord>,
+    /// Ascent floors climbed (0 during the descent; past the last, the church).
+    pub(crate) ascent: u8,
+    /// The turn the Following comes up onto this ascent floor.
+    pub(crate) following_at: Option<u64>,
+    pub(crate) victory: Option<crate::throne::Victory>,
 }
 
 impl World {
@@ -191,6 +204,7 @@ impl World {
                 blind_until: None,
                 leavings: Vec::new(),
                 dark_sight_until: None,
+                vigil: false,
                 energy: ACTION_COST,
             },
             floor,
@@ -216,6 +230,10 @@ impl World {
             leavings: Vec::new(),
             leaving_ready: HashMap::new(),
             leaving_busy: false,
+            lord: None,
+            ascent: 0,
+            following_at: None,
+            victory: None,
         };
         // The acolyte comes down with what was at hand.
         for (id, equip) in [
@@ -249,6 +267,36 @@ impl World {
         leavings: &mut Vec<crate::leavings::Leaving>,
     ) -> Floor {
         let mut rng = rng::floor_rng(seed, depth);
+        if depth == MAX_DEPTH {
+            let (map, start, dais, bodies, lord) = crate::throne::throne_room(&mut rng);
+            let mut floor = Floor::new(map, start);
+            let parishioner = content.kind_by_id("parishioner").expect("defined");
+            for at in bodies {
+                floor.corpses.push(crate::corpse::Corpse {
+                    at,
+                    kind: parishioner,
+                    died: 0,
+                    studied: 0,
+                    rendered: 0,
+                    ancient: true,
+                });
+            }
+            let court = content.kind_by_id("beelzebub").expect("defined");
+            floor
+                .monsters
+                .insert(Monster::new(court, content.monster(court), lord));
+            let candle = content.item_by_id("vigil_candle").expect("defined");
+            *next_item += 1;
+            floor.items.push(FloorItem::new(
+                dais,
+                Item {
+                    id: crate::item::ItemId(*next_item),
+                    kind: candle,
+                    count: 1,
+                },
+            ));
+            return floor;
+        }
         let layout = generate::floor(&mut rng, depth, depth < MAX_DEPTH);
         let spawns = spawn::populate(&mut rng, content, &layout.map, layout.start, depth);
         let tallow = spawn::place_tallow(&mut rng, &layout.map, layout.start);
@@ -365,6 +413,9 @@ impl World {
             &mut self.leavings,
         );
         self.player.pos = self.floor.arrival();
+        if depth == MAX_DEPTH {
+            self.begin_throne();
+        }
         self.update_view();
     }
 
@@ -488,12 +539,15 @@ impl World {
 
     /// Tiles about to be struck by a raised heavy blow.
     pub fn telegraphs(&self) -> impl Iterator<Item = Point> + '_ {
-        self.floor.monsters().filter_map(|(_, m)| m.winding_up)
+        self.floor
+            .monsters()
+            .filter_map(|(id, m)| m.winding_up.map(|t| self.blow_area(id, t)))
+            .flatten()
     }
 
     /// Resolves one player command and returns what happened.
     pub fn apply(&mut self, command: Command) -> Vec<Event> {
-        if self.death.is_some() {
+        if self.death.is_some() || self.victory.is_some() {
             return Vec::new();
         }
         self.fire_ok = self.fire_warned.take();
@@ -532,10 +586,7 @@ impl World {
             Command::DropLeaving(id) => self.drop_leaving(id),
             Command::Render => self.render(),
             Command::Cast { rite, target } => self.cast(rite, target),
-            Command::Ascend => match self.map().tile(self.player.pos) {
-                Tile::StairsUp => vec![Event::StairsSealed { depth: self.depth }],
-                _ => vec![Event::NoStairsHere],
-            },
+            Command::Ascend => self.ascend(),
         }
     }
 
@@ -603,7 +654,7 @@ impl World {
                 self.fall_through(target, &mut events);
                 return events;
             }
-            if tile == Tile::DeepWater && self.player.candle.is_lit() {
+            if tile == Tile::DeepWater && self.player.candle.is_lit() && !self.player.vigil {
                 self.player.candle.snuff();
                 events.push(Event::CandleDrowned);
                 self.wake_leavings(crate::leavings::Wake::EnteringDarkness, &mut events);
@@ -760,6 +811,9 @@ impl World {
         source: Source,
         events: &mut Vec<Event>,
     ) {
+        if self.absorb_blow(id, damage, events) {
+            return;
+        }
         let monster = &mut self.floor.monsters[id];
         monster.health = monster.health.saturating_sub(damage);
         let health = monster.health;
@@ -812,6 +866,7 @@ impl World {
             self.death = Some(Death {
                 cause,
                 depth: self.depth,
+                ascent: self.ascent,
                 turn: self.turn(),
             });
             events.push(Event::PlayerDied { cause });
@@ -954,6 +1009,9 @@ impl World {
         if self.map().tile(self.player.pos) != Tile::StairsDown {
             return vec![Event::NoStairsHere];
         }
+        if self.ascent > 0 {
+            return vec![Event::NoGoingBack];
+        }
         let mut events = vec![Event::Descended {
             depth: self.depth + 1,
         }];
@@ -976,6 +1034,9 @@ impl World {
         let now = self.turn();
         for c in &mut self.floor.corpses {
             c.died = now;
+        }
+        if self.depth == MAX_DEPTH {
+            self.begin_throne();
         }
         self.player.pos = self.floor.arrival();
         if fell {
@@ -1018,7 +1079,13 @@ impl World {
     /// time has passed, first sightings of creatures.
     pub(crate) fn update_view(&mut self) -> Vec<Event> {
         let blind = self.player.blind_until.is_some();
-        let candle = self.player.candle.radius().map(|radius| LightSource {
+        let vigil = self.player.vigil && self.player.candle.is_lit();
+        let candle = if vigil {
+            Some(VIGIL_RADIUS)
+        } else {
+            self.player.candle.radius()
+        };
+        let candle = candle.map(|radius| LightSource {
             at: self.player.pos,
             radius: if blind {
                 radius.min(BLIND_RADIUS)

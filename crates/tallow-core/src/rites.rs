@@ -519,6 +519,7 @@ impl World {
                 events.push(Event::Banished { kind });
             }
         }
+        self.maybe_bind_lord(victim, def.school, def.effect, &mut events);
         self.shift_dread(cost as i32 * 100, &mut events);
         self.train(def.school.skill(), cost.max(4), &mut events);
         self.stats.casts += 1;

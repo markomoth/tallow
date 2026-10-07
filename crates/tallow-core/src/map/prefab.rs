@@ -55,6 +55,7 @@ pub fn parse(text: &str) -> Result<(Map, Point), PrefabError> {
                 '~' => Tile::ShallowWater,
                 'W' => Tile::DeepWater,
                 ',' => Tile::RottenFloor,
+                'A' => Tile::Altar,
                 '>' => Tile::StairsDown,
                 '<' => Tile::StairsUp,
                 '&' => Tile::Brazier,

@@ -266,6 +266,7 @@ impl World {
                 events.push(Event::SealBroken { at });
             }
             // The bell is heard all around whoever pulled the rope.
+            Tile::Altar => return Some(self.place_candle()),
             Tile::BellRope => {
                 let here = self.player.pos;
                 self.make_noise(here, BELL_ROPE_NOISE, Noise::Bell);

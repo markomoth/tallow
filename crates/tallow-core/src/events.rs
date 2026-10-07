@@ -551,4 +551,46 @@ pub enum Event {
     AnomalyAhead {
         at: Point,
     },
+
+    /// A blow passes through something that cannot die.
+    Undying {
+        kind: KindId,
+    },
+    /// The swarm coat took the blow.
+    SwarmAbsorbs {
+        left: u32,
+    },
+    /// Light or fire ate at the swarm coat.
+    SwarmThins {
+        left: u32,
+    },
+    /// The first phase is over: he leaves his body.
+    LordLeavesBody,
+    /// Flies gather over a body: he will rise in it next turn.
+    LordGathers {
+        at: Point,
+    },
+    LordPossesses {
+        at: Point,
+    },
+    /// A rite pinned him in the body he wears.
+    LordBound,
+    /// The third phase: the Lord of Flies himself.
+    LordRises,
+    LordFalls,
+    /// The candle can't be taken while he lives. Costs no time.
+    CandleGuarded,
+    VigilTaken,
+    Ascended {
+        floor: u8,
+    },
+    ReachedChurch,
+    /// The Following is close behind.
+    FollowingNear,
+    FollowingArrives,
+    /// You have nothing to set on the altar. Costs no time.
+    AltarEmpty,
+    /// The way down is behind you now. Costs no time.
+    NoGoingBack,
+    Won,
 }

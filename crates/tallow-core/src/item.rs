@@ -61,6 +61,8 @@ pub enum ItemClass {
     Bell {
         noise: u32,
     },
+    /// The Vigil Candle.
+    Relic,
 }
 
 /// Damage holy water does on a splash, by what it lands on.

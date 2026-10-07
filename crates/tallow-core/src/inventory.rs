@@ -186,6 +186,12 @@ impl World {
         let mut events = Vec::new();
         self.take_leavings(&mut events);
         for f in found {
+            if matches!(self.content.item(f.item.kind).class, ItemClass::Relic)
+                && !self.take_relic(&mut events)
+            {
+                self.floor.items.push(f);
+                continue;
+            }
             if self.add_to_pack(f.item) {
                 events.push(Event::PickedUp {
                     kind: f.item.kind,
