@@ -57,6 +57,10 @@ pub enum ItemClass {
     Text {
         school: crate::rites::School,
     },
+    /// Rung in the hand (`a`): heard this many steps away.
+    Bell {
+        noise: u32,
+    },
 }
 
 /// Damage holy water does on a splash, by what it lands on.
@@ -75,6 +79,15 @@ pub struct ThrowStats {
     pub breaks: bool,
     #[serde(default)]
     pub holy: Option<Holy>,
+    /// Bursts into flame where it breaks.
+    #[serde(default)]
+    pub fire: bool,
+    /// Spills lamp oil where it breaks.
+    #[serde(default)]
+    pub oil: bool,
+    /// Rings where it lands, heard this many steps away.
+    #[serde(default)]
+    pub noise: Option<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

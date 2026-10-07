@@ -26,13 +26,26 @@ pub struct Layout {
 
 /// Generates a crypt floor. The down-stair is left out on the deepest floor.
 pub fn crypt<R: Rng + ?Sized>(rng: &mut R, with_stairs_down: bool) -> Layout {
+    floor(rng, 1, with_stairs_down)
+}
+
+/// Generates the floor at `depth`, furnished for its biome: chapels with pews
+/// in the crypts, libraries below.
+pub fn floor<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) -> Layout {
     // Room placement is random and can come up short; just roll again.
     loop {
-        if let Some(layout) = try_crypt(rng, with_stairs_down) {
+        if let Some(layout) = try_crypt(rng, depth, with_stairs_down) {
             return layout;
         }
     }
 }
+
+/// Doors that start shut, in percent.
+const CLOSED_DOORS: f64 = 0.4;
+/// Braziers that start cold, in percent.
+const COLD_BRAZIERS: f64 = 0.4;
+/// Chance a floor has a bell rope.
+const BELL_ROPE: f64 = 0.7;
 
 #[derive(Debug, Clone, Copy)]
 struct Room {
@@ -76,7 +89,7 @@ impl Room {
     }
 }
 
-fn try_crypt<R: Rng + ?Sized>(rng: &mut R, with_stairs_down: bool) -> Option<Layout> {
+fn try_crypt<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) -> Option<Layout> {
     let mut map = Map::filled(WIDTH, HEIGHT);
     let rooms = place_rooms(rng);
     if rooms.len() < 5 {
@@ -87,8 +100,14 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, with_stairs_down: bool) -> Option<Lay
             map.set(p, Tile::Floor);
         }
     }
+    let library_floor = depth >= 4;
     for room in &rooms {
-        if room.w >= 9 && room.h >= 5 && rng.random_bool(0.6) {
+        let big = room.w >= 7 && room.h >= 5;
+        if big && library_floor && rng.random_bool(0.4) {
+            add_shelves(&mut map, room);
+        } else if big && !library_floor && rng.random_bool(0.25) {
+            add_pews(&mut map, room);
+        } else if room.w >= 9 && room.h >= 5 && rng.random_bool(0.6) {
             add_pillars(&mut map, room);
         }
     }
@@ -102,8 +121,26 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, with_stairs_down: bool) -> Option<Lay
         if rng.random_bool(0.25) {
             let count = if room.w * room.h >= 40 { 2 } else { 1 };
             for _ in 0..count {
-                place_somewhere(rng, &mut map, room, Tile::Brazier);
+                let tile = if rng.random_bool(COLD_BRAZIERS) {
+                    Tile::ColdBrazier
+                } else {
+                    Tile::Brazier
+                };
+                place_somewhere(rng, &mut map, room, tile);
             }
+        }
+    }
+    if rng.random_bool(BELL_ROPE)
+        && let Some(room) = rooms.choose(rng)
+    {
+        let walls: Vec<Point> = room
+            .wall_ring()
+            .into_iter()
+            .map(|(p, _)| p)
+            .filter(|&p| map.tile(p) == Tile::Wall)
+            .collect();
+        if let Some(&p) = walls.choose(rng) {
+            map.set(p, Tile::BellRope);
         }
     }
 
@@ -224,7 +261,12 @@ fn add_doors<R: Rng + ?Sized>(rng: &mut R, map: &mut Map, room: &Room) {
             && map.tile(p + side_a) == Tile::Wall
             && map.tile(p + side_b) == Tile::Wall;
         if is_gap && rng.random_bool(0.55) {
-            map.set(p, Tile::Door);
+            let tile = if rng.random_bool(CLOSED_DOORS) {
+                Tile::DoorClosed
+            } else {
+                Tile::Door
+            };
+            map.set(p, tile);
         }
     }
 }
@@ -235,6 +277,38 @@ fn add_pillars(map: &mut Map, room: &Room) {
         let colonnade = p.y == room.y + 1 || p.y == room.y + room.h - 2;
         if colonnade && (p.x - room.x) % 3 == 1 {
             place_obstacle(map, p, Tile::Wall);
+        }
+    }
+}
+
+/// Rows of shelves across a room, each an island with floor all around it,
+/// so a library never cuts the floor in two.
+fn add_shelves(map: &mut Map, room: &Room) {
+    let (x0, x1) = (room.x + 1, room.x + room.w - 2);
+    let mut y = room.y + 1;
+    while y <= room.y + room.h - 2 {
+        let ring_clear = (x0 - 1..=x1 + 1).all(|x| {
+            [y - 1, y, y + 1]
+                .iter()
+                .all(|&ry| map.tile(Point::new(x, ry)) == Tile::Floor)
+        });
+        if ring_clear && x1 > x0 {
+            for x in x0..=x1 {
+                map.set(Point::new(x, y), Tile::Bookshelf);
+            }
+        }
+        y += 2;
+    }
+}
+
+/// Rows of pews facing an aisle. Pews can be walked over.
+fn add_pews(map: &mut Map, room: &Room) {
+    let aisle = room.x + room.w / 2;
+    for p in room.interior() {
+        let row = (p.y - room.y) % 2 == 1 && p.y < room.y + room.h - 1;
+        let edge = p.x == room.x || p.x == room.x + room.w - 1;
+        if row && !edge && p.x != aisle && map.tile(p) == Tile::Floor {
+            map.set(p, Tile::Pew);
         }
     }
 }
@@ -321,6 +395,24 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn deep_floors_have_libraries_and_stay_connected() {
+        let mut shelves = 0;
+        for seed in 0..200 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            let Layout { map, start } = floor(&mut rng, 5, true);
+            shelves += map.find(Tile::Bookshelf).count();
+            let dist = path::distances(&map, start);
+            for p in map.points() {
+                assert!(
+                    !map.is_walkable(p) || dist.at(p).is_some(),
+                    "seed {seed}: walkable {p:?} unreachable from start"
+                );
+            }
+        }
+        assert!(shelves > 0);
     }
 
     #[test]

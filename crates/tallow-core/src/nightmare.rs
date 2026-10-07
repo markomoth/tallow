@@ -37,6 +37,8 @@ impl World {
         }
         self.tick_rites(events);
         self.tick_corpses(events);
+        self.tick_fire(events);
+        self.tick_seals(events);
 
         // A thrifty candle skips every fourth turn of burning.
         let thrifty = self.has_passive(Passive::CandleThrift) && self.turn().is_multiple_of(4);

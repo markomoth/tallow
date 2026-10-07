@@ -9,7 +9,7 @@ use crate::content::{Faction, Trait};
 use crate::events::{Cause, Event, Who};
 use crate::geom::{Direction, Point};
 use crate::item::Family;
-use crate::map::path;
+use crate::map::{Tile, path};
 use crate::monster::{Mind, MonsterId};
 use crate::progress::Source;
 use crate::rites::{DECOY_IGNORED_WITHIN, DECOY_PULL};
@@ -28,6 +28,8 @@ const TALLOW_BITTEN: u32 = 15;
 const FOE_RANGE: i32 = 10;
 /// A thrall with nothing to fight stays this close to you.
 const HEEL: i32 = 2;
+/// Creatures attack a hated faction this close, if it's nearer than you.
+const AGGRO_RANGE: i32 = 5;
 
 impl World {
     pub(crate) fn monster_act(&mut self, id: MonsterId, events: &mut Vec<Event>) {
@@ -62,6 +64,27 @@ impl World {
         if std::mem::take(&mut monster.flinching) {
             if self.floor.is_visible(m.pos) {
                 events.push(Event::Flinched { kind });
+            }
+            return;
+        }
+        if std::mem::take(&mut monster.slipping) {
+            if self.floor.is_visible(m.pos) {
+                events.push(Event::Slipped {
+                    who: Who::Monster(kind),
+                });
+            }
+            return;
+        }
+        if m.beckoned > 0 {
+            if m.pos.chebyshev(player) <= 1 {
+                let monster = &mut self.floor.monsters[id];
+                monster.beckoned = 0;
+                monster.mind = Mind::Hunting { last_seen: player };
+            } else {
+                self.step_toward(id, player);
+                if let Some(monster) = self.floor.monsters.get_mut(id) {
+                    monster.beckoned -= 1;
+                }
             }
             return;
         }
@@ -135,8 +158,17 @@ impl World {
         let monster = &mut self.floor.monsters[id];
         monster.cooldown = monster.cooldown.saturating_sub(1);
 
-        // A creature that's been struck by another fights back.
-        if let Some(foe) = m.foe {
+        // Rival factions go for each other when they meet, if you aren't nearer.
+        let mut foe = m.foe;
+        if foe.is_none()
+            && let Some((enemy, d)) = self.nearest_enemy(id, AGGRO_RANGE)
+            && (!sees || d < m.pos.chebyshev(player))
+        {
+            self.floor.monsters[id].foe = Some(enemy);
+            foe = Some(enemy);
+        }
+        // A creature fighting another keeps at it.
+        if let Some(foe) = foe {
             match self.floor.monsters.get(foe).map(|f| f.pos) {
                 Some(at) if at.chebyshev(m.pos) <= FOE_RANGE => {
                     if at.chebyshev(m.pos) == 1 {
@@ -291,6 +323,21 @@ impl World {
         }
     }
 
+    /// The nearest creature `id` hates that it can see within `range`, and how far.
+    fn nearest_enemy(&self, id: MonsterId, range: i32) -> Option<(MonsterId, i32)> {
+        let pos = self.floor.monsters[id].pos;
+        self.floor
+            .monsters
+            .iter()
+            .filter(|&(other, o)| {
+                o.pos.chebyshev(pos) <= range
+                    && self.hostile(id, other)
+                    && self.clear_line(pos, o.pos)
+            })
+            .map(|(other, o)| (other, o.pos.chebyshev(pos)))
+            .min_by_key(|&(_, d)| d)
+    }
+
     /// Nothing solid between two points.
     fn clear_line(&self, a: Point, b: Point) -> bool {
         let line = crate::inventory::line(a, b);
@@ -341,6 +388,7 @@ impl World {
             defender: Who::Player,
             damage,
         });
+        self.fight_noise();
         if damage.is_none()
             && self.wielded_family() == Some(Family::Blade)
             && let Some(Technique::Riposte { chance }) =
@@ -364,10 +412,18 @@ impl World {
 
     /// Whether a monster may step onto `p`.
     fn can_enter(&self, id: MonsterId, p: Point) -> bool {
-        let def = self.content.monster(self.floor.monsters[id].kind);
+        let m = &self.floor.monsters[id];
+        let def = self.content.monster(m.kind);
+        let heedless = m.beckoned > 0;
+        let tile = self.map().tile(p);
+        let near_fire = || Direction::ALL.iter().any(|&d| self.floor.is_burning(p + d));
         self.map().is_walkable(p)
             && p != self.player.pos
             && self.floor.monster_at(p).is_none()
+            && tile != Tile::DoorSealed
+            && (tile != Tile::DoorClosed || def.faction.opens_doors())
+            && (heedless || !self.floor.is_burning(p))
+            && (heedless || def.faction != Faction::Swarm || !near_fire())
             && !(def.has(|t| *t == Trait::ShunsLight) && self.floor.ambient_light(p).is_lit())
             && !(def.faction == Faction::Dreaming && self.floor.is_sanctified(p))
     }
@@ -424,6 +480,14 @@ impl World {
 
     /// Moves a monster one step. The Taken flinch on stepping onto holy ground.
     fn move_monster(&mut self, id: MonsterId, to: Point) {
+        // A shut door takes an action to open.
+        if self.map().tile(to) == Tile::DoorClosed {
+            self.floor.set_tile(to, Tile::Door);
+            return;
+        }
+        if self.floor.has_oil(to) && self.slips(to) {
+            self.floor.monsters[id].slipping = true;
+        }
         let from = self.floor.monsters[id].pos;
         let onto_holy = self.floor.is_sanctified(to) && !self.floor.is_sanctified(from);
         let monster = &mut self.floor.monsters[id];

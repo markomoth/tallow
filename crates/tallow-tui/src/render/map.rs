@@ -89,6 +89,21 @@ impl Widget for MapView<'_> {
                 } else {
                     bg
                 };
+                let bg = if floor.has_oil(p) && floor.is_explored(p) && !floor.is_burning(p) {
+                    if floor.is_visible(p) {
+                        palette::OIL_BG
+                    } else {
+                        remember_bg(palette::OIL_BG)
+                    }
+                } else {
+                    bg
+                };
+                let fire = floor.is_burning(p) && floor.is_visible(p);
+                let bg = if fire {
+                    palette::FIRE_BG.map(|c| (f32::from(c) * pulse) as u8)
+                } else {
+                    bg
+                };
                 let decoy = floor.decoy().filter(|d| d.at == p && floor.is_visible(p));
                 let corpse = floor.corpse_at(p).filter(|_| floor.is_explored(p));
                 let monster = floor
@@ -114,6 +129,14 @@ impl Widget for MapView<'_> {
                     if monster.compelled > 0 {
                         cell.modifier.insert(Modifier::UNDERLINED);
                     }
+                } else if fire {
+                    // Flames flicker through three colors and two shapes.
+                    let i = (frame as usize + (p.x * 7 + p.y * 3) as usize) % 3;
+                    let glyph = if i == 1 { '"' } else { '^' };
+                    cell.set_char(glyph)
+                        .set_fg(rgb(palette::FIRE_FG[i]))
+                        .set_bg(rgb(bg));
+                    cell.modifier.insert(Modifier::BOLD);
                 } else if decoy.is_some() {
                     let flicker = 0.8 + 0.2 * (self.time * 11.0).sin();
                     let fg =
@@ -177,7 +200,23 @@ fn tile_look(floor: &Floor, p: Point) -> Option<Look> {
     };
     let look = match map.tile(p) {
         Tile::Floor => plain('.', palette::FLOOR_FG),
-        Tile::Door => plain('+', palette::DOOR_FG),
+        Tile::Door => plain('\'', palette::DOOR_FG),
+        Tile::DoorClosed => plain('+', palette::DOOR_FG),
+        Tile::DoorSealed => plain('+', palette::SEAL_FG),
+        Tile::ColdBrazier => plain('&', palette::COLD_BRAZIER_FG),
+        Tile::Pew => plain('=', palette::PEW_FG),
+        Tile::BellRope => Look {
+            glyph: '|',
+            fg: palette::BELL_FG,
+            bg: palette::WALL_BG,
+            emissive: false,
+        },
+        Tile::Bookshelf => Look {
+            glyph: '#',
+            fg: palette::SHELF_FG,
+            bg: palette::SHELF_BG,
+            emissive: false,
+        },
         Tile::StairsDown => plain('>', palette::STAIRS_DOWN_FG),
         Tile::StairsUp => plain('<', palette::STAIRS_UP_FG),
         Tile::Brazier => Look {

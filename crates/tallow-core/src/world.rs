@@ -129,6 +129,10 @@ pub struct World {
     pub(crate) studied: HashSet<KindId>,
     pub(crate) rite_rng: GameRng,
     pub(crate) death: Option<Death>,
+    /// You were warned about the fire at this tile; stepping in again goes ahead.
+    fire_warned: Option<Point>,
+    /// The warning from the previous command, valid for this one only.
+    fire_ok: Option<Point>,
 }
 
 impl World {
@@ -188,6 +192,8 @@ impl World {
             studied: HashSet::new(),
             rite_rng: rng::stream(seed, Stream::Rites),
             death: None,
+            fire_warned: None,
+            fire_ok: None,
         };
         // The acolyte comes down with what was at hand.
         for (id, equip) in [
@@ -215,7 +221,7 @@ impl World {
 
     fn generate_floor(content: &Content, seed: u64, depth: u8, next_item: &mut u32) -> Floor {
         let mut rng = rng::floor_rng(seed, depth);
-        let layout = generate::crypt(&mut rng, depth < MAX_DEPTH);
+        let layout = generate::floor(&mut rng, depth, depth < MAX_DEPTH);
         let spawns = spawn::populate(&mut rng, content, &layout.map, layout.start, depth);
         let tallow = spawn::place_tallow(&mut rng, &layout.map, layout.start);
         let items = spawn::place_items(&mut rng, content, &layout.map, layout.start, depth);
@@ -290,6 +296,18 @@ impl World {
         self.floor = Self::generate_floor(self.content, self.seed, depth, &mut self.next_item);
         self.player.pos = self.floor.arrival();
         self.update_view();
+    }
+
+    /// Puts things in the pack. For testing.
+    pub fn dev_give(&mut self, id: &str, count: u32) {
+        if let Some(kind) = self.content.item_by_id(id) {
+            let item = Item {
+                id: self.new_item_id(),
+                kind,
+                count,
+            };
+            self.add_to_pack(item);
+        }
     }
 
     /// Knows every rite. For testing.
@@ -379,7 +397,9 @@ impl World {
         if self.death.is_some() {
             return Vec::new();
         }
+        self.fire_ok = self.fire_warned.take();
         let mut events = self.resolve(command);
+        self.fire_ok = None;
         let burden = self.burden();
         if burden != self.last_burden {
             self.last_burden = burden;
@@ -408,6 +428,7 @@ impl World {
             Command::Fire { target } => self.fire(target),
             Command::ChooseBoon(index) => self.choose_boon(index),
             Command::Study => self.study(),
+            Command::CloseDoor => self.close_doors(),
             Command::Render => self.render(),
             Command::Cast { rite, target } => self.cast(rite, target),
             Command::Ascend => match self.map().tile(self.player.pos) {
@@ -440,9 +461,16 @@ impl World {
         } else if let Some((id, bonus)) = self.reach_target(dir) {
             self.player_attack(id, bonus, &mut events);
         } else {
+            if let Some(events) = self.use_tile(target) {
+                return events;
+            }
             let tile = self.map().tile(target);
             if !tile.is_walkable() {
                 return vec![Event::PlayerBlocked { at: target, tile }];
+            }
+            if self.floor.is_burning(target) && self.fire_ok != Some(target) {
+                self.fire_warned = Some(target);
+                return vec![Event::FireAhead { at: target }];
             }
             match self.burden() {
                 Burden::Overloaded => return vec![Event::TooHeavy],
@@ -451,6 +479,10 @@ impl World {
             }
             self.player.pos = target;
             events.push(Event::PlayerMoved { to: target });
+            if self.slips(target) {
+                events.push(Event::Slipped { who: Who::Player });
+                cost += ACTION_COST;
+            }
             if let Some(i) = self.floor.tallow.iter().position(|t| t.at == target) {
                 let found = self.floor.tallow.swap_remove(i);
                 let amount = if self.has_passive(Passive::TallowThief) {
@@ -556,6 +588,7 @@ impl World {
         });
 
         self.wake(id);
+        self.fight_noise();
         let Some(damage) = damage else { return };
         if let Some(family) = family {
             self.train(Skill::of_family(family), damage.min(health_before), events);
@@ -740,6 +773,7 @@ impl World {
             if disturbed
                 || company
                 || matches!(underfoot, Tile::Door | Tile::StairsDown | Tile::StairsUp)
+                || self.floor.has_oil(self.player.pos)
                 || new_landmark
                 || new_door
                 || side_opened
@@ -758,7 +792,7 @@ impl World {
             .iter()
             .filter(|&&d| d != heading)
             .map(|&d| self.player.pos + d)
-            .filter(|&p| self.map().tile(p) == Tile::Door)
+            .filter(|&p| self.map().tile(p).is_door())
             .collect()
     }
 

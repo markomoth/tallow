@@ -15,14 +15,26 @@ pub enum Tile {
     #[default]
     Wall,
     Floor,
-    /// An open doorway. Opening, closing and barring come later.
+    /// An open door.
     Door,
+    /// A shut door. Blocks sight. You (and the Taken and the Remnant) open it by walking into it.
+    DoorClosed,
+    /// A door barred by the rite of Seal. Nothing opens it but you.
+    DoorSealed,
     /// The way further down.
     StairsDown,
     /// The way you came. Sealed during the descent.
     StairsUp,
     /// A burning iron bowl. Blocks movement, not sight. Gives light.
     Brazier,
+    /// A brazier gone cold. Touch your candle to it to light it.
+    ColdBrazier,
+    /// Shelves of old books. Blocks movement and sight. Burns.
+    Bookshelf,
+    /// A wooden pew. Walkable. Burns.
+    Pew,
+    /// A bell rope on the wall. Pull it (walk into it) and the bell rings out.
+    BellRope,
 }
 
 impl Tile {
@@ -30,18 +42,54 @@ impl Tile {
     pub const fn is_walkable(self) -> bool {
         matches!(
             self,
-            Tile::Floor | Tile::Door | Tile::StairsDown | Tile::StairsUp
+            Tile::Floor
+                | Tile::Door
+                | Tile::DoorClosed
+                | Tile::DoorSealed
+                | Tile::StairsDown
+                | Tile::StairsUp
+                | Tile::Pew
         )
     }
 
     /// Does this tile stop line of sight (and light)?
     pub const fn blocks_sight(self) -> bool {
-        matches!(self, Tile::Wall)
+        matches!(
+            self,
+            Tile::Wall | Tile::DoorClosed | Tile::DoorSealed | Tile::Bookshelf | Tile::BellRope
+        )
     }
 
     /// Worth stopping a run for when it first comes into view.
     pub const fn is_landmark(self) -> bool {
-        matches!(self, Tile::StairsDown | Tile::Brazier)
+        matches!(
+            self,
+            Tile::StairsDown | Tile::Brazier | Tile::ColdBrazier | Tile::BellRope
+        )
+    }
+
+    pub const fn is_door(self) -> bool {
+        matches!(self, Tile::Door | Tile::DoorClosed | Tile::DoorSealed)
+    }
+
+    /// Turns a fire burns on this tile, if it can burn at all on its own.
+    pub const fn fuel(self) -> Option<u8> {
+        match self {
+            Tile::Bookshelf => Some(10),
+            Tile::Pew => Some(6),
+            Tile::Door | Tile::DoorClosed | Tile::DoorSealed => Some(6),
+            _ => None,
+        }
+    }
+
+    /// Percent chance per turn that fire next door catches here.
+    pub const fn catch_chance(self) -> u32 {
+        match self {
+            Tile::Bookshelf => 30,
+            Tile::Pew => 30,
+            Tile::Door | Tile::DoorClosed | Tile::DoorSealed => 15,
+            _ => 0,
+        }
     }
 }
 

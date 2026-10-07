@@ -21,6 +21,7 @@ cargo run --release -- --seed 42   # replay a specific dungeon
 | `>` | Descend stairs |
 | `x` | Look (Tab cycles creatures) |
 | `c` | Snuff / light your candle |
+| `C` | Shut doors beside you |
 | `R` | Rest |
 | `g` | Pick up |
 | `i` | Pack |

@@ -52,6 +52,8 @@ Kept vague on purpose. Names below are placeholders until we like them.
 
 Factions have a hostility matrix. Mind control, lures, noise and light let you turn them on each other.
 
+**Matrix (M7):** the Dreaming attack the Swarm and the Taken; the Swarm attack the Taken; the Remnant attack all three; the Taken only want you. A creature goes for a hated creature it can see within 5 tiles when that one is nearer than you (or it can't see you). Struck creatures fight back. Turncoat makes a creature and its own kind enemies. The Taken and the Remnant open doors; the Dreaming and the Swarm can't. Look shows each creature's faction and whom it attacks.
+
 ---
 
 ## 3. The run
@@ -226,7 +228,14 @@ Target for v1: 16 rites (4 per school). No damage-only spells. Every rite change
 | Sanctify | Warding | 12 | self | Ground within 2 tiles is holy for 30 turns: the Dreaming can't enter (and leave it if caught on it), the Taken lose an action when they step on it. |
 | Exorcise | Warding | 15 | 3 | One of the Taken wakes and runs home (gone, counted for the epilogue). Bosses take 8 instead. |
 
-Still to come with M7's environment: Turncoat (Binding), Hush (Veil), Seal (Warding), and one more Communion rite.
+| Turncoat | Binding | 12 | 6 | It and its own kind become enemies for good. It still hates you. Not on bosses. |
+| Beckon | Binding | 6 | 7 | It walks to you for up to 6 steps, calm and heedless of fire and oil, then wakes. |
+| Exchange | Communion | 8 | 6 | You and it trade places. |
+| Hush | Veil | 4 | self | 25 turns: your fights make no noise. |
+| Seal | Warding | 6 | 5 | A door shuts and holds for 40 turns; nothing but you can open it (opening breaks the seal). It still burns. |
+| Banish | Warding | 10 | 6 | A creature of the Dreaming goes far away on this floor (25+ steps, out of sight) and forgets you. Not on bosses. |
+
+All 16 v1 rites exist as of M7.
 
 **Creatures fighting each other (M6):** a creature struck by another turns on it until one dies or they're 10+ tiles apart. M7 adds the faction hostility matrix on top.
 
@@ -259,11 +268,11 @@ Still to come with M7's environment: Turncoat (Binding), Hush (Veil), Seal (Ward
 |---|---|
 | Melee | Sickle, cleaver, censer-on-chain, iron candlestick, boathook, verger's staff |
 | Ranged | Sling (stones also probe anomalies, see §8), crossbow |
-| Throwables | Throwing knives, holy water; later oil flask, smoke pot, chalk (draws a ward line) |
+| Throwables | Throwing knives, holy water (also leaves the ground holy for 20 turns), fire flask (bursts into flame in a cross where it breaks, never on your own tile), lamp oil (spills oil around where it breaks), handbell (rings where it lands, can be picked up again); later smoke pot, chalk (draws a ward line) |
 | Vestments | Cassock, gambeson, sexton's leathers, choir mail (heavy) |
 | Tinctures | Mending (+health), steadying (−dread), seeing (reveals the floor around you) |
 | Texts | Hymnal page (Warding), heretic's note (Binding), anatomist's notes (Communion), lecture fragment (Veil). Read with `a` in the pack: 3 quiet turns, then a rite. Used up. |
-| Tools | Handbell (noise lure), crowbar (pry, break), tallow lumps, incense |
+| Tools | Handbell (ring it with `a`, or throw it), later crowbar (pry, break), incense |
 
 ### Identification: known category, learn by use
 
@@ -285,7 +294,15 @@ The room is a weapon. All of these must be readable on screen.
 - **Bells:** wall bells and handbells make noise; noise draws nearby creatures. Lure factions into each other.
 - **Doors:** open, close, bar, Seal. Wooden ones burn.
 - **Rotten floors:** look different, collapse under weight, drop you one floor. Never on the critical path without an alternative.
-- **Water:** shallow slows you; deep drowns your candle (confirm prompt).
+- **Water:** shallow slows you; deep drowns your candle (confirm prompt). (M8, with the Drowned Stacks.)
+
+**How it works (M7):**
+- **Doors** (`'` open, `+` shut, gold `+` sealed): walk into a shut door to open it (a turn). `C` shuts every open door beside you with nothing in the doorway. 40% of doors start shut; shut doors block sight and light.
+- **Fire** (`^` flickering): fuel by tile, shelves 10 turns, pews and doors 6, oil 5, bare floor 3 (a flask only). Each turn fire may catch a neighbor: shelves and pews 30%, doors 15%, oil 70%. What burns away becomes open floor. Fire lights its surroundings (radius 2), burns bodies, and does 2–4 a turn to whatever stands in it (the Swarm ×2; the Swarm also won't step next to it). Creatures won't walk into fire unless Beckoned. Walking into fire yourself needs a second step in the same direction.
+- **Oil:** dark yellow floor. 25% of steps onto it slip and lose an action (you and creatures). It catches fire fast.
+- **Noise:** a bell rope (`|` on a wall, pull it by walking into it) is heard 18 steps away; a handbell 12; a fight 5 (not under Hush). Creatures that hear it come to look. The Taken within 4 steps of a bell cower for 4 actions instead. Relentless hunters and creatures already fighting ignore noise.
+- **Braziers:** 40% start cold (grey `&`). Walk into one with your candle lit to light it. Braziers keep lantern-eaters off and ease dread.
+- **Furniture:** Collegium floors and deeper (4+) get libraries: rows of shelves (`#` in brown) with floor all around each row, so they never cut a floor in two. Crypt floors get chapels with pews (`=`, walkable). Most floors have one bell rope.
 
 ---
 
@@ -383,6 +400,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `x` | Look (cursor; Tab cycles creatures, Esc leaves) |
 | `s` | Study / render corpse |
 | `c` | Snuff / relight candle |
+| `C` | Shut the open doors beside you |
 | `R` | Rest until healed (or calm, by a brazier) |
 | `o` | Auto-explore |
 | `@` | Character sheet: skills, techniques, boons |
@@ -501,7 +519,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | M4 ✅ | Items & weight | Pick up, equip, throw, get Burdened, learn a tincture by drinking it | 3–4 h |
 | M5 ✅ | Skills & levels | See Blades rank up from use, pick 1 of 3 boons on level up | 2–3 h |
 | M6 ✅ | Rites & study | Study a corpse, learn Compel from a page, mind-control a Proctor into a Taken | 3–4 h |
-| M7 | Factions & environment | Ring a bell to pull a swarm into a nightmare; set a library on fire | 4–5 h |
+| M7 ✅ | Factions & environment | Ring a bell to pull a swarm into a nightmare; set a library on fire | 4–5 h |
 
 ### Phase C: The full run (~3–4 days)
 

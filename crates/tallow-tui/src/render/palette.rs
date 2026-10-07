@@ -16,6 +16,15 @@ pub const DOOR_FG: Rgb = [196, 140, 82];
 pub const STAIRS_DOWN_FG: Rgb = [236, 224, 198];
 pub const STAIRS_UP_FG: Rgb = [140, 130, 118];
 pub const BRAZIER_FG: Rgb = [255, 156, 64];
+pub const COLD_BRAZIER_FG: Rgb = [120, 110, 100];
+pub const SHELF_FG: Rgb = [150, 96, 60];
+pub const SHELF_BG: Rgb = [48, 30, 22];
+pub const PEW_FG: Rgb = [140, 98, 64];
+pub const BELL_FG: Rgb = [226, 196, 110];
+pub const SEAL_FG: Rgb = [236, 214, 130];
+pub const FIRE_FG: [Rgb; 3] = [[255, 200, 80], [255, 130, 40], [230, 70, 30]];
+pub const FIRE_BG: Rgb = [110, 34, 10];
+pub const OIL_BG: Rgb = [52, 46, 18];
 
 /// Remembered tiles, out of sight: a cold blue-grey.
 pub const MEMORY_TINT: [f32; 3] = [0.30, 0.34, 0.46];

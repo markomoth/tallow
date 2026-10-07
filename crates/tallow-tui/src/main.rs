@@ -26,6 +26,7 @@ struct Options {
     seed: Option<u64>,
     dev_depth: Option<u8>,
     dev_rites: bool,
+    dev_kit: bool,
 }
 
 fn main() -> Result<()> {
@@ -46,6 +47,16 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
     }
     if options.dev_rites {
         app.world_mut().dev_learn_all_rites();
+    }
+    if options.dev_kit {
+        for (id, n) in [
+            ("fire_flask", 3),
+            ("lamp_oil", 2),
+            ("handbell", 1),
+            ("holy_water", 2),
+        ] {
+            app.world_mut().dev_give(id, n);
+        }
     }
     let started = Instant::now();
     while !app.should_quit() {
@@ -81,6 +92,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
                 options.dev_depth = Some(value.parse().context("bad depth")?);
             }
             "--dev-rites" => options.dev_rites = true,
+            "--dev-kit" => options.dev_kit = true,
             "-h" | "--help" => bail!(USAGE),
             other => bail!("unknown argument {other:?}\n{USAGE}"),
         }

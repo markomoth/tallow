@@ -38,6 +38,8 @@ pub enum Source {
     Thrall,
     /// Creatures fighting each other.
     Other,
+    /// Burned to death. Insight if it burned, no kill boons.
+    Fire,
 }
 
 impl World {
@@ -220,7 +222,7 @@ impl World {
         };
         match source {
             Source::Other => return,
-            Source::Thrall => return self.gain_insight(insight, events),
+            Source::Thrall | Source::Fire => return self.gain_insight(insight, events),
             _ => {}
         }
         self.trigger(Trigger::Kill, events);

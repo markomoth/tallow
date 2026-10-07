@@ -105,14 +105,26 @@ pub fn item_stats(world: &World, kind: ItemKindId) -> Vec<String> {
             "Read it (a few quiet turns) to learn a {} rite you don't know.",
             school_name(*school)
         )),
+        ItemClass::Bell { noise } => lines.push(format!(
+            "Ring it (a) or throw it: heard {noise} steps away. The Taken close by cower."
+        )),
         ItemClass::Ammo | ItemClass::Throwable => {}
     }
     if let Some(thrown) = def.thrown {
         match thrown.holy {
             Some(holy) => lines.push(format!(
-                "Thrown: burns the Dreaming {}–{}, the Taken {}–{}.",
+                "Thrown: burns the Dreaming {}–{}, the Taken {}–{}. Leaves the ground holy for a while.",
                 holy.dreaming.0, holy.dreaming.1, holy.taken.0, holy.taken.1
             )),
+            None if thrown.fire => lines.push(
+                "Thrown: bursts into flame where it breaks, catching books, pews, doors and oil."
+                    .into(),
+            ),
+            None if thrown.oil => lines
+                .push("Thrown: spills oil around where it breaks. Slippery; burns fast.".into()),
+            None if thrown.noise.is_some() => {
+                lines.push("Thrown: rings where it lands, and can be picked up again.".into())
+            }
             None => lines.push(format!(
                 "Thrown: {}–{} · accuracy {:+}",
                 thrown.damage.0, thrown.damage.1, thrown.accuracy
@@ -177,10 +189,18 @@ pub fn rite_numbers(world: &World, rite: RiteId) -> String {
         RiteEffect::Exorcise { damage } => {
             format!("frees one of the Taken (bosses: {})", scale(damage))
         }
+        RiteEffect::Turncoat => "it turns on its own kind".into(),
+        RiteEffect::Beckon { actions } => format!("up to {} steps", scale(actions)),
+        RiteEffect::Exchange => "trade places".into(),
+        RiteEffect::Hush { turns } => format!("{} turns", scale(turns)),
+        RiteEffect::Seal { turns } => format!("{} turns", scale(turns)),
+        RiteEffect::Banish => "the Dreaming only".into(),
     };
     let reach = match def.effect.target() {
         RiteTarget::Myself => "on yourself".to_string(),
-        RiteTarget::Creature | RiteTarget::Tile => format!("range {}", def.range),
+        RiteTarget::Creature | RiteTarget::Tile | RiteTarget::Door => {
+            format!("range {}", def.range)
+        }
     };
     format!("dread +{} · {reach} · {what}", world.rite_cost(rite))
 }

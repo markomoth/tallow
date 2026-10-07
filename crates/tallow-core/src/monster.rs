@@ -50,6 +50,12 @@ pub struct Monster {
     pub foe: Option<MonsterId>,
     /// Stepped onto holy ground: loses its next action.
     pub(crate) flinching: bool,
+    /// Turned against its own kind by Turncoat.
+    pub turned: bool,
+    /// Actions left walking to you under Beckon, heedless of fire.
+    pub beckoned: u32,
+    /// Slipped on oil: loses its next action.
+    pub(crate) slipping: bool,
 }
 
 impl Monster {
@@ -72,6 +78,9 @@ impl Monster {
             carries_dread: false,
             foe: None,
             flinching: false,
+            turned: false,
+            beckoned: 0,
+            slipping: false,
         }
     }
 }

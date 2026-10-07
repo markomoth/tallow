@@ -175,6 +175,7 @@ fn conditions(world: &World) -> Line<'static> {
         Burden::Overloaded => Some("can't move!"),
     };
     let shroud = world.shrouded().then_some(("shrouded", palette::GOOD));
+    let hush = world.hushed().then_some(("hushed", palette::GOOD));
     let eyes = world
         .borrowed_eyes()
         .is_some()
@@ -183,6 +184,7 @@ fn conditions(world: &World) -> Line<'static> {
         .into_iter()
         .chain(load.map(|w| (w, palette::DANGER)))
         .chain(shroud)
+        .chain(hush)
         .chain(eyes)
     {
         if !spans.is_empty() {
@@ -258,6 +260,7 @@ fn keys() -> Vec<Line<'static>> {
         key("t f", "throw, fire"),
         key("s z", "study, rites"),
         key("c >", "candle, down"),
+        key("C", "shut doors"),
         key("x @", "look, self"),
         key("q", "quit"),
     ]
@@ -302,6 +305,7 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             Span::styled(capitalize(&def.name), text().add_modifier(Modifier::BOLD)),
         ]));
         lines.push(Line::styled(def.description.clone(), dim()));
+        lines.push(Line::styled(faction_line(def.faction), dim()));
         let mind = match info.mind {
             _ if info.compelled > 0 => "bound to your will".to_string(),
             _ if info.terrified > 0 => "fleeing your dread".to_string(),
@@ -417,6 +421,18 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
         lines.push(Line::styled("You don't know what is there.", dim()));
     } else {
         lines.push(Line::styled(tile_line(floor.map().tile(cursor)), text()));
+        if floor.is_burning(cursor) && floor.is_visible(cursor) {
+            lines.push(Line::styled(
+                "On fire! It burns whatever stands in it, the Swarm worst of all.",
+                Style::new().fg(palette::DANGER),
+            ));
+        }
+        if floor.has_oil(cursor) {
+            lines.push(Line::styled(
+                "Spilled lamp oil: slippery, and it burns fast.",
+                text(),
+            ));
+        }
         if floor.is_sanctified(cursor) {
             lines.push(Line::styled(
                 "Holy ground. The Dreaming can't cross it; the Taken flinch.",
@@ -483,6 +499,28 @@ fn target_panel(world: &World, aim: Aim, cursor: Point, path_len: usize) -> Vec<
     lines
 }
 
+/// Who a faction is and whom it attacks on sight.
+fn faction_line(faction: tallow_core::Faction) -> String {
+    use tallow_core::Faction;
+    let name = |f: Faction| match f {
+        Faction::Dreaming => "the Dreaming",
+        Faction::Taken => "the Taken",
+        Faction::Swarm => "the Swarm",
+        Faction::Remnant => "the Remnant",
+    };
+    let hated: Vec<&str> = Faction::ALL
+        .into_iter()
+        .filter(|&f| faction.hates(f))
+        .map(name)
+        .collect();
+    let fights = match hated.as_slice() {
+        [] => "Wants only you.".to_string(),
+        [one] => format!("Attacks {one} on sight."),
+        [rest @ .., last] => format!("Attacks {} and {last} on sight.", rest.join(", ")),
+    };
+    format!("{} · {fights}", capitalize(name(faction)))
+}
+
 fn trait_line(t: &Trait) -> String {
     match *t {
         Trait::PackCourage => "flees when no packmate is near.".into(),
@@ -502,7 +540,19 @@ fn tile_line(tile: Tile) -> &'static str {
     match tile {
         Tile::Floor => "Flagstones, worn smooth by centuries of feet.",
         Tile::Wall => "Old stone, sweating in the cold.",
-        Tile::Door => "A doorway. The door hangs open.",
+        Tile::Door => "An open door. Wood: it burns. C closes doors beside you.",
+        Tile::DoorClosed => {
+            "A shut door. Walk into it to open it. The Taken and the Remnant can open doors; nightmares and vermin can't."
+        }
+        Tile::DoorSealed => "A door held shut by your Seal. Only you can open it.",
+        Tile::ColdBrazier => {
+            "A cold brazier. Walk into it with your candle lit to light it: braziers keep the Dreaming off and ease dread."
+        }
+        Tile::Bookshelf => "Shelves of crumbling books. They would burn well.",
+        Tile::Pew => "A wooden pew. You can climb over it. It would burn.",
+        Tile::BellRope => {
+            "A bell rope. Pull it (walk into it) and the bell rings out: everything within earshot comes to you. The Taken close by cower."
+        }
         Tile::StairsDown => "Stairs down. There is no coming back up.",
         Tile::StairsUp => "The way you came. Sealed now.",
         Tile::Brazier => {

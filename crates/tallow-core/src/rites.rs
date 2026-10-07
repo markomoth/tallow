@@ -69,6 +69,18 @@ pub enum RiteEffect {
     Sanctify { turns: u32, radius: i32 },
     /// Frees one of the Taken. Bosses only take damage.
     Exorcise { damage: u32 },
+    /// The creature turns on its own kind, and they on it.
+    Turncoat,
+    /// The creature walks to you, heedless of fire, then wakes.
+    Beckon { actions: u32 },
+    /// You and the creature trade places.
+    Exchange,
+    /// Your fights make no noise.
+    Hush { turns: u32 },
+    /// A door shuts and nothing but you can open it.
+    Seal { turns: u32 },
+    /// A creature of the Dreaming is sent far away on this floor.
+    Banish,
 }
 
 /// What a rite is aimed at.
@@ -77,6 +89,8 @@ pub enum RiteTarget {
     Creature,
     /// Open ground in view.
     Tile,
+    /// A door in view.
+    Door,
     Myself,
 }
 
@@ -84,7 +98,10 @@ impl RiteEffect {
     pub const fn target(self) -> RiteTarget {
         match self {
             RiteEffect::FalseFlame { .. } => RiteTarget::Tile,
-            RiteEffect::Shroud { .. } | RiteEffect::Sanctify { .. } => RiteTarget::Myself,
+            RiteEffect::Seal { .. } => RiteTarget::Door,
+            RiteEffect::Shroud { .. } | RiteEffect::Sanctify { .. } | RiteEffect::Hush { .. } => {
+                RiteTarget::Myself
+            }
             _ => RiteTarget::Creature,
         }
     }
@@ -118,6 +135,10 @@ pub enum RiteFailure {
     Immune,
     /// That creature already carries your dread.
     AlreadyCarries,
+    /// Seal needs a door with nothing in the doorway.
+    NotDoor,
+    /// Banish only works on the Dreaming.
+    NotDreaming,
 }
 
 /// A decoy light from False Flame.
@@ -141,6 +162,8 @@ pub struct Rites {
     pub shroud_until: Option<u64>,
     /// Borrowed Eyes: whose, until when, and how far they see.
     pub borrowed: Option<(MonsterId, u64, i32)>,
+    /// Hush lasts until this turn.
+    pub hush_until: Option<u64>,
 }
 
 /// Insight for learning a rite.
@@ -151,6 +174,8 @@ pub const INSIGHT_OLD_TEXT: u32 = 6;
 pub const INSIGHT_EXORCISM: u32 = 10;
 /// Bosses resist Binding: its durations are divided by this.
 const BOSS_RESISTANCE: u32 = 3;
+/// Banish sends a creature at least this many steps from you.
+const BANISH_DISTANCE: u32 = 25;
 
 impl World {
     /// Rites the acolyte knows, in the order learned.
@@ -251,6 +276,23 @@ impl World {
                     Ok(None)
                 }
             }
+            RiteTarget::Door => {
+                let tile = self.map().tile(target);
+                let blocked = self.floor.monster_at(target).is_some()
+                    || target == here
+                    || self.floor.items_at(target).next().is_some()
+                    || self.floor.corpse_at(target).is_some();
+                if !self.floor.is_explored(target)
+                    || !matches!(tile, crate::map::Tile::Door | crate::map::Tile::DoorClosed)
+                    || blocked
+                {
+                    Err(RiteFailure::NotDoor)
+                } else if target.chebyshev(here) > def.range {
+                    Err(RiteFailure::OutOfRange)
+                } else {
+                    Ok(None)
+                }
+            }
             RiteTarget::Creature => {
                 let id = self
                     .floor
@@ -270,11 +312,19 @@ impl World {
                     RiteEffect::Transference { .. } if m.carries_dread => {
                         Err(RiteFailure::AlreadyCarries)
                     }
+                    RiteEffect::Banish if mdef.faction != Faction::Dreaming => {
+                        Err(RiteFailure::NotDreaming)
+                    }
                     RiteEffect::Compel { .. }
                     | RiteEffect::Unsee { .. }
                     | RiteEffect::Transference { .. }
+                    | RiteEffect::Turncoat
+                    | RiteEffect::Beckon { .. }
                         if relentless =>
                     {
+                        Err(RiteFailure::Immune)
+                    }
+                    RiteEffect::Turncoat | RiteEffect::Banish if mdef.boss => {
                         Err(RiteFailure::Immune)
                     }
                     _ => Ok(Some(id)),
@@ -398,6 +448,76 @@ impl World {
                     self.gain_insight(INSIGHT_EXORCISM, &mut events);
                 }
             }
+            RiteEffect::Turncoat => {
+                let id = victim.expect("checked");
+                let m = &mut self.floor.monsters[id];
+                m.turned = true;
+                m.foe = None;
+                events.push(Event::Turned { kind: m.kind });
+            }
+            RiteEffect::Beckon { actions } => {
+                let id = victim.expect("checked");
+                let boss = self.content.monster(self.floor.monsters[id].kind).boss;
+                let actions = self.potent(rite, actions) / if boss { BOSS_RESISTANCE } else { 1 };
+                let m = &mut self.floor.monsters[id];
+                m.beckoned = actions.max(1);
+                m.winding_up = None;
+                m.foe = None;
+                events.push(Event::Beckoned { kind: m.kind });
+            }
+            RiteEffect::Exchange => {
+                let id = victim.expect("checked");
+                std::mem::swap(&mut self.floor.monsters[id].pos, &mut self.player.pos);
+                self.wake(id);
+                events.push(Event::Exchanged {
+                    kind: self.floor.monsters[id].kind,
+                });
+            }
+            RiteEffect::Hush { turns } => {
+                let until = self.turn() + u64::from(self.potent(rite, turns));
+                self.player.rite_state.hush_until = Some(until);
+                events.push(Event::Hushed);
+            }
+            RiteEffect::Seal { turns } => {
+                let until = self.turn() + u64::from(self.potent(rite, turns));
+                self.floor.seals.retain(|&(p, _)| p != target);
+                self.floor.seals.push((target, until));
+                self.floor.set_tile(target, crate::map::Tile::DoorSealed);
+                events.push(Event::Sealed { at: target });
+            }
+            RiteEffect::Banish => {
+                let id = victim.expect("checked");
+                let kind = self.floor.monsters[id].kind;
+                let dist = crate::map::path::distances(self.map(), self.player.pos);
+                let mut far: Vec<(u32, Point)> = self
+                    .map()
+                    .points()
+                    .filter(|&p| self.floor.monster_at(p).is_none() && !self.floor.is_visible(p))
+                    .filter_map(|p| dist.at(p).map(|d| (d, p)))
+                    .filter(|&(d, p)| {
+                        d >= BANISH_DISTANCE && self.map().tile(p) == crate::map::Tile::Floor
+                    })
+                    .collect();
+                if far.is_empty() {
+                    far = self
+                        .map()
+                        .points()
+                        .filter(|&p| self.floor.monster_at(p).is_none())
+                        .filter_map(|p| dist.at(p).map(|d| (d, p)))
+                        .collect();
+                    far.sort();
+                    far.reverse();
+                    far.truncate(1);
+                }
+                if let Some(&(_, to)) = far.choose(&mut self.rite_rng) {
+                    let m = &mut self.floor.monsters[id];
+                    m.pos = to;
+                    m.mind = Mind::Unaware;
+                    m.winding_up = None;
+                    m.foe = None;
+                }
+                events.push(Event::Banished { kind });
+            }
         }
         self.shift_dread(cost as i32 * 100, &mut events);
         self.train(def.school.skill(), cost.max(4), &mut events);
@@ -425,6 +545,15 @@ impl World {
             self.player.rite_state.borrowed = None;
             events.push(Event::EyesReturned);
         }
+        if self
+            .player
+            .rite_state
+            .hush_until
+            .is_some_and(|until| now >= until)
+        {
+            self.player.rite_state.hush_until = None;
+            events.push(Event::HushFaded);
+        }
         if self.floor.decoy.is_some_and(|d| now >= d.until) {
             self.floor.decoy = None;
             events.push(Event::FalseFlameOut);
@@ -437,6 +566,11 @@ impl World {
     /// Shroud is on: only what's beside you notices you.
     pub fn shrouded(&self) -> bool {
         self.player.rite_state.shroud_until.is_some()
+    }
+
+    /// Hush is on: your fights make no noise.
+    pub fn hushed(&self) -> bool {
+        self.player.rite_state.hush_until.is_some()
     }
 
     /// The creature whose eyes you're borrowing, if any.
@@ -795,5 +929,135 @@ mod tests {
         world.player.skills.add(Skill::Veil, 1000);
         assert_eq!(world.rite_potency(compel), 200);
         assert_eq!(world.rite_cost(shroud), 4);
+    }
+
+    #[test]
+    fn a_turncoat_fights_its_own_kind() {
+        let mut world = hall();
+        let turncoat = learn(&mut world, "turncoat");
+        let a = world.spawn_monster(kind("parishioner"), Point::new(5, 2));
+        let b = world.spawn_monster(kind("parishioner"), Point::new(6, 2));
+        assert!(!world.hostile(a, b));
+        world.apply(Command::Cast {
+            rite: turncoat,
+            target: Point::new(5, 2),
+        });
+        assert!(world.hostile(a, b) && world.hostile(b, a));
+    }
+
+    #[test]
+    fn beckon_walks_a_creature_through_fire() {
+        let mut world = hall();
+        let beckon = learn(&mut world, "beckon");
+        for y in 1..=3 {
+            world.ignite(Point::new(4, y), true);
+            world.floor.set_fire(Point::new(4, y), 30);
+        }
+        let id = world.spawn_monster(kind("parishioner"), Point::new(7, 2));
+        world.player.health = 999;
+        let events = world.apply(Command::Cast {
+            rite: beckon,
+            target: Point::new(7, 2),
+        });
+        assert!(events.contains(&Event::Beckoned {
+            kind: kind("parishioner")
+        }));
+        let mut log = Vec::new();
+        for _ in 0..12 {
+            log.extend(world.apply(Command::Wait));
+        }
+        assert!(
+            log.iter().any(|e| matches!(
+                e,
+                Event::Burned {
+                    who: crate::events::Who::Monster(_),
+                    ..
+                }
+            )) || world.floor().monster(id).is_none(),
+            "it walked through the fire"
+        );
+    }
+
+    #[test]
+    fn exchange_trades_places() {
+        let mut world = hall();
+        let exchange = learn(&mut world, "exchange");
+        let at = Point::new(5, 3);
+        let id = world.spawn_monster(kind("parishioner"), at);
+        world.apply(Command::Cast {
+            rite: exchange,
+            target: at,
+        });
+        assert_eq!(world.player().pos, at);
+        assert_ne!(world.floor().monster(id).unwrap().pos, at);
+    }
+
+    #[test]
+    fn a_sealed_door_holds_creatures_but_not_you() {
+        let (map, start) = prefab::parse("##########\n#@+......#\n##########").unwrap();
+        let mut world = World::from_map(map, start);
+        let seal = learn(&mut world, "seal");
+        let door = Point::new(2, 1);
+        world.apply(Command::Cast {
+            rite: seal,
+            target: door,
+        });
+        assert_eq!(world.map().tile(door), crate::map::Tile::DoorSealed);
+        let id = world.spawn_monster(kind("parishioner"), Point::new(6, 1));
+        world.floor.monsters[id].mind = Mind::Hunting { last_seen: start };
+        wait(&mut world, 10);
+        assert!(world.floor().monster(id).unwrap().pos.x > 2);
+        let events = world.apply(Command::Move(Direction::E));
+        assert!(events.contains(&Event::SealBroken { at: door }));
+        assert_eq!(world.map().tile(door), crate::map::Tile::Door);
+    }
+
+    #[test]
+    fn banish_sends_the_dreaming_away_and_refuses_others() {
+        let (map, start) = prefab::parse(&format!(
+            "{}\n#@{}#\n{}",
+            "#".repeat(60),
+            ".".repeat(57),
+            "#".repeat(60)
+        ))
+        .unwrap();
+        let mut world = World::from_map(map, start);
+        let banish = learn(&mut world, "banish");
+        let at = Point::new(4, 1);
+        world.spawn_monster(kind("gnawer"), at);
+        assert!(matches!(
+            world.apply(Command::Cast {
+                rite: banish,
+                target: at
+            })[..],
+            [Event::RiteFailed {
+                why: RiteFailure::NotDreaming,
+                ..
+            }]
+        ));
+        world.despawn_all();
+        let id = world.spawn_monster(kind("lantern_eater"), at);
+        world.apply(Command::Cast {
+            rite: banish,
+            target: at,
+        });
+        assert!(world.floor().monster(id).unwrap().pos.x >= 25);
+    }
+
+    #[test]
+    fn hush_silences_your_fights() {
+        let mut world = hall();
+        let hush = learn(&mut world, "hush");
+        world.apply(Command::Cast {
+            rite: hush,
+            target: world.player().pos,
+        });
+        assert!(world.hushed());
+        let far = world.spawn_monster(kind("parishioner"), Point::new(5, 3));
+        world.floor.monsters[far].unseeing = 99;
+        world.fight_noise();
+        assert_eq!(world.floor().monster(far).unwrap().mind, Mind::Unaware);
+        let events = wait(&mut world, 30);
+        assert!(events.contains(&Event::HushFaded));
     }
 }

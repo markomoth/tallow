@@ -12,6 +12,7 @@ pub mod combat;
 pub mod content;
 pub mod corpse;
 pub mod dread;
+pub mod environment;
 pub mod events;
 pub mod floor;
 pub mod geom;

@@ -188,6 +188,7 @@ impl App {
             Action::Candle => Command::ToggleCandle,
             Action::Rest => Command::Rest,
             Action::PickUp => Command::PickUp,
+            Action::CloseDoor => Command::CloseDoor,
             Action::Pack => {
                 self.mode = Mode::Pack {
                     purpose: PackPurpose::Browse,
@@ -302,7 +303,7 @@ impl App {
                     cursor: self.first_target(),
                 };
             }
-            RiteTarget::Tile => {
+            RiteTarget::Tile | RiteTarget::Door => {
                 self.mode = Mode::Target {
                     aim: Aim::Rite(rite),
                     cursor: self.world.player().pos,

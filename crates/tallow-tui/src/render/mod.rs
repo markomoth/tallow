@@ -140,6 +140,7 @@ fn cause_line(world: &World, cause: Cause) -> String {
     match cause {
         Cause::Attack(kind) => format!("Killed by {}", with_article(name(kind))),
         Cause::HeavyBlow(kind) => format!("Crushed by {}'s heavy blow", with_article(name(kind))),
+        Cause::Fire => "Burned to death".to_string(),
     }
 }
 

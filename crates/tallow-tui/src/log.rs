@@ -229,7 +229,10 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             format!("The {} isn't made for throwing.", thing(kind, 1)),
             Normal,
         ),
-        Event::BadTarget => ("Choose a target that isn't yourself.".into(), Normal),
+        Event::BadTarget => (
+            "Nothing can fly that way. Choose another target.".into(),
+            Normal,
+        ),
         Event::Thrown { .. } | Event::Fired { .. } => return None,
         Event::NoRangedWeapon => (
             "You have nothing ready to shoot. Equip a sling or crossbow.".into(),
@@ -442,6 +445,8 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
                 RiteFailure::AlreadyCarries => {
                     "It already carries your dread. It can hold no more."
                 }
+                RiteFailure::NotDoor => "It needs a door you know, with nothing in the doorway.",
+                RiteFailure::NotDreaming => "Only the Dreaming can be sent back into the dark.",
             }
             .into(),
             Normal,
@@ -517,6 +522,76 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             Normal,
         ),
         Event::SwappedPlaces { .. } => return None,
+
+        Event::BellRung { .. } => (
+            "A bell rings out through the dark. Things will come to see.".into(),
+            Danger,
+        ),
+        Event::FireSpread { .. } => (
+            "The shelves catch. The books go up like dry grass.".into(),
+            Danger,
+        ),
+        Event::FireOut => ("The last of the fire dies to embers.".into(), Normal),
+        Event::Burned {
+            who: Who::Player,
+            damage,
+        } => (format!("The fire burns you ({damage})!"), Danger),
+        Event::Burned {
+            who: Who::Monster(kind),
+            damage,
+        } => (format!("The {} burns ({damage}).", name(kind)), Normal),
+        Event::FireAhead { .. } => (
+            "That is fire. Step that way again to walk into it.".into(),
+            Danger,
+        ),
+        Event::Ignited { .. } => ("The flask bursts into flame!".into(), Danger),
+        Event::OilSpilled { .. } => ("Oil spreads across the floor.".into(), Normal),
+        Event::Slipped { who: Who::Player } => {
+            ("You slip on the oil and lose your footing.".into(), Normal)
+        }
+        Event::Slipped {
+            who: Who::Monster(kind),
+        } => (format!("The {} slips on the oil.", name(kind)), Normal),
+        Event::DoorOpened { .. } => ("You open the door.".into(), Normal),
+        Event::DoorShut { .. } => ("You shut the door.".into(), Normal),
+        Event::NoDoorToClose => ("There is no open door beside you.".into(), Normal),
+        Event::DoorBlocked => ("Something is in the doorway.".into(), Normal),
+        Event::SealBroken { .. } => ("You open the door, and your seal breaks.".into(), Normal),
+        Event::SealFaded { .. } => (
+            "A seal lapses. The door is only a door again.".into(),
+            Normal,
+        ),
+        Event::NeedFlame => ("You need a lit candle to light it.".into(), Normal),
+        Event::BrazierLit { .. } => (
+            "You touch your flame to the brazier. It roars up, warm and steady.".into(),
+            Good,
+        ),
+        Event::Consecrated { .. } => (
+            "Where the holy water fell, the ground is holy.".into(),
+            Good,
+        ),
+        Event::Turned { kind } => (
+            format!("The {} looks at its own kind with new hatred.", name(kind)),
+            Good,
+        ),
+        Event::Beckoned { kind } => (
+            format!("The {} comes toward you, calm and blank.", name(kind)),
+            Good,
+        ),
+        Event::Exchanged { kind } => (format!("You and the {} trade places.", name(kind)), Good),
+        Event::Hushed => ("The sounds you make fall dead around you.".into(), Good),
+        Event::HushFaded => (
+            "Your hush lifts. You can hear yourself again.".into(),
+            Normal,
+        ),
+        Event::Sealed { .. } => ("The door swings shut and holds.".into(), Good),
+        Event::Banished { kind } => (
+            format!(
+                "The {} is gone, back into the dark somewhere far from here.",
+                name(kind)
+            ),
+            Good,
+        ),
         Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => return None,
     };
     Some((text, tone))

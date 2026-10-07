@@ -24,6 +24,7 @@ pub enum Who {
 pub enum Cause {
     Attack(KindId),
     HeavyBlow(KindId),
+    Fire,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -349,6 +350,79 @@ pub enum Event {
     },
     /// You traded places with your thrall.
     SwappedPlaces {
+        kind: KindId,
+    },
+
+    /// A bell rang out at `at`. Creatures nearby will come to look.
+    BellRung {
+        at: Point,
+    },
+    /// Shelves caught fire.
+    FireSpread {
+        at: Point,
+        tile: Tile,
+    },
+    /// The last fire on the floor burned out.
+    FireOut,
+    Burned {
+        who: Who,
+        damage: u32,
+    },
+    /// Walking into fire needs a second step in the same direction. Costs no time.
+    FireAhead {
+        at: Point,
+    },
+    /// A thrown flask set fire where it broke.
+    Ignited {
+        at: Point,
+    },
+    OilSpilled {
+        at: Point,
+    },
+    Slipped {
+        who: Who,
+    },
+    DoorOpened {
+        at: Point,
+    },
+    DoorShut {
+        at: Point,
+    },
+    /// No open door beside you. Costs no time.
+    NoDoorToClose,
+    /// Something is in the doorway. Costs no time.
+    DoorBlocked,
+    /// You broke your own seal by opening the door.
+    SealBroken {
+        at: Point,
+    },
+    SealFaded {
+        at: Point,
+    },
+    /// A cold brazier needs a lit candle. Costs no time.
+    NeedFlame,
+    BrazierLit {
+        at: Point,
+    },
+    /// Holy water left the ground holy.
+    Consecrated {
+        at: Point,
+    },
+    Turned {
+        kind: KindId,
+    },
+    Beckoned {
+        kind: KindId,
+    },
+    Exchanged {
+        kind: KindId,
+    },
+    Hushed,
+    HushFaded,
+    Sealed {
+        at: Point,
+    },
+    Banished {
         kind: KindId,
     },
 }

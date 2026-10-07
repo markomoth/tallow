@@ -31,6 +31,9 @@ struct Shot {
     range: i32,
     breaks: bool,
     holy: Option<item::Holy>,
+    fire: bool,
+    oil: bool,
+    noise: Option<u32>,
 }
 
 impl World {
@@ -295,6 +298,13 @@ impl World {
         let effect = match self.content.item(item.kind).class {
             ItemClass::Tincture { effect } => effect,
             ItemClass::Text { .. } => return self.read(id),
+            ItemClass::Bell { noise } => {
+                let mut events = Vec::new();
+                let here = self.player.pos;
+                self.ring_bell(here, noise, &mut events);
+                self.pass_time(&mut events);
+                return events;
+            }
             _ => return self.toggle_equip(id),
         };
         self.take_from_pack(id, 1);
@@ -346,11 +356,14 @@ impl World {
             damage,
             breaks,
             holy,
+            fire,
+            oil,
+            noise,
         }) = self.content.item(item.kind).thrown
         else {
             return vec![Event::CantThrow { kind: item.kind }];
         };
-        if target == self.player.pos {
+        if target == self.player.pos || self.aim(target, THROW_RANGE).is_empty() {
             return vec![Event::BadTarget];
         }
         let thrown = self.take_from_pack(id, 1).expect("checked above");
@@ -361,6 +374,9 @@ impl World {
             range: THROW_RANGE,
             breaks,
             holy,
+            fire,
+            oil,
+            noise,
         };
         let mut events = vec![Event::Thrown { kind: thrown.kind }];
         self.launch(shot, thrown, target, &mut events);
@@ -391,7 +407,7 @@ impl World {
         else {
             return vec![Event::NoAmmo { kind: ammo_kind }];
         };
-        if target == self.player.pos {
+        if target == self.player.pos || self.aim(target, range).is_empty() {
             return vec![Event::BadTarget];
         }
         let round = self.take_from_pack(stack.id, 1).expect("found above");
@@ -402,6 +418,9 @@ impl World {
             range,
             breaks: false,
             holy: None,
+            fire: false,
+            oil: false,
+            noise: None,
         };
         let mut events = vec![Event::Fired { kind: ammo_kind }];
         self.launch(shot, round, target, &mut events);
@@ -478,6 +497,36 @@ impl World {
     }
 
     fn land(&mut self, shot: Shot, projectile: Item, at: Point, events: &mut Vec<Event>) {
+        if shot.holy.is_some() {
+            self.consecrate(at, events);
+        }
+        if shot.oil {
+            self.spill_oil(at);
+            events.push(Event::OilSpilled { at });
+        }
+        if shot.fire {
+            let cross = [
+                crate::geom::Direction::N,
+                crate::geom::Direction::S,
+                crate::geom::Direction::E,
+                crate::geom::Direction::W,
+            ];
+            // The flame splashes away from the hand that threw it.
+            let here = self.player.pos;
+            let mut caught = false;
+            for p in std::iter::once(at).chain(cross.iter().map(|&d| at + d)) {
+                if p != here {
+                    caught |= self.ignite(p, true);
+                }
+            }
+            if caught {
+                events.push(Event::Ignited { at });
+            }
+            self.floor.refresh_lights();
+        }
+        if let Some(noise) = shot.noise {
+            self.ring_bell(at, noise, events);
+        }
         if shot.breaks {
             events.push(Event::Shattered {
                 kind: shot.item,

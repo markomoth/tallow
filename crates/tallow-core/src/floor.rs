@@ -11,6 +11,8 @@ use crate::monster::{Monster, MonsterId};
 
 pub const BRAZIER_RADIUS: i32 = 5;
 pub const BRAZIER_COLOR: Rgb = [255, 138, 64];
+pub const FIRE_RADIUS: i32 = 2;
+pub const FIRE_COLOR: Rgb = [255, 112, 40];
 
 /// How far the eye reaches along an unbroken line. You still only see what is lit.
 const SIGHT_RADIUS: i32 = 40;
@@ -36,6 +38,12 @@ pub struct Floor {
     sanctified: Grid<u64>,
     /// A False Flame burning somewhere on this floor.
     pub(crate) decoy: Option<crate::rites::Decoy>,
+    /// Turns of fire left on each tile (0 = not burning).
+    fire: Grid<u8>,
+    /// Spilled lamp oil: slippery, and it burns.
+    oil: Grid<bool>,
+    /// Doors barred by Seal, and the turn each seal lapses.
+    pub(crate) seals: Vec<(Point, u64)>,
 }
 
 /// An item lying on the floor.
@@ -87,17 +95,13 @@ impl Tallow {
 impl Floor {
     /// A floor whose player arrives at `arrival`. Braziers on the map become light sources.
     pub fn new(map: Map, arrival: Point) -> Self {
-        let lights = map
-            .find(Tile::Brazier)
-            .map(|at| LightSource {
-                at,
-                radius: BRAZIER_RADIUS,
-                color: BRAZIER_COLOR,
-            })
-            .collect::<Vec<_>>();
+        let lights = Self::braziers(&map);
         let (w, h) = (map.width(), map.height());
         Self {
             ambient: light::compute(&map, &lights),
+            fire: Grid::new(w, h, 0),
+            oil: Grid::new(w, h, false),
+            seals: Vec::new(),
             map,
             arrival,
             lights,
@@ -112,6 +116,63 @@ impl Floor {
             sanctified: Grid::new(w, h, 0),
             decoy: None,
         }
+    }
+
+    fn braziers(map: &Map) -> Vec<LightSource> {
+        map.find(Tile::Brazier)
+            .map(|at| LightSource {
+                at,
+                radius: BRAZIER_RADIUS,
+                color: BRAZIER_COLOR,
+            })
+            .collect()
+    }
+
+    /// Fixed lights plus every fire.
+    fn standing_lights(&self) -> Vec<LightSource> {
+        let fires = self.burning().map(|at| LightSource {
+            at,
+            radius: FIRE_RADIUS,
+            color: FIRE_COLOR,
+        });
+        self.lights.iter().copied().chain(fires).collect()
+    }
+
+    /// Recomputes light from braziers and fires after either changes.
+    pub(crate) fn refresh_lights(&mut self) {
+        self.lights = Self::braziers(&self.map);
+        self.ambient = light::compute(&self.map, &self.standing_lights());
+    }
+
+    /// Changes a tile (a door opens, shelves burn away) and updates the light.
+    pub(crate) fn set_tile(&mut self, p: Point, tile: Tile) {
+        self.map.set(p, tile);
+        self.refresh_lights();
+    }
+
+    pub fn is_burning(&self, p: Point) -> bool {
+        self.fire.at(p) > 0
+    }
+
+    pub fn fire_at(&self, p: Point) -> u8 {
+        self.fire.at(p)
+    }
+
+    /// Every burning tile.
+    pub fn burning(&self) -> impl Iterator<Item = Point> + '_ {
+        self.map.points().filter(|&p| self.fire.at(p) > 0)
+    }
+
+    pub(crate) fn set_fire(&mut self, p: Point, turns: u8) {
+        self.fire.set(p, turns);
+    }
+
+    pub fn has_oil(&self, p: Point) -> bool {
+        self.oil.at(p)
+    }
+
+    pub(crate) fn set_oil(&mut self, p: Point, oil: bool) {
+        self.oil.set(p, oil);
     }
 
     /// Bodies lying on this floor.
@@ -280,9 +341,8 @@ impl Floor {
             color: crate::rites::DECOY_COLOR,
         });
         let sources: Vec<LightSource> = self
-            .lights
-            .iter()
-            .copied()
+            .standing_lights()
+            .into_iter()
             .chain(carried)
             .chain(decoy)
             .collect();

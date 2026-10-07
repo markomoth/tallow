@@ -15,7 +15,7 @@ fn main() {
 
     let content = Content::bundled();
     let mut rng = rng::floor_rng(seed, depth);
-    let layout = generate::crypt(&mut rng, depth < MAX_DEPTH);
+    let layout = generate::floor(&mut rng, depth, depth < MAX_DEPTH);
     let spawns = spawn::populate(&mut rng, content, &layout.map, layout.start, depth);
     let map = &layout.map;
     for y in 0..map.height() {
@@ -28,7 +28,12 @@ fn main() {
                 match map.tile(p) {
                     Tile::Wall => '#',
                     Tile::Floor => '.',
-                    Tile::Door => '+',
+                    Tile::Door => '\'',
+                    Tile::DoorClosed | Tile::DoorSealed => '+',
+                    Tile::ColdBrazier => 'o',
+                    Tile::Bookshelf => 'B',
+                    Tile::Pew => '=',
+                    Tile::BellRope => '|',
                     Tile::StairsDown => '>',
                     Tile::StairsUp => '<',
                     Tile::Brazier => '&',

@@ -26,6 +26,31 @@ pub enum Faction {
     Remnant,
 }
 
+impl Faction {
+    pub const ALL: [Faction; 4] = [
+        Faction::Dreaming,
+        Faction::Taken,
+        Faction::Swarm,
+        Faction::Remnant,
+    ];
+
+    /// Who attacks whom on sight (BUILD_GUIDE.md §2). The Dreaming hate the
+    /// living, the Swarm anything with a pulse, the Remnant every intruder.
+    /// The Taken only want you.
+    pub const fn hates(self, other: Faction) -> bool {
+        use Faction::{Dreaming, Remnant, Swarm, Taken};
+        matches!(
+            (self, other),
+            (Dreaming, Swarm | Taken) | (Swarm, Taken) | (Remnant, Dreaming | Swarm | Taken)
+        )
+    }
+
+    /// Hands enough to open a door.
+    pub const fn opens_doors(self) -> bool {
+        matches!(self, Faction::Taken | Faction::Remnant)
+    }
+}
+
 /// A creature's one clear trick (BUILD_GUIDE.md §9).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum Trait {
