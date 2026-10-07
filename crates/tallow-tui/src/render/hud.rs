@@ -8,16 +8,20 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Widget, Wrap};
 use tallow_core::candle::{LOW_AT, START_TALLOW};
+use tallow_core::item::LIGHT_LOAD;
 use tallow_core::{
-    Biome, CandleState, DreadBand, MAX_DEPTH, Mind, MonsterInfo, Point, Tile, Trait, World,
+    Biome, Burden, CandleState, DreadBand, MAX_DEPTH, Mind, MonsterInfo, Point, Tile, Trait, World,
 };
+
+use crate::app::Aim;
+use crate::names::{item_phrase, item_stats};
 
 use super::palette::{self, rgb};
 use crate::app::{App, Mode};
 use crate::log::capitalize;
 
 const BAR_WIDTH: usize = 10;
-const MAX_IN_VIEW: usize = 4;
+const MAX_IN_VIEW: usize = 3;
 
 pub struct Hud<'a> {
     app: &'a App,
@@ -61,7 +65,6 @@ impl Widget for Hud<'_> {
                     .add_modifier(Modifier::BOLD),
             ),
             Line::default(),
-            Line::styled("Acolyte", text()),
             bar(
                 "Health",
                 player.health,
@@ -83,15 +86,24 @@ impl Widget for Hud<'_> {
                 palette::DREAD,
                 palette::DREAD_EMPTY,
             ),
+            bar(
+                "Load  ",
+                world.load() / 10,
+                LIGHT_LOAD / 10,
+                palette::LOAD,
+                palette::LOAD_EMPTY,
+            ),
             conditions(world),
             Line::styled(format!("Floor {depth} of {MAX_DEPTH}"), text()),
             Line::styled(biome_name(Biome::for_depth(depth)), dim()),
-            Line::styled(format!("Turn {}", world.turn()), dim()),
             Line::default(),
         ];
         match self.app.mode() {
             Mode::Look { cursor } => lines.extend(look_panel(world, cursor)),
-            Mode::Play | Mode::Dead => {
+            Mode::Target { aim, cursor } => {
+                lines.extend(target_panel(world, aim, cursor, self.app.aim_path().len()));
+            }
+            Mode::Play | Mode::Dead | Mode::Pack { .. } => {
                 lines.extend(in_view(world));
                 lines.extend(keys());
             }
@@ -109,7 +121,11 @@ impl Widget for Hud<'_> {
         Paragraph::new(lines)
             .wrap(Wrap { trim: true })
             .render(body, buf);
-        Line::styled(format!("seed {}", world.seed()), dim()).render(footer, buf);
+        Line::styled(
+            format!("turn {} · seed {}", world.turn(), world.seed()),
+            dim(),
+        )
+        .render(footer, buf);
     }
 }
 
@@ -144,7 +160,15 @@ fn conditions(world: &World) -> Line<'static> {
         DreadBand::Frayed => Some("frayed"),
         DreadBand::Manifest => Some("hunted"),
     };
-    if let Some((word, color)) = candle {
+    let load = match world.burden() {
+        Burden::Light => None,
+        Burden::Burdened => Some("burdened"),
+        Burden::Overloaded => Some("can't move!"),
+    };
+    for (word, color) in candle.into_iter().chain(load.map(|w| (w, palette::DANGER))) {
+        if !spans.is_empty() {
+            spans.push(Span::styled(" · ", dim()));
+        }
         spans.push(Span::styled(word, Style::new().fg(color)));
     }
     if let Some(word) = mind {
@@ -209,8 +233,9 @@ fn keys() -> Vec<Line<'static>> {
         key("hjkl yubn", "move"),
         key("HJKL", "run"),
         key(". R", "wait, rest"),
-        key("c", "candle"),
-        key(">", "descend"),
+        key("g i", "take, pack"),
+        key("t f", "throw, fire"),
+        key("c >", "candle, down"),
         key("x q", "look, quit"),
     ]
 }
@@ -289,6 +314,29 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             "You. Acolyte of the Low Bell, a candle in one hand.",
             text(),
         ));
+    } else if let Some(top) = floor
+        .items_at(cursor)
+        .last()
+        .filter(|_| floor.is_explored(cursor))
+    {
+        let count = floor.items_at(cursor).count();
+        let def = world.content().item(top.item.kind);
+        lines.push(Line::styled(
+            crate::log::capitalize(&item_phrase(world, top.item.kind, top.item.count)),
+            text().add_modifier(Modifier::BOLD),
+        ));
+        lines.push(Line::styled(def.description.clone(), dim()));
+        lines.extend(
+            item_stats(world, top.item.kind)
+                .into_iter()
+                .map(|s| Line::styled(s, text())),
+        );
+        if count > 1 {
+            lines.push(Line::styled(
+                format!("…and {} more things here.", count - 1),
+                dim(),
+            ));
+        }
     } else if let Some(tallow) = floor
         .tallow_at(cursor)
         .filter(|_| floor.is_explored(cursor))
@@ -310,6 +358,38 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
     }
     lines.push(Line::default());
     lines.push(Line::styled("Tab next · Esc done", dim()));
+    lines
+}
+
+fn target_panel(world: &World, aim: Aim, cursor: Point, path_len: usize) -> Vec<Line<'static>> {
+    let doing = match aim {
+        Aim::Throw(id) => {
+            let what = world
+                .inventory_item(id)
+                .map_or_else(|| "something".into(), |it| item_phrase(world, it.kind, 1));
+            format!("Throwing {what}.")
+        }
+        Aim::Fire => "Shooting.".into(),
+    };
+    let mut lines = vec![Line::styled("─ aim ─", dim()), Line::styled(doing, text())];
+    if let Some(info) = world
+        .floor()
+        .monster_at(cursor)
+        .and_then(|id| world.inspect(id))
+    {
+        let def = world.content().monster(info.kind);
+        lines.push(Line::styled(format!("At the {}.", def.name), text()));
+    }
+    if path_len == 0 {
+        lines.push(Line::styled(
+            "Nothing can fly that way.",
+            Style::new().fg(palette::DANGER),
+        ));
+    }
+    lines.push(Line::styled("The shaded line is where it will fly.", dim()));
+    lines.push(Line::default());
+    lines.push(Line::styled("Enter fly · Tab next", dim()));
+    lines.push(Line::styled("Esc cancel", dim()));
     lines
 }
 

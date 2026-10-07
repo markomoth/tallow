@@ -1,6 +1,7 @@
 //! Commands: everything the player can ask the world to do.
 
-use crate::geom::Direction;
+use crate::geom::{Direction, Point};
+use crate::item::ItemId;
 
 /// A request from the player. The world decides what actually happens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,4 +20,19 @@ pub enum Command {
     ToggleCandle,
     /// Wait until healed or until something happens.
     Rest,
+    /// Pick up everything here.
+    PickUp,
+    Drop(ItemId),
+    /// Equip, or take off if already equipped.
+    Equip(ItemId),
+    /// Drink a tincture, or equip gear.
+    Use(ItemId),
+    Throw {
+        item: ItemId,
+        target: Point,
+    },
+    /// Shoot the equipped ranged weapon.
+    Fire {
+        target: Point,
+    },
 }

@@ -30,6 +30,34 @@ pub struct Floor {
     explored: Grid<bool>,
     pub(crate) monsters: SlotMap<MonsterId, Monster>,
     pub(crate) tallow: Vec<Tallow>,
+    pub(crate) items: Vec<FloorItem>,
+}
+
+/// An item lying on the floor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FloorItem {
+    pub at: Point,
+    pub item: crate::item::Item,
+    seen: bool,
+}
+
+impl FloorItem {
+    pub fn new(at: Point, item: crate::item::Item) -> Self {
+        Self {
+            at,
+            item,
+            seen: false,
+        }
+    }
+
+    /// Something the player put there, so no need to announce it.
+    pub fn seen(at: Point, item: crate::item::Item) -> Self {
+        Self {
+            at,
+            item,
+            seen: true,
+        }
+    }
 }
 
 /// A lump or stub of tallow lying on the floor. Walk over it to take it.
@@ -74,6 +102,7 @@ impl Floor {
             explored: Grid::new(w, h, false),
             monsters: SlotMap::with_key(),
             tallow: Vec::new(),
+            items: Vec::new(),
         }
     }
 
@@ -146,6 +175,30 @@ impl Floor {
         self.tallow.iter().find(|t| t.at == p)
     }
 
+    /// Items lying on this floor, in the order they were put down.
+    pub fn items(&self) -> &[FloorItem] {
+        &self.items
+    }
+
+    /// Items on one tile; the last is on top.
+    pub fn items_at(&self, p: Point) -> impl Iterator<Item = &FloorItem> {
+        self.items.iter().filter(move |f| f.at == p)
+    }
+
+    /// Learns the shape of the floor within `radius` of `center`, as if seen.
+    pub(crate) fn reveal(&mut self, center: Point, radius: i32) {
+        for p in self.map.points() {
+            let near = p.distance_squared(center) <= radius * radius;
+            let shaped = self.map.is_walkable(p)
+                || crate::geom::Direction::ALL
+                    .iter()
+                    .any(|&d| self.map.is_walkable(p + d));
+            if near && shaped {
+                self.explored.set(p, true);
+            }
+        }
+    }
+
     /// Landmarks and tallow in view right now: things worth stopping a run for.
     pub fn visible_landmarks(&self) -> impl Iterator<Item = Point> + '_ {
         let tiles = self
@@ -157,7 +210,12 @@ impl Floor {
             .iter()
             .map(|t| t.at)
             .filter(|&p| self.is_visible(p));
-        tiles.chain(tallow)
+        let items = self
+            .items
+            .iter()
+            .map(|f| f.at)
+            .filter(|&p| self.is_visible(p));
+        tiles.chain(tallow).chain(items)
     }
 
     /// Recomputes light and sight from `eye`, carrying an optional light of its own.
@@ -197,6 +255,15 @@ impl Floor {
             if !tallow.seen && self.visible.at(tallow.at) {
                 tallow.seen = true;
                 events.push(Event::SpottedTallow { at: tallow.at });
+            }
+        }
+        for item in &mut self.items {
+            if !item.seen && self.visible.at(item.at) {
+                item.seen = true;
+                events.push(Event::SpottedItem {
+                    kind: item.item.kind,
+                    at: item.at,
+                });
             }
         }
         events

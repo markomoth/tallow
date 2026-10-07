@@ -18,6 +18,8 @@ pub fn floor_rng(seed: u64, depth: u8) -> GameRng {
 pub enum Stream {
     Combat = 1,
     Ai = 2,
+    /// Per-run item secrets, like how strong each tincture is.
+    Loot = 3,
 }
 
 pub fn stream(seed: u64, stream: Stream) -> GameRng {

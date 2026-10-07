@@ -17,16 +17,19 @@ pub struct MapView<'a> {
     world: &'a World,
     /// Seconds since start; drives flicker. Visual only, never affects rules.
     time: f32,
-    /// The Look cursor, if looking.
+    /// The Look or target cursor, if any.
     cursor: Option<Point>,
+    /// Tiles a projectile would cross, while aiming.
+    path: Vec<Point>,
 }
 
 impl<'a> MapView<'a> {
-    pub fn new(world: &'a World, time: f32, cursor: Option<Point>) -> Self {
+    pub fn new(world: &'a World, time: f32, cursor: Option<Point>, path: Vec<Point>) -> Self {
         Self {
             world,
             time,
             cursor,
+            path,
         }
     }
 }
@@ -75,6 +78,8 @@ impl Widget for MapView<'_> {
 
                 let bg = if telegraphs.contains(&p) {
                     palette::TELEGRAPH.map(|c| (f32::from(c) * pulse) as u8)
+                } else if self.path.contains(&p) {
+                    palette::AIM
                 } else {
                     bg
                 };
@@ -83,6 +88,7 @@ impl Widget for MapView<'_> {
                     .filter(|_| floor.is_visible(p))
                     .and_then(|id| floor.monster(id));
                 let tallow = floor.tallow_at(p).filter(|_| floor.is_explored(p));
+                let item = floor.items_at(p).last().filter(|_| floor.is_explored(p));
                 if p == player {
                     cell.set_char('@').set_fg(palette::PLAYER).set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
@@ -97,6 +103,14 @@ impl Widget for MapView<'_> {
                     };
                     cell.set_char(def.glyph).set_fg(rgb(color)).set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
+                } else if let Some(item) = item {
+                    let def = content.item(item.item.kind);
+                    let fg = if floor.is_visible(p) {
+                        shade(def.color, floor.light(p), global_flicker)
+                    } else {
+                        remember(def.color)
+                    };
+                    cell.set_char(def.glyph).set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else if tallow.is_some() {
                     let fg = if floor.is_visible(p) {
                         shade(palette::TALLOW_FG, floor.light(p), global_flicker)

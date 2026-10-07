@@ -13,6 +13,10 @@ pub enum Action {
     Ascend,
     Candle,
     Rest,
+    PickUp,
+    Pack,
+    Throw,
+    Fire,
     Look,
     NextTarget,
     Cancel,
@@ -40,6 +44,10 @@ pub fn map_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('>') => Some(Action::Descend),
         KeyCode::Char('<') => Some(Action::Ascend),
         KeyCode::Char('c') => Some(Action::Candle),
+        KeyCode::Char('g') => Some(Action::PickUp),
+        KeyCode::Char('i') => Some(Action::Pack),
+        KeyCode::Char('t') => Some(Action::Throw),
+        KeyCode::Char('f') => Some(Action::Fire),
         KeyCode::Char('R') => Some(Action::Rest),
         KeyCode::Char('x') => Some(Action::Look),
         KeyCode::Tab => Some(Action::NextTarget),
@@ -117,6 +125,10 @@ mod tests {
         assert_eq!(press(KeyCode::Char('x')), Some(Action::Look));
         assert_eq!(press(KeyCode::Char('c')), Some(Action::Candle));
         assert_eq!(press(KeyCode::Char('R')), Some(Action::Rest));
+        assert_eq!(press(KeyCode::Char('g')), Some(Action::PickUp));
+        assert_eq!(press(KeyCode::Char('i')), Some(Action::Pack));
+        assert_eq!(press(KeyCode::Char('t')), Some(Action::Throw));
+        assert_eq!(press(KeyCode::Char('f')), Some(Action::Fire));
         assert_eq!(press(KeyCode::Tab), Some(Action::NextTarget));
         assert_eq!(press(KeyCode::Esc), Some(Action::Cancel));
         assert_eq!(press(KeyCode::Enter), Some(Action::Confirm));

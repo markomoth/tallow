@@ -21,9 +21,11 @@ SHOW_SCREEN=1 cargo test -p tallow-tui -- --nocapture   # print rendered test sc
 
 - `crates/tallow-core` — pure game logic. `World::apply(Command) -> Vec<Event>`.
 - `crates/tallow-tui` — the `tallow` binary: ratatui rendering, key bindings, message log.
-- `assets/` — RON content embedded with `include_str!` (`monsters.ron` now; items, rites, boons later). Loaded by `content.rs`.
+- `assets/` — RON content embedded with `include_str!` (`monsters.ron`, `items.ron`; rites and boons later). Loaded and cross-checked by `content.rs`.
 
-Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor and per-system seeded streams), `monster.rs` + `ai.rs` (monsters and their decisions), `combat.rs`, `time.rs` (energy scheduler), `spawn.rs`, `candle.rs`, `dread.rs`, `nightmare.rs` (per-turn candle/dread, whispers, phantoms, Manifestation).
+Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor and per-system seeded streams), `monster.rs` + `ai.rs` (monsters and their decisions), `combat.rs`, `time.rs` (energy scheduler), `spawn.rs`, `candle.rs`, `dread.rs`, `nightmare.rs` (per-turn candle/dread, whispers, phantoms, Manifestation). `item.rs` (item types, burden, tincture lore) + `inventory.rs` (pack, equipment, drinking, throwing, firing, projectile paths).
+
+Frontend: `app.rs` (modes: play, look, pack, target, dead), `log.rs` (`narrate`), `names.rs` (item names reflecting what's been learned), `render/` (`map`, `hud`, `pack`, `palette`).
 
 ## Rules for the code
 

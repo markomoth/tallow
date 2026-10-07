@@ -4,9 +4,11 @@ use std::sync::OnceLock;
 
 use serde::Deserialize;
 
+use crate::item::{ItemClass, ItemDef, ItemKindId};
 use crate::map::light::Rgb;
 
 const MONSTERS: &str = include_str!("../../../assets/monsters.ron");
+const ITEMS: &str = include_str!("../../../assets/items.ron");
 
 /// Index of a monster definition in [`Content::monsters`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -83,6 +85,31 @@ impl MonsterDef {
 #[derive(Debug)]
 pub struct Content {
     pub monsters: Vec<MonsterDef>,
+    pub items: Vec<ItemDef>,
+}
+
+#[derive(Debug)]
+pub enum ContentError {
+    Parse(ron::error::SpannedError),
+    /// A reference to an id that doesn't exist, like a sling's ammunition.
+    Missing(String),
+}
+
+impl std::fmt::Display for ContentError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContentError::Parse(e) => write!(f, "{e}"),
+            ContentError::Missing(id) => write!(f, "unknown id {id:?}"),
+        }
+    }
+}
+
+impl std::error::Error for ContentError {}
+
+impl From<ron::error::SpannedError> for ContentError {
+    fn from(e: ron::error::SpannedError) -> Self {
+        ContentError::Parse(e)
+    }
 }
 
 impl Content {
@@ -90,13 +117,39 @@ impl Content {
     pub fn bundled() -> &'static Content {
         static CONTENT: OnceLock<Content> = OnceLock::new();
         CONTENT.get_or_init(|| {
-            Content::parse(MONSTERS).expect("bundled monsters.ron is valid; covered by tests")
+            Content::parse(MONSTERS, ITEMS).expect("bundled content is valid; covered by tests")
         })
     }
 
-    pub fn parse(monsters: &str) -> Result<Content, ron::error::SpannedError> {
+    pub fn parse(monsters: &str, items: &str) -> Result<Content, ContentError> {
         let monsters: Vec<MonsterDef> = ron::from_str(monsters)?;
-        Ok(Content { monsters })
+        let items: Vec<ItemDef> = ron::from_str(items)?;
+        let content = Content { monsters, items };
+        for def in &content.items {
+            if let ItemClass::Ranged { ammo, .. } = &def.class {
+                content
+                    .item_by_id(ammo)
+                    .ok_or_else(|| ContentError::Missing(ammo.clone()))?;
+            }
+        }
+        Ok(content)
+    }
+
+    pub fn item(&self, kind: ItemKindId) -> &ItemDef {
+        &self.items[usize::from(kind.0)]
+    }
+
+    pub fn item_kinds(&self) -> impl Iterator<Item = (ItemKindId, &ItemDef)> {
+        self.items
+            .iter()
+            .enumerate()
+            .map(|(i, def)| (ItemKindId(i as u16), def))
+    }
+
+    pub fn item_by_id(&self, id: &str) -> Option<ItemKindId> {
+        self.item_kinds()
+            .find(|(_, def)| def.id == id)
+            .map(|(kind, _)| kind)
     }
 
     pub fn monster(&self, kind: KindId) -> &MonsterDef {
@@ -126,6 +179,44 @@ mod tests {
     fn bundled_content_parses() {
         let content = Content::bundled();
         assert!(content.monsters.len() >= 4);
+    }
+
+    #[test]
+    fn item_definitions_are_sane() {
+        let content = Content::bundled();
+        let mut ids = HashSet::new();
+        for def in &content.items {
+            assert!(ids.insert(&def.id), "duplicate id {}", def.id);
+            assert!(def.glyph.is_ascii_graphic(), "{}", def.id);
+            assert!(def.depth.0 <= def.depth.1, "{}", def.id);
+            assert!(def.stack.0 >= 1 && def.stack.0 <= def.stack.1, "{}", def.id);
+            assert!(
+                def.stacks() || def.stack == (1, 1),
+                "{} can't stack",
+                def.id
+            );
+            if matches!(def.class, ItemClass::Throwable) {
+                assert!(
+                    def.thrown.is_some(),
+                    "{} is a throwable that can't be thrown",
+                    def.id
+                );
+            }
+        }
+        for id in ["iron_candlestick", "cassock", "mending_tincture"] {
+            assert!(content.item_by_id(id).is_some(), "starting kit needs {id}");
+        }
+    }
+
+    #[test]
+    fn missing_ammo_is_caught() {
+        let items = r#"[(id: "sling", name: "s", plural: "s", glyph: ')', color: (1, 1, 1),
+            description: "", class: Ranged(damage: (1, 2), accuracy: 0, range: 5, ammo: "nope"),
+            weight: 1, depth: (1, 1), frequency: 1)]"#;
+        assert!(matches!(
+            Content::parse("[]", items),
+            Err(ContentError::Missing(_))
+        ));
     }
 
     #[test]

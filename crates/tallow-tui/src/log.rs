@@ -2,7 +2,12 @@
 
 use std::collections::VecDeque;
 
-use tallow_core::{Content, DreadBand, Event, Faction, KindId, Tile, Who};
+use tallow_core::{
+    Burden, Content, DreadBand, Event, Faction, ItemClass, KindId, Potency, SideEffect, Tile,
+    TinctureEffect, Who, World,
+};
+
+use crate::names::{item_name, item_phrase};
 
 const CAPACITY: usize = 200;
 
@@ -69,8 +74,10 @@ const WHISPERS: [&str; 8] = [
 ];
 
 /// The log line for an event, if it deserves one. Routine movement stays quiet.
-pub fn narrate(event: &Event, content: &Content) -> Option<(String, Tone)> {
+pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
     use Tone::{Danger, Dread, Good, Normal};
+    let content = world.content();
+    let thing = |kind, count| item_name(world, kind, count);
     let name = |kind: KindId| &content.monster(kind).name;
     let (text, tone): (String, Tone) = match *event {
         Event::PlayerBlocked {
@@ -152,6 +159,109 @@ pub fn narrate(event: &Event, content: &Content) -> Option<(String, Tone)> {
         Event::ManifestationEscaped => (
             "You leave your dread on the floor above. For now.".into(),
             Good,
+        ),
+
+        Event::SpottedItem { kind, .. } => {
+            (format!("You see {}.", item_phrase(world, kind, 1)), Normal)
+        }
+        Event::NothingToPickUp => ("There is nothing here to pick up.".into(), Normal),
+        Event::PickedUp { kind, count } => (
+            format!("You pick up {}.", item_phrase(world, kind, count)),
+            Normal,
+        ),
+        Event::PackFull { kind } => (
+            format!(
+                "Your pack has no room for another kind of thing. The {} stays.",
+                thing(kind, 1)
+            ),
+            Danger,
+        ),
+        Event::Dropped { kind, count } => (
+            format!("You drop {}.", item_phrase(world, kind, count)),
+            Normal,
+        ),
+        Event::Equipped { kind } => {
+            let verb = match content.item(kind).class {
+                ItemClass::Vestment { .. } => "put on",
+                ItemClass::Ranged { .. } => "ready",
+                _ => "take up",
+            };
+            (format!("You {verb} the {}.", thing(kind, 1)), Normal)
+        }
+        Event::Unequipped { kind } => {
+            let verb = match content.item(kind).class {
+                ItemClass::Vestment { .. } => "take off",
+                _ => "put away",
+            };
+            (format!("You {verb} the {}.", thing(kind, 1)), Normal)
+        }
+        Event::CantUse { kind } => (
+            format!("The {} has no use of its own.", thing(kind, 1)),
+            Normal,
+        ),
+        Event::Drank {
+            effect,
+            potency,
+            side,
+            amount,
+            learned,
+            ..
+        } => {
+            let what = match effect {
+                TinctureEffect::Mending => format!("Your wounds close (+{amount})."),
+                TinctureEffect::Steadying => format!("Your dread recedes (−{amount})."),
+                TinctureEffect::Seeing => "The shape of the floor comes to you.".into(),
+            };
+            let opening = match (learned, potency) {
+                (false, _) => "",
+                (true, Potency::Weak) => "Weak stuff. ",
+                (true, Potency::Common) => "Middling strength. ",
+                (true, Potency::Strong) => "Strong stuff. ",
+            };
+            let aftertaste = match side {
+                SideEffect::None => "",
+                SideEffect::Bitter => " It leaves a bitter taste of the dark.",
+            };
+            (format!("{opening}{what}{aftertaste}"), Good)
+        }
+        Event::CantThrow { kind } => (
+            format!("The {} isn't made for throwing.", thing(kind, 1)),
+            Normal,
+        ),
+        Event::BadTarget => ("Choose a target that isn't yourself.".into(), Normal),
+        Event::Thrown { .. } | Event::Fired { .. } => return None,
+        Event::NoRangedWeapon => (
+            "You have nothing ready to shoot. Equip a sling or crossbow.".into(),
+            Normal,
+        ),
+        Event::NoAmmo { kind } => (
+            format!("You have no {}.", content.item(kind).plural),
+            Normal,
+        ),
+        Event::ProjectileHit {
+            item,
+            target,
+            damage,
+        } => {
+            let (item, target) = (thing(item, 1), name(target));
+            match damage {
+                Some(0) => (
+                    format!("The {item} splashes the {target}, harmlessly."),
+                    Normal,
+                ),
+                Some(d) => (format!("The {item} hits the {target} ({d})."), Normal),
+                None => (format!("The {item} misses the {target}."), Normal),
+            }
+        }
+        Event::Shattered { kind, .. } => (format!("The {} shatters.", thing(kind, 1)), Normal),
+        Event::BurdenChanged { burden } => match burden {
+            Burden::Light => ("Your load feels manageable again.".into(), Good),
+            Burden::Burdened => ("You are burdened. Every step takes longer.".into(), Danger),
+            Burden::Overloaded => ("You carry too much to move. Drop something.".into(), Danger),
+        },
+        Event::TooHeavy => (
+            "You can't move under this weight. Open your pack (i) and drop something.".into(),
+            Danger,
         ),
 
         Event::FirstSighting { kind } => {
@@ -299,13 +409,14 @@ mod tests {
     #[test]
     fn every_depth_has_a_descent_line() {
         for depth in 2..=tallow_core::MAX_DEPTH {
-            assert!(narrate(&Event::Descended { depth }, Content::bundled()).is_some());
+            assert!(narrate(&Event::Descended { depth }, &World::new(1)).is_some());
         }
     }
 
     #[test]
     fn combat_lines_name_the_creature_and_show_damage() {
-        let content = Content::bundled();
+        let world = World::new(1);
+        let content = world.content();
         let gnawer = content.kind_by_id("gnawer").unwrap();
         let hit = Event::Attack {
             attacker: Who::Player,
@@ -313,26 +424,26 @@ mod tests {
             damage: Some(3),
         };
         assert_eq!(
-            narrate(&hit, content).unwrap(),
+            narrate(&hit, &world).unwrap(),
             ("You strike the gnawer (3).".to_string(), Tone::Normal)
         );
-        let (sight, _) = narrate(&Event::FirstSighting { kind: gnawer }, content).unwrap();
+        let (sight, _) = narrate(&Event::FirstSighting { kind: gnawer }, &world).unwrap();
         assert!(sight.starts_with("A gnawer. A rat"));
     }
 
     #[test]
     fn whispers_and_warnings_carry_their_tone() {
-        let content = Content::bundled();
+        let world = World::new(1);
         assert_eq!(
-            narrate(&Event::Whisper { seed: 3 }, content).unwrap().1,
+            narrate(&Event::Whisper { seed: 3 }, &world).unwrap().1,
             Tone::Dread
         );
         assert_eq!(
-            narrate(&Event::CandleGuttering, content).unwrap().1,
+            narrate(&Event::CandleGuttering, &world).unwrap().1,
             Tone::Danger
         );
         assert_eq!(
-            narrate(&Event::TallowFound { amount: 5 }, content)
+            narrate(&Event::TallowFound { amount: 5 }, &world)
                 .unwrap()
                 .1,
             Tone::Good

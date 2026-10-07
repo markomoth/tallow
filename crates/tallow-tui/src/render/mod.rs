@@ -2,6 +2,7 @@
 
 mod hud;
 mod map;
+mod pack;
 mod palette;
 
 use ratatui::Frame;
@@ -38,14 +39,21 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
         Layout::horizontal([Constraint::Min(0), Constraint::Length(SIDEBAR_WIDTH)]).areas(top);
 
     let cursor = match app.mode() {
-        Mode::Look { cursor } => Some(cursor),
-        Mode::Play | Mode::Dead => None,
+        Mode::Look { cursor } | Mode::Target { cursor, .. } => Some(cursor),
+        Mode::Play | Mode::Dead | Mode::Pack { .. } => None,
     };
-    frame.render_widget(map::MapView::new(app.world(), time, cursor), map_area);
+    frame.render_widget(
+        map::MapView::new(app.world(), time, cursor, app.aim_path()),
+        map_area,
+    );
     frame.render_widget(hud::Hud::new(app), hud_area);
     draw_log(frame, log_area, app.log());
-    if app.mode() == Mode::Dead {
-        draw_death(frame, map_area, app);
+    match app.mode() {
+        Mode::Dead => draw_death(frame, map_area, app),
+        Mode::Pack { purpose, selected } => {
+            pack::draw(frame, map_area, app.world(), purpose, selected)
+        }
+        Mode::Play | Mode::Look { .. } | Mode::Target { .. } => {}
     }
 }
 
@@ -89,7 +97,9 @@ fn draw_death(frame: &mut Frame, area: Rect, app: &App) {
     ]);
 
     let width = area.width.min(72);
-    let height = (lines.len() as u16 + 2).min(area.height);
+    let inner = usize::from(width.saturating_sub(4)).max(1);
+    let rows: usize = lines.iter().map(|l| l.width().max(1).div_ceil(inner)).sum();
+    let height = (rows as u16 + 2).min(area.height);
     let [_, column, _] = Layout::horizontal([
         Constraint::Fill(1),
         Constraint::Length(width),
@@ -352,6 +362,53 @@ mod tests {
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(screen.contains("Floor 2 of 12"));
         assert!(screen.contains("The stair turns more times than it should."));
+    }
+
+    #[test]
+    fn the_pack_lists_gear_weight_and_tallow() {
+        let mut app = App::new(7);
+        app.handle(Action::Pack);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains(" Pack "));
+        assert!(screen.contains("iron candlestick (in hand)"));
+        assert!(screen.contains("cassock (worn)"));
+        assert!(screen.contains("mending tincture (untried)"));
+        assert!(screen.contains("tallow, 900 turns of light"));
+        assert!(screen.contains("Load 14.3"));
+    }
+
+    #[test]
+    fn an_opened_item_shows_stats_and_actions() {
+        let mut app = App::new(7);
+        app.handle(Action::Pack);
+        app.handle_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('a'),
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        ));
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("Damage 2–5 · accuracy +5 · Bludgeon"));
+        assert!(screen.contains("e take off"));
+    }
+
+    #[test]
+    fn aiming_shows_the_flight_path() {
+        let mut app = scene("parishioner");
+        let world = app.world_mut();
+        let stone = world.content().item_by_id("stone").unwrap();
+        let here = world.player().pos;
+        world.place_item(here, stone, 2);
+        app.handle(Action::PickUp);
+        app.handle(Action::Throw);
+        let letter = (b'a' + app.world().player().inventory.len() as u8 - 1) as char;
+        app.handle_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char(letter),
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(!app.aim_path().is_empty());
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("─ aim ─"));
+        assert!(screen.contains("Throwing a stone."));
+        assert!(screen.contains("At the Taken"));
     }
 
     #[test]

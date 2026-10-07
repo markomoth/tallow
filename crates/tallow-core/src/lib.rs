@@ -14,6 +14,8 @@ pub mod events;
 pub mod floor;
 pub mod geom;
 pub mod grid;
+pub mod inventory;
+pub mod item;
 pub mod map;
 pub mod monster;
 mod nightmare;
@@ -28,8 +30,12 @@ pub use candle::{Candle, CandleState};
 pub use content::{Content, Faction, KindId, MonsterDef, Trait};
 pub use dread::{Dread, DreadBand};
 pub use events::{Cause, Event, Who};
-pub use floor::{Floor, Tallow};
+pub use floor::{Floor, FloorItem, Tallow};
 pub use geom::{Direction, Point};
+pub use item::{
+    Burden, Equipment, Family, Item, ItemClass, ItemDef, ItemId, ItemKindId, Potency, SideEffect,
+    Slot, TinctureEffect, TinctureLore,
+};
 pub use map::light::{Light, Rgb};
 pub use map::{Map, Tile};
 pub use monster::{Mind, Monster, MonsterId};

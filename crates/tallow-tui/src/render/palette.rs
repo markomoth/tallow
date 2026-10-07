@@ -34,6 +34,10 @@ pub const GOOD: Color = Color::Rgb(168, 196, 138);
 pub const CANDLE: Color = Color::Rgb(232, 176, 92);
 pub const CANDLE_EMPTY: Color = Color::Rgb(56, 44, 30);
 pub const TALLOW_FG: Rgb = [240, 220, 168];
+pub const LOAD: Color = Color::Rgb(150, 140, 120);
+pub const LOAD_EMPTY: Color = Color::Rgb(46, 42, 36);
+/// Background of tiles a projectile would cross.
+pub const AIM: Rgb = [70, 58, 34];
 
 pub const TEXT: Color = Color::Rgb(196, 186, 170);
 pub const TEXT_DIM: Color = Color::Rgb(110, 102, 92);

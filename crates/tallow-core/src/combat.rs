@@ -3,10 +3,11 @@
 use rand::{Rng, RngExt};
 
 pub const PLAYER_HEALTH: u32 = 24;
-pub const PLAYER_ACCURACY: i32 = 85;
-pub const PLAYER_DEFENSE: i32 = 10;
-/// Bare-handed with the iron candlestick until weapons arrive in M4.
-pub const PLAYER_DAMAGE: (u32, u32) = (2, 5);
+/// The acolyte's own accuracy and defense, before weapon and vestment.
+pub const BASE_ACCURACY: i32 = 80;
+pub const BASE_DEFENSE: i32 = 7;
+/// Damage with nothing in hand.
+pub const FISTS: (u32, u32) = (1, 2);
 
 /// Percent chance to land a blow.
 pub fn hit_chance(accuracy: i32, defense: i32) -> u32 {

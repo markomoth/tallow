@@ -5,12 +5,16 @@ use std::collections::HashSet;
 use crate::actions::Command;
 use crate::biome::MAX_DEPTH;
 use crate::candle::{self, Candle};
-use crate::combat::{self, PLAYER_ACCURACY, PLAYER_DAMAGE, PLAYER_DEFENSE, PLAYER_HEALTH};
+use std::collections::HashMap;
+
+use crate::combat::{self, PLAYER_HEALTH};
 use crate::content::{Content, Faction, KindId, Trait};
 use crate::dread::{self, Dread};
 use crate::events::{Cause, Event, Who};
-use crate::floor::{Floor, Tallow};
+use crate::floor::{Floor, FloorItem, Tallow};
 use crate::geom::{Direction, Point};
+use crate::inventory;
+use crate::item::{Burden, Equipment, Item, ItemKindId, TinctureLore};
 use crate::map::light::LightSource;
 use crate::map::{Map, Tile, generate};
 use crate::monster::{Mind, Monster, MonsterId};
@@ -22,6 +26,8 @@ use crate::time::{ACTION_COST, PLAYER_SPEED, TICKS_PER_TURN};
 const MAX_RUN_STEPS: u32 = 120;
 /// Safety stop for one rest.
 const MAX_REST_TURNS: u32 = 200;
+/// Energy a step costs while burdened.
+const BURDENED_MOVE: i32 = ACTION_COST * 3 / 2;
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -30,6 +36,8 @@ pub struct Player {
     pub max_health: u32,
     pub candle: Candle,
     pub dread: Dread,
+    pub inventory: Vec<Item>,
+    pub equipment: Equipment,
     pub(crate) energy: i32,
 }
 
@@ -73,6 +81,11 @@ pub struct World {
     pub(crate) ai_rng: GameRng,
     /// The kind dread takes form as.
     pub(crate) manifestation: KindId,
+    /// Ids handed out so far; every item gets its own.
+    pub(crate) next_item: u32,
+    /// This run's tincture strengths and side effects.
+    pub(crate) tinctures: HashMap<ItemKindId, TinctureLore>,
+    last_burden: Burden,
     sighted: HashSet<KindId>,
     witnessed: HashSet<(KindId, Trait)>,
     death: Option<Death>,
@@ -82,8 +95,9 @@ impl World {
     /// A new run. The seed decides every floor and every roll.
     pub fn new(seed: u64) -> Self {
         let content = Content::bundled();
-        let floor = Self::generate_floor(content, seed, 1);
-        Self::on_floor(content, seed, floor)
+        let mut next_item = 0;
+        let floor = Self::generate_floor(content, seed, 1, &mut next_item);
+        Self::on_floor(content, seed, floor, next_item)
     }
 
     /// A run starting on a hand-made map with no monsters, for tests and vaults.
@@ -92,10 +106,10 @@ impl World {
             map.is_walkable(start),
             "player must start on a walkable tile"
         );
-        Self::on_floor(Content::bundled(), 0, Floor::new(map, start))
+        Self::on_floor(Content::bundled(), 0, Floor::new(map, start), 0)
     }
 
-    fn on_floor(content: &'static Content, seed: u64, floor: Floor) -> Self {
+    fn on_floor(content: &'static Content, seed: u64, floor: Floor, next_item: u32) -> Self {
         let mut world = Self {
             content,
             seed,
@@ -106,6 +120,8 @@ impl World {
                 max_health: PLAYER_HEALTH,
                 candle: Candle::default(),
                 dread: Dread::default(),
+                inventory: Vec::new(),
+                equipment: Equipment::default(),
                 energy: ACTION_COST,
             },
             floor,
@@ -115,20 +131,43 @@ impl World {
             manifestation: content
                 .kind_by_id("manifestation")
                 .expect("monsters.ron defines the manifestation"),
+            next_item,
+            tinctures: inventory::roll_tinctures(&mut rng::stream(seed, Stream::Loot), content),
+            last_burden: Burden::Light,
             sighted: HashSet::new(),
             witnessed: HashSet::new(),
             death: None,
         };
+        // The acolyte comes down with what was at hand.
+        for (id, equip) in [
+            ("iron_candlestick", true),
+            ("cassock", true),
+            ("mending_tincture", false),
+        ] {
+            let kind = content.item_by_id(id).expect("starting kit is defined");
+            let item = Item {
+                id: world.new_item_id(),
+                kind,
+                count: 1,
+            };
+            world.add_to_pack(item);
+            if equip {
+                let slot = content.item(kind).slot().expect("starting gear has a slot");
+                world.player.equipment.set(slot, Some(item.id));
+            }
+        }
+        world.last_burden = world.burden();
         // What you see on arrival is the scene, not news.
         world.update_view();
         world
     }
 
-    fn generate_floor(content: &Content, seed: u64, depth: u8) -> Floor {
+    fn generate_floor(content: &Content, seed: u64, depth: u8, next_item: &mut u32) -> Floor {
         let mut rng = rng::floor_rng(seed, depth);
         let layout = generate::crypt(&mut rng, depth < MAX_DEPTH);
         let spawns = spawn::populate(&mut rng, content, &layout.map, layout.start, depth);
         let tallow = spawn::place_tallow(&mut rng, &layout.map, layout.start);
+        let items = spawn::place_items(&mut rng, content, &layout.map, layout.start, depth);
         let mut floor = Floor::new(layout.map, layout.start);
         for (kind, pos) in spawns {
             floor
@@ -138,6 +177,20 @@ impl World {
         floor.tallow = tallow
             .into_iter()
             .map(|(at, amount)| Tallow::new(at, amount))
+            .collect();
+        floor.items = items
+            .into_iter()
+            .map(|(at, kind, count)| {
+                *next_item += 1;
+                FloorItem::new(
+                    at,
+                    Item {
+                        id: crate::item::ItemId(*next_item),
+                        kind,
+                        count,
+                    },
+                )
+            })
             .collect();
         floor
     }
@@ -151,6 +204,22 @@ impl World {
             .insert(Monster::new(kind, self.content.monster(kind), pos));
         self.update_view();
         id
+    }
+
+    /// Drops an item on the current floor. For tests and scripted scenes.
+    pub fn place_item(&mut self, at: Point, kind: ItemKindId, count: u32) {
+        let item = Item {
+            id: self.new_item_id(),
+            kind,
+            count,
+        };
+        self.floor.items.push(FloorItem::new(at, item));
+        self.update_view();
+    }
+
+    /// This run's truth about a tincture kind (whether or not it's been learned).
+    pub fn tincture_lore(&self, kind: ItemKindId) -> Option<TinctureLore> {
+        self.tinctures.get(&kind).copied()
     }
 
     /// Drops tallow on the current floor. For tests and scripted scenes.
@@ -212,8 +281,8 @@ impl World {
             health: m.health,
             max_health: m.max_health,
             mind: m.mind,
-            your_hit_chance: combat::hit_chance(PLAYER_ACCURACY, def.defense),
-            its_hit_chance: combat::hit_chance(def.accuracy, PLAYER_DEFENSE),
+            your_hit_chance: combat::hit_chance(self.player_accuracy(), def.defense),
+            its_hit_chance: combat::hit_chance(def.accuracy, self.player_defense()),
             its_damage: def.damage,
             known_traits: def
                 .traits
@@ -236,6 +305,16 @@ impl World {
         if self.death.is_some() {
             return Vec::new();
         }
+        let mut events = self.resolve(command);
+        let burden = self.burden();
+        if burden != self.last_burden {
+            self.last_burden = burden;
+            events.push(Event::BurdenChanged { burden });
+        }
+        events
+    }
+
+    fn resolve(&mut self, command: Command) -> Vec<Event> {
         match command {
             Command::Move(dir) => self.player_step(dir),
             Command::Run(dir) => self.run(dir),
@@ -247,6 +326,12 @@ impl World {
             Command::Descend => self.descend(),
             Command::ToggleCandle => self.toggle_candle(),
             Command::Rest => self.rest(),
+            Command::PickUp => self.pick_up(),
+            Command::Drop(item) => self.drop_item(item),
+            Command::Equip(item) => self.toggle_equip(item),
+            Command::Use(item) => self.use_item(item),
+            Command::Throw { item, target } => self.throw(item, target),
+            Command::Fire { target } => self.fire(target),
             Command::Ascend => match self.map().tile(self.player.pos) {
                 Tile::StairsUp => vec![Event::StairsSealed { depth: self.depth }],
                 _ => vec![Event::NoStairsHere],
@@ -258,12 +343,18 @@ impl World {
     fn player_step(&mut self, dir: Direction) -> Vec<Event> {
         let target = self.player.pos + dir;
         let mut events = Vec::new();
+        let mut cost = ACTION_COST;
         if let Some(id) = self.floor.monster_at(target) {
             self.player_attack(id, &mut events);
         } else {
             let tile = self.map().tile(target);
             if !tile.is_walkable() {
                 return vec![Event::PlayerBlocked { at: target, tile }];
+            }
+            match self.burden() {
+                Burden::Overloaded => return vec![Event::TooHeavy],
+                Burden::Burdened => cost = BURDENED_MOVE,
+                Burden::Light => {}
             }
             self.player.pos = target;
             events.push(Event::PlayerMoved { to: target });
@@ -275,7 +366,7 @@ impl World {
                 });
             }
         }
-        self.pass_time(&mut events);
+        self.pass_time_costing(cost, &mut events);
         events
     }
 
@@ -326,37 +417,50 @@ impl World {
 
     fn player_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
         let monster = &self.floor.monsters[id];
-        let (kind, at) = (monster.kind, monster.pos);
+        let kind = monster.kind;
         if monster.phantom {
             self.floor.monsters.remove(id);
             events.push(Event::PhantomFaded { kind, struck: true });
             return;
         }
         let def = self.content.monster(kind);
-        let chance = combat::hit_chance(PLAYER_ACCURACY, def.defense);
-        let damage = combat::roll_attack(&mut self.combat_rng, chance, PLAYER_DAMAGE);
+        let chance = combat::hit_chance(self.player_accuracy(), def.defense);
+        let weapon = self.player_damage();
+        let damage = combat::roll_attack(&mut self.combat_rng, chance, weapon);
         events.push(Event::Attack {
             attacker: Who::Player,
             defender: Who::Monster(kind),
             damage,
         });
 
+        self.wake(id);
+        if let Some(damage) = damage {
+            self.damage_monster(id, damage, events);
+        }
+    }
+
+    /// Being attacked makes an unaware monster turn on you.
+    pub(crate) fn wake(&mut self, id: MonsterId) {
         let monster = &mut self.floor.monsters[id];
         if monster.mind == Mind::Unaware {
             monster.mind = Mind::Hunting {
                 last_seen: self.player.pos,
             };
         }
-        if let Some(damage) = damage {
-            monster.health = monster.health.saturating_sub(damage);
-            if monster.health == 0 {
-                self.floor.monsters.remove(id);
-                events.push(Event::MonsterDied { kind, at });
-                if kind == self.manifestation {
-                    events.push(Event::ManifestationBanished);
-                    self.ease_dread(events);
-                }
-            }
+    }
+
+    pub(crate) fn damage_monster(&mut self, id: MonsterId, damage: u32, events: &mut Vec<Event>) {
+        let monster = &mut self.floor.monsters[id];
+        monster.health = monster.health.saturating_sub(damage);
+        if monster.health > 0 {
+            return;
+        }
+        let (kind, at) = (monster.kind, monster.pos);
+        self.floor.monsters.remove(id);
+        events.push(Event::MonsterDied { kind, at });
+        if kind == self.manifestation {
+            events.push(Event::ManifestationBanished);
+            self.ease_dread(events);
         }
     }
 
@@ -395,13 +499,17 @@ impl World {
     }
 
     /// After an action that costs time: the world moves until the player can act again.
-    fn pass_time(&mut self, events: &mut Vec<Event>) {
+    pub(crate) fn pass_time(&mut self, events: &mut Vec<Event>) {
+        self.pass_time_costing(ACTION_COST, events);
+    }
+
+    fn pass_time_costing(&mut self, cost: i32, events: &mut Vec<Event>) {
         events.extend(self.update_view());
         events.extend(self.note_sightings());
         for monster in self.floor.monsters.values_mut() {
             monster.blow_ready = monster.winding_up.is_some();
         }
-        self.player.energy -= ACTION_COST;
+        self.player.energy -= cost;
         while self.player.energy < ACTION_COST && self.death.is_none() {
             self.tick(events);
         }
@@ -505,7 +613,7 @@ impl World {
             .monsters()
             .any(|(_, m)| m.kind == self.manifestation);
         self.depth += 1;
-        self.floor = Self::generate_floor(self.content, self.seed, self.depth);
+        self.floor = Self::generate_floor(self.content, self.seed, self.depth, &mut self.next_item);
         self.player.pos = self.floor.arrival();
         let mut events = vec![Event::Descended { depth: self.depth }];
         if fled {
@@ -1040,9 +1148,20 @@ mod tests {
         let info = world.inspect(near).unwrap();
         assert_eq!(
             info.your_hit_chance,
-            combat::hit_chance(PLAYER_ACCURACY, 15)
+            combat::hit_chance(world.player_accuracy(), 15)
         );
-        assert_eq!(info.its_hit_chance, combat::hit_chance(60, PLAYER_DEFENSE));
+        assert_eq!(
+            info.its_hit_chance,
+            combat::hit_chance(60, world.player_defense())
+        );
+        assert_eq!(
+            info.your_hit_chance, 70,
+            "candlestick +5 on base 80, against defense 15"
+        );
+        assert_eq!(
+            info.its_hit_chance, 50,
+            "cassock +3 on base 7, against accuracy 60"
+        );
         assert!(
             world.inspect(far).is_none(),
             "unseen monsters can't be inspected"

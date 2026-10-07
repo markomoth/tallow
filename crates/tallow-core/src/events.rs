@@ -6,6 +6,7 @@
 use crate::content::KindId;
 use crate::dread::DreadBand;
 use crate::geom::Point;
+use crate::item::{Burden, ItemKindId, Potency, SideEffect, TinctureEffect};
 use crate::map::Tile;
 
 /// Someone in a fight.
@@ -99,6 +100,79 @@ pub enum Event {
     ManifestationBanished,
     /// The player left the floor with the Manifestation still on it. Dread eases.
     ManifestationEscaped,
+
+    /// An item came into view for the first time.
+    SpottedItem {
+        kind: ItemKindId,
+        at: Point,
+    },
+    NothingToPickUp,
+    PickedUp {
+        kind: ItemKindId,
+        count: u32,
+    },
+    /// No pack slot left for another kind of thing; it stays on the floor.
+    PackFull {
+        kind: ItemKindId,
+    },
+    Dropped {
+        kind: ItemKindId,
+        count: u32,
+    },
+    Equipped {
+        kind: ItemKindId,
+    },
+    Unequipped {
+        kind: ItemKindId,
+    },
+    /// That item has no use of its own. Costs no time.
+    CantUse {
+        kind: ItemKindId,
+    },
+    /// A tincture was drunk. `learned` if this is the first of its kind.
+    Drank {
+        kind: ItemKindId,
+        effect: TinctureEffect,
+        potency: Potency,
+        side: SideEffect,
+        amount: u32,
+        learned: bool,
+    },
+    /// That item can't be thrown. Costs no time.
+    CantThrow {
+        kind: ItemKindId,
+    },
+    /// You can't aim at yourself. Costs no time.
+    BadTarget,
+    Thrown {
+        kind: ItemKindId,
+    },
+    Fired {
+        kind: ItemKindId,
+    },
+    /// Nothing to shoot with. Costs no time.
+    NoRangedWeapon,
+    /// No ammunition of this kind. Costs no time.
+    NoAmmo {
+        kind: ItemKindId,
+    },
+    /// A projectile reached a creature. `damage` is `None` on a miss.
+    ProjectileHit {
+        item: ItemKindId,
+        target: KindId,
+        damage: Option<u32>,
+    },
+    /// A breakable projectile shattered.
+    Shattered {
+        kind: ItemKindId,
+        at: Point,
+    },
+    /// Carrying more or less crossed a weight threshold.
+    BurdenChanged {
+        burden: Burden,
+    },
+    /// Too heavy to move. Costs no time.
+    TooHeavy,
 
     /// The first time this run the player sees a kind of creature.
     FirstSighting {

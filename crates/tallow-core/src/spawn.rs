@@ -97,6 +97,41 @@ pub fn populate<R: Rng + ?Sized>(
     placed
 }
 
+/// Items lying about on a fresh floor.
+const ITEMS_PER_FLOOR: (u32, u32) = (3, 5);
+
+/// Picks a floor's loose items (kind, count) and where they lie.
+pub fn place_items<R: Rng + ?Sized>(
+    rng: &mut R,
+    content: &Content,
+    map: &Map,
+    start: Point,
+    depth: u8,
+) -> Vec<(Point, crate::item::ItemKindId, u32)> {
+    let kinds: Vec<_> = content
+        .item_kinds()
+        .filter(|(_, d)| d.frequency > 0 && d.depth.0 <= depth && depth <= d.depth.1)
+        .map(|(k, _)| k)
+        .collect();
+    let mut spots: Vec<Point> = map
+        .points()
+        .filter(|&p| map.tile(p) == Tile::Floor && p != start)
+        .collect();
+    let mut placed = Vec::new();
+    for _ in 0..rng.random_range(ITEMS_PER_FLOOR.0..=ITEMS_PER_FLOOR.1) {
+        let Ok(&kind) = kinds.choose_weighted(rng, |&k| content.item(k).frequency) else {
+            break;
+        };
+        if spots.is_empty() {
+            break;
+        }
+        let at = spots.swap_remove(rng.random_range(0..spots.len()));
+        let (lo, hi) = content.item(kind).stack;
+        placed.push((at, kind, rng.random_range(lo..=hi)));
+    }
+    placed
+}
+
 /// Places a floor's tallow: one guaranteed lump and a few stubs, on plain floor.
 pub fn place_tallow<R: Rng + ?Sized>(rng: &mut R, map: &Map, start: Point) -> Vec<(Point, u32)> {
     let dist = path::distances(map, start);

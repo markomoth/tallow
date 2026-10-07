@@ -3,7 +3,7 @@
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 
-use crate::combat::{self, PLAYER_DEFENSE};
+use crate::combat;
 use crate::content::Trait;
 use crate::events::{Cause, Event, Who};
 use crate::geom::{Direction, Point};
@@ -165,7 +165,7 @@ impl World {
     fn monster_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
         let kind = self.floor.monsters[id].kind;
         let def = self.content.monster(kind);
-        let chance = combat::hit_chance(def.accuracy, PLAYER_DEFENSE);
+        let chance = combat::hit_chance(def.accuracy, self.player_defense());
         let damage = combat::roll_attack(&mut self.combat_rng, chance, def.damage);
         events.push(Event::Attack {
             attacker: Who::Monster(kind),

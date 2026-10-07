@@ -3,6 +3,7 @@
 mod app;
 mod input;
 mod log;
+mod names;
 mod render;
 
 use std::hash::{BuildHasher, RandomState};
@@ -41,9 +42,8 @@ fn run(terminal: &mut DefaultTerminal, seed: u64) -> Result<()> {
         if event::poll(FRAME)?
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
-            && let Some(action) = input::map_key(key)
         {
-            app.handle(action);
+            app.handle_key(key);
         }
     }
     Ok(())

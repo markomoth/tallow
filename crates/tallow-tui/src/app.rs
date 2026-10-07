@@ -1,18 +1,46 @@
 //! Top-level app state: the world, the log, and which screen is up.
 
-use tallow_core::{Command, MonsterId, Point, World};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use tallow_core::inventory::THROW_RANGE;
+use tallow_core::{Command, Event, ItemId, MonsterId, Point, World};
 
-use crate::input::Action;
+use crate::input::{Action, map_key};
 use crate::log::{MessageLog, Tone, narrate};
 
-/// How far a Shift+direction moves the Look cursor.
-const LOOK_JUMP: i32 = 5;
+/// How far a Shift+direction moves a cursor.
+const CURSOR_JUMP: i32 = 5;
+
+/// What the pack screen is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackPurpose {
+    /// Browsing: pick an item to see it and act on it.
+    Browse,
+    /// Choosing something to throw.
+    Throw,
+}
+
+/// What a target cursor will do when confirmed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Aim {
+    Throw(ItemId),
+    Fire,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Play,
     /// Examining the map. The world is paused.
     Look {
+        cursor: Point,
+    },
+    /// The pack screen, optionally with one item opened.
+    Pack {
+        purpose: PackPurpose,
+        selected: Option<ItemId>,
+    },
+    /// Choosing where a projectile goes.
+    Target {
+        aim: Aim,
         cursor: Point,
     },
     /// The run is over; waiting for "again" or "quit".
@@ -68,10 +96,39 @@ impl App {
         self.restart
     }
 
+    /// The tiles a projectile would cross, while aiming.
+    pub fn aim_path(&self) -> Vec<Point> {
+        match self.mode {
+            Mode::Target { aim, cursor } => self.world.aim(cursor, self.range(aim)),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Handles a raw key. The pack screen reads letters; everything else goes
+    /// through the key bindings.
+    pub fn handle_key(&mut self, key: KeyEvent) {
+        if let Mode::Pack { purpose, selected } = self.mode {
+            self.handle_pack_key(key, purpose, selected);
+        } else if let Some(action) = map_key(key) {
+            self.handle(action);
+        }
+    }
+
     pub fn handle(&mut self, action: Action) {
         match self.mode {
             Mode::Play => self.handle_play(action),
-            Mode::Look { cursor } => self.handle_look(action, cursor),
+            Mode::Look { cursor } => {
+                if let Some(cursor) = self.move_cursor(action, cursor) {
+                    self.mode = Mode::Look { cursor };
+                } else if matches!(
+                    action,
+                    Action::Look | Action::Cancel | Action::Confirm | Action::Quit
+                ) {
+                    self.mode = Mode::Play;
+                }
+            }
+            Mode::Target { aim, cursor } => self.handle_target(action, aim, cursor),
+            Mode::Pack { .. } => {}
             Mode::Dead => match action {
                 Action::Confirm => self.restart = true,
                 Action::Quit => self.quit = true,
@@ -89,13 +146,40 @@ impl App {
             Action::Ascend => Command::Ascend,
             Action::Candle => Command::ToggleCandle,
             Action::Rest => Command::Rest,
+            Action::PickUp => Command::PickUp,
+            Action::Pack => {
+                self.mode = Mode::Pack {
+                    purpose: PackPurpose::Browse,
+                    selected: None,
+                };
+                return;
+            }
+            Action::Throw => {
+                self.mode = Mode::Pack {
+                    purpose: PackPurpose::Throw,
+                    selected: None,
+                };
+                return;
+            }
+            Action::Fire => {
+                // A shot at your own feet is refused for free; the refusal says
+                // whether the problem is the weapon, the ammunition, or the aim.
+                let here = self.world.player().pos;
+                let check = self.world.clone().apply(Command::Fire { target: here });
+                if check == [Event::BadTarget] {
+                    self.mode = Mode::Target {
+                        aim: Aim::Fire,
+                        cursor: self.first_target(),
+                    };
+                } else {
+                    self.play(Command::Fire { target: here });
+                }
+                return;
+            }
             Action::Look => {
-                let cursor = self
-                    .visible_monsters()
-                    .first()
-                    .and_then(|&id| self.world.floor().monster(id))
-                    .map_or(self.world.player().pos, |m| m.pos);
-                self.mode = Mode::Look { cursor };
+                self.mode = Mode::Look {
+                    cursor: self.first_target(),
+                };
                 return;
             }
             Action::Quit => {
@@ -104,9 +188,86 @@ impl App {
             }
             Action::NextTarget | Action::Cancel | Action::Confirm => return,
         };
-        let content = self.world.content();
+        self.play(command);
+    }
+
+    fn handle_target(&mut self, action: Action, aim: Aim, cursor: Point) {
+        if let Some(cursor) = self.move_cursor(action, cursor) {
+            self.mode = Mode::Target { aim, cursor };
+            return;
+        }
+        match action {
+            Action::Confirm | Action::Throw | Action::Fire => {
+                self.mode = Mode::Play;
+                self.play(match aim {
+                    Aim::Throw(item) => Command::Throw {
+                        item,
+                        target: cursor,
+                    },
+                    Aim::Fire => Command::Fire { target: cursor },
+                });
+            }
+            Action::Cancel | Action::Quit => self.mode = Mode::Play,
+            _ => {}
+        }
+    }
+
+    fn handle_pack_key(&mut self, key: KeyEvent, purpose: PackPurpose, selected: Option<ItemId>) {
+        let KeyCode::Char(c) = key.code else {
+            if key.code == KeyCode::Esc {
+                self.mode = match selected {
+                    Some(_) => Mode::Pack {
+                        purpose,
+                        selected: None,
+                    },
+                    None => Mode::Play,
+                };
+            }
+            return;
+        };
+        let Some(item) = selected else {
+            // Choosing an item by its letter.
+            let index = (c as u32).wrapping_sub('a' as u32) as usize;
+            let Some(&item) = self.world.player().inventory.get(index) else {
+                return;
+            };
+            let throwable = self.world.content().item(item.kind).thrown.is_some();
+            if purpose == PackPurpose::Throw && !throwable {
+                return;
+            }
+            self.mode = match purpose {
+                PackPurpose::Browse => Mode::Pack {
+                    purpose,
+                    selected: Some(item.id),
+                },
+                PackPurpose::Throw => Mode::Target {
+                    aim: Aim::Throw(item.id),
+                    cursor: self.first_target(),
+                },
+            };
+            return;
+        };
+        let command = match c {
+            'e' => Command::Equip(item),
+            'a' => Command::Use(item),
+            'd' => Command::Drop(item),
+            't' => {
+                self.mode = Mode::Target {
+                    aim: Aim::Throw(item),
+                    cursor: self.first_target(),
+                };
+                return;
+            }
+            _ => return,
+        };
+        self.mode = Mode::Play;
+        self.play(command);
+    }
+
+    /// Applies a command and writes what happened to the log.
+    fn play(&mut self, command: Command) {
         for event in self.world.apply(command) {
-            if let Some((text, tone)) = narrate(&event, content) {
+            if let Some((text, tone)) = narrate(&event, &self.world) {
                 self.log.push(text, tone);
             }
         }
@@ -115,7 +276,8 @@ impl App {
         }
     }
 
-    fn handle_look(&mut self, action: Action, cursor: Point) {
+    /// Moves a cursor for a movement action, or `None` if it isn't one.
+    fn move_cursor(&self, action: Action, cursor: Point) -> Option<Point> {
         let map = self.world.map();
         let clamp = |p: Point| {
             Point::new(
@@ -123,14 +285,14 @@ impl App {
                 p.y.clamp(0, map.height() - 1),
             )
         };
-        let cursor = match action {
-            Action::Move(dir) => clamp(cursor + dir),
+        match action {
+            Action::Move(dir) => Some(clamp(cursor + dir)),
             Action::Run(dir) => {
                 let (dx, dy) = dir.delta();
-                clamp(Point::new(
-                    cursor.x + dx * LOOK_JUMP,
-                    cursor.y + dy * LOOK_JUMP,
-                ))
+                Some(clamp(Point::new(
+                    cursor.x + dx * CURSOR_JUMP,
+                    cursor.y + dy * CURSOR_JUMP,
+                )))
             }
             Action::NextTarget => {
                 let spots: Vec<Point> = self
@@ -140,20 +302,34 @@ impl App {
                     .map(|m| m.pos)
                     .collect();
                 let next = spots.iter().position(|&p| p == cursor).map_or(0, |i| i + 1);
-                spots
-                    .get(next % spots.len().max(1))
-                    .copied()
-                    .unwrap_or(cursor)
+                Some(
+                    spots
+                        .get(next % spots.len().max(1))
+                        .copied()
+                        .unwrap_or(cursor),
+                )
             }
-            Action::Look | Action::Cancel | Action::Confirm | Action::Quit => {
-                self.mode = Mode::Play;
-                return;
-            }
-            Action::Wait | Action::Descend | Action::Ascend | Action::Candle | Action::Rest => {
-                cursor
-            }
-        };
-        self.mode = Mode::Look { cursor };
+            _ => None,
+        }
+    }
+
+    /// Where a cursor starts: on the nearest creature in view, else on you.
+    fn first_target(&self) -> Point {
+        self.visible_monsters()
+            .first()
+            .and_then(|&id| self.world.floor().monster(id))
+            .map_or(self.world.player().pos, |m| m.pos)
+    }
+
+    fn range(&self, aim: Aim) -> i32 {
+        match aim {
+            Aim::Throw(_) => THROW_RANGE,
+            Aim::Fire => self.world.fire_range().unwrap_or(0),
+        }
+    }
+
+    fn visible_monsters(&self) -> Vec<MonsterId> {
+        self.world.floor().visible_monsters(self.world.player().pos)
     }
 
     #[cfg(test)]
@@ -165,16 +341,17 @@ impl App {
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
-
-    fn visible_monsters(&self) -> Vec<MonsterId> {
-        self.world.floor().visible_monsters(self.world.player().pos)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::crossterm::event::KeyModifiers;
     use tallow_core::Direction;
+
+    fn key(c: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
 
     #[test]
     fn look_moves_a_cursor_and_returns_to_play() {
@@ -195,5 +372,62 @@ mod tests {
         assert_eq!(app.world().turn(), 0, "looking takes no time");
         app.handle(Action::Cancel);
         assert_eq!(app.mode(), Mode::Play);
+    }
+
+    #[test]
+    fn the_pack_opens_items_by_letter_and_acts_on_them() {
+        let mut app = App::new(3);
+        app.handle(Action::Pack);
+        app.handle_key(key('c')); // the starting tincture
+        let Mode::Pack {
+            selected: Some(item),
+            ..
+        } = app.mode()
+        else {
+            panic!("item not opened: {:?}", app.mode())
+        };
+        app.handle_key(key('a'));
+        assert_eq!(app.mode(), Mode::Play);
+        assert!(app.world().inventory_item(item).is_none(), "drunk");
+        assert!(
+            app.log()
+                .entries()
+                .last()
+                .unwrap()
+                .text
+                .contains("Your wounds close")
+        );
+    }
+
+    #[test]
+    fn throwing_goes_through_the_pack_then_a_target() {
+        let mut app = App::new(3);
+        app.clear_floor_for_test();
+        let world = app.world_mut();
+        let here = world.player().pos;
+        let stone = world.content().item_by_id("stone").unwrap();
+        world.place_item(here, stone, 3);
+        app.handle(Action::PickUp);
+        app.handle(Action::Throw);
+        let letter = (b'a' + app.world().player().inventory.len() as u8 - 1) as char;
+        app.handle_key(key(letter));
+        assert!(matches!(app.mode(), Mode::Target { .. }));
+        app.handle(Action::Cancel);
+        assert_eq!(app.mode(), Mode::Play);
+    }
+
+    #[test]
+    fn fire_without_a_sling_says_so_instead_of_aiming() {
+        let mut app = App::new(3);
+        app.handle(Action::Fire);
+        assert_eq!(app.mode(), Mode::Play);
+        assert!(
+            app.log()
+                .entries()
+                .last()
+                .unwrap()
+                .text
+                .contains("nothing ready to shoot")
+        );
     }
 }

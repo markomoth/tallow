@@ -197,29 +197,41 @@ Target for v1: 16 rites (4 per school). No damage-only spells. Every rite change
 
 ### Weight-based inventory
 
-- Every item has weight. Thresholds shown on HUD:
-  - **Unburdened:** normal.
-  - **Burdened:** moving costs 1.5× time. (Tallow burns per turn, so this matters.)
-  - **Overloaded:** cannot move until you drop something.
-- Tallow lumps have weight. Carrying light is a real trade.
+- Every item has weight. The HUD shows a Load bar; the pack screen shows exact numbers.
+  - **Unburdened:** up to 25.0. Normal.
+  - **Burdened:** over 25.0. Moving costs 1.5× time. (Tallow burns per turn, so this matters.)
+  - **Overloaded:** over 38.0. Cannot move until you drop something.
+- Tallow weighs 1.0 per 100 turns of light. A full candle is a real weight; it lightens as it burns.
+- **Starting kit:** iron candlestick (in hand), cassock (worn), one mending tincture. Load 14.3.
+- The pack holds up to 26 kinds of thing (one letter each); stackables share a slot.
+- Each floor has 3–5 loose items, chosen by depth from `assets/items.ron`.
+
+### Throwing and shooting
+
+- `t` picks something throwable from the pack, then a target. `f` shoots the readied sling or crossbow.
+- The target cursor starts on the nearest creature; the shaded line is exactly where the projectile will fly (it stops at walls, range, and the first creature you can see).
+- Hand range is 7; a sling reaches 8, a crossbow 10. Stones and bolts land where they stop and can be picked up again.
+- **Holy water** shatters on landing: it burns the Dreaming (5–9), makes the Taken flinch (1–3), and does nothing to vermin.
+- Projectiles pass straight through phantoms, which come apart.
 
 ### Categories
 
 | Category | Examples |
 |---|---|
 | Melee | Sickle, cleaver, censer-on-chain, iron candlestick, boathook, verger's staff |
-| Ranged | Sling (stones also probe anomalies, see §8), crossbow, throwing knives |
-| Throwables | Oil flask, holy water, smoke pot, chalk (draws a ward line) |
+| Ranged | Sling (stones also probe anomalies, see §8), crossbow |
+| Throwables | Throwing knives, holy water; later oil flask, smoke pot, chalk (draws a ward line) |
 | Vestments | Cassock, gambeson, sexton's leathers, choir mail (heavy) |
-| Tinctures | Mending, steadying (−dread), waking (+speed), etc. |
+| Tinctures | Mending (+health), steadying (−dread), seeing (reveals the floor around you) |
 | Texts | Hymnal pages, heretic notes, Collegium lecture fragments (teach rites) |
 | Tools | Handbell (noise lure), crowbar (pry, break), tallow lumps, incense |
 
 ### Identification: known category, learn by use
 
-- You always see the category: "a mending tincture (strength unknown)".
-- Using it reveals the exact strength and any side effect for the rest of the run.
-- Side effects are never lethal and never permanent.
+- You always see the category: "mending tincture (untried)".
+- Each tincture kind rolls, per run, a strength (weak, middling, strong) and maybe a side effect.
+- Drinking one reveals both for that kind for the rest of the run; the name then shows it ("strong mending tincture (bitter)").
+- The only side effect so far is **bitter**: +6 dread. Side effects are never lethal and never permanent.
 
 ---
 
@@ -309,7 +321,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Glyphs:** ASCII. `@` you, `#` wall, `.` floor, `+` door, `>` `<` stairs, `&` brazier, `,` tallow, letters for creatures, `!` tinctures, `?` texts, `*` Leavings, `~` water, `"` vestments, `/` `|` `)` weapons.
+- **Glyphs:** ASCII. `@` you, `#` wall, `.` floor, `+` door, `>` `<` stairs, `&` brazier, `,` tallow, letters for creatures, `!` tinctures, `?` texts, `*` Leavings, `~` water, `"` vestments, `/` melee weapons, `)` ranged weapons, `(` throwables and ammunition.
 - **Lighting:** per-tile light value blended into foreground and background. Warm amber falloff from the candle; braziers orange; holy light pale gold; darkness near-black.
 - **Flicker:** small per-frame jitter on candle light (visual only, never affects rules).
 - **Remembered tiles:** desaturated blue-grey.
@@ -325,10 +337,10 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `.` / `5` | Wait |
 | `<` `>` | Stairs |
 | `g` | Pick up |
-| `i` | Inventory (use, equip, drop) |
+| `i` | Pack: pick a letter, then `a` drink, `e` equip / take off, `t` throw, `d` drop |
 | `z` | Cast rite |
-| `f` | Fire ranged |
-| `t` | Throw |
+| `f` | Fire the readied sling or crossbow |
+| `t` | Throw (choose item, then target; Enter lets fly) |
 | `x` | Look (cursor; Tab cycles creatures, Esc leaves) |
 | `s` | Study / render corpse |
 | `c` | Snuff / relight candle |
@@ -446,7 +458,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 
 | # | Milestone | Done when you can… | Est. |
 |---|---|---|---|
-| M4 | Items & weight | Pick up, equip, throw, get Burdened, learn a tincture by drinking it | 3–4 h |
+| M4 ✅ | Items & weight | Pick up, equip, throw, get Burdened, learn a tincture by drinking it | 3–4 h |
 | M5 | Skills & levels | See Blades rank up from use, pick 1 of 3 boons on level up | 2–3 h |
 | M6 | Rites & study | Study a corpse, learn Compel from a page, mind-control a Proctor into a Taken | 3–4 h |
 | M7 | Factions & environment | Ring a bell to pull a swarm into a nightmare; set a library on fire | 4–5 h |
