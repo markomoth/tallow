@@ -27,6 +27,8 @@ struct Options {
     dev_depth: Option<u8>,
     dev_rites: bool,
     dev_kit: bool,
+    dev_level: Option<u32>,
+    dev_near_stairs: bool,
 }
 
 fn main() -> Result<()> {
@@ -47,6 +49,12 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
     }
     if options.dev_rites {
         app.world_mut().dev_learn_all_rites();
+    }
+    if options.dev_near_stairs {
+        app.world_mut().dev_near_stairs(8);
+    }
+    if let Some(level) = options.dev_level {
+        app.world_mut().dev_level_to(level);
     }
     if options.dev_kit {
         for (id, n) in [
@@ -93,6 +101,11 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             }
             "--dev-rites" => options.dev_rites = true,
             "--dev-kit" => options.dev_kit = true,
+            "--dev-near-stairs" => options.dev_near_stairs = true,
+            "--dev-level" => {
+                let value = args.next().context(USAGE)?;
+                options.dev_level = Some(value.parse().context("bad level")?);
+            }
             "-h" | "--help" => bail!(USAGE),
             other => bail!("unknown argument {other:?}\n{USAGE}"),
         }

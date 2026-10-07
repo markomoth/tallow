@@ -15,6 +15,7 @@ struct Stats {
     tallow_left_at_end: u32,
     level: u32,
     bludgeons: u32,
+    bosses: u32,
 }
 
 fn main() {
@@ -39,6 +40,7 @@ fn main() {
         totals.tallow_left_at_end += stats.tallow_left_at_end;
         totals.level += stats.level;
         totals.bludgeons += stats.bludgeons;
+        totals.bosses += stats.bosses;
     }
     let n = runs as u32;
     println!("{runs} runs, average {} turns", turns / runs);
@@ -49,9 +51,10 @@ fn main() {
         totals.tallow_left_at_end / n,
     );
     println!(
-        "average final level {:.1}; average Bludgeons rank {:.1}",
+        "average final level {:.1}; average Bludgeons rank {:.1}; {:.2} mini-bosses killed per run",
         f64::from(totals.level) / f64::from(n),
         f64::from(totals.bludgeons) / f64::from(n),
+        f64::from(totals.bosses) / f64::from(n),
     );
     for (depth, &count) in deaths.iter().enumerate().skip(1) {
         println!(
@@ -74,6 +77,7 @@ fn play(seed: u64) -> (World, Stats) {
             match event {
                 Event::CandleBurnedOut => stats.burned_out += 1,
                 Event::Manifested => stats.manifested += 1,
+                Event::BossDefeated { .. } => stats.bosses += 1,
                 _ => {}
             }
         }

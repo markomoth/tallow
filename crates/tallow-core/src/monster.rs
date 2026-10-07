@@ -56,6 +56,10 @@ pub struct Monster {
     pub beckoned: u32,
     /// Slipped on oil: loses its next action.
     pub(crate) slipping: bool,
+    /// Mid-chant: the rite lands next action if it can still see you.
+    pub chanting: bool,
+    /// Actions until it can use its special ability again.
+    pub ability_cooldown: u32,
 }
 
 impl Monster {
@@ -81,6 +85,8 @@ impl Monster {
             turned: false,
             beckoned: 0,
             slipping: false,
+            chanting: false,
+            ability_cooldown: 0,
         }
     }
 }

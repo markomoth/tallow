@@ -141,6 +141,8 @@ fn cause_line(world: &World, cause: Cause) -> String {
         Cause::Attack(kind) => format!("Killed by {}", with_article(name(kind))),
         Cause::HeavyBlow(kind) => format!("Crushed by {}'s heavy blow", with_article(name(kind))),
         Cause::Fire => "Burned to death".to_string(),
+        Cause::Chant(kind) => format!("Undone by {}'s chanted rite", with_article(name(kind))),
+        Cause::Fall => "Killed by a fall".to_string(),
     }
 }
 

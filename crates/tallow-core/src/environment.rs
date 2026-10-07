@@ -90,7 +90,7 @@ impl World {
         let fuel = tile
             .fuel()
             .or(self.floor.has_oil(p).then_some(OIL_FUEL))
-            .or((flask && tile.is_walkable()).then_some(FLOOR_FUEL));
+            .or((flask && tile.is_walkable() && !tile.is_water()).then_some(FLOOR_FUEL));
         let Some(fuel) = fuel else { return false };
         if self.floor.fire_at(p) >= fuel {
             return false;
@@ -102,7 +102,7 @@ impl World {
     /// Spills lamp oil on open ground around `at`. Fire already there lights it.
     pub(crate) fn spill_oil(&mut self, at: Point) {
         for p in std::iter::once(at).chain(Direction::ALL.iter().map(|&d| at + d)) {
-            if self.map().is_walkable(p) {
+            if self.map().is_walkable(p) && !self.map().tile(p).is_water() {
                 self.floor.set_oil(p, true);
                 if self.floor.is_burning(p) {
                     self.ignite(p, false);
@@ -149,6 +149,7 @@ impl World {
                 self.floor.set_oil(p, false);
                 if self.map().tile(p).fuel().is_some() {
                     self.floor.seals.retain(|&(at, _)| at != p);
+                    self.floor.locks.retain(|&(at, _)| at != p);
                     self.floor.set_tile(p, Tile::Floor);
                 }
             }
@@ -199,11 +200,13 @@ impl World {
             .floor
             .seals
             .iter()
+            .chain(self.floor.locks.iter())
             .filter(|&&(_, until)| now >= until)
             .map(|&(at, _)| at)
             .collect();
         for at in lapsed {
             self.floor.seals.retain(|&(p, _)| p != at);
+            self.floor.locks.retain(|&(p, _)| p != at);
             if self.map().tile(at) == Tile::DoorSealed {
                 self.floor.set_tile(at, Tile::DoorClosed);
                 if self.floor.is_explored(at) {
@@ -254,6 +257,9 @@ impl World {
                 self.floor.set_tile(at, Tile::Door);
                 events.push(Event::DoorOpened { at });
             }
+            Tile::DoorSealed if self.floor.locks.iter().any(|&(p, _)| p == at) => {
+                return Some(vec![Event::DoorLocked]);
+            }
             Tile::DoorSealed => {
                 self.floor.seals.retain(|&(p, _)| p != at);
                 self.floor.set_tile(at, Tile::Door);
@@ -303,8 +309,12 @@ impl World {
         if a == b || ma.phantom || mb.phantom || mb.compelled > 0 || ma.compelled > 0 {
             return false;
         }
-        let fa = self.content.monster(ma.kind).faction;
-        let fb = self.content.monster(mb.kind).faction;
+        let (da, db) = (self.content.monster(ma.kind), self.content.monster(mb.kind));
+        // The great ones below only want you.
+        if da.boss || db.boss {
+            return false;
+        }
+        let (fa, fb) = (da.faction, db.faction);
         fa.hates(fb) || (fa == fb && ma.turned != mb.turned)
     }
 }
@@ -599,5 +609,62 @@ mod tests {
         });
         assert!(world.floor().is_burning(Point::new(2, 1)));
         assert!(!world.floor().is_burning(Point::new(1, 1)));
+    }
+
+    #[test]
+    fn deep_water_warns_then_drowns_your_candle() {
+        let mut world = world_from("#######\n#@WW..#\n#######");
+        let events = world.apply(Command::Move(Direction::E));
+        assert_eq!(
+            events,
+            vec![Event::DeepWaterAhead {
+                at: Point::new(2, 1)
+            }]
+        );
+        let events = world.apply(Command::Move(Direction::E));
+        assert!(events.contains(&Event::CandleDrowned));
+        assert!(!world.player().candle.is_lit());
+        assert_eq!(world.turn(), 2, "wading costs double");
+        assert_eq!(
+            world.apply(Command::ToggleCandle),
+            vec![Event::CantLightInWater]
+        );
+        let events = world.apply(Command::Move(Direction::E));
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, Event::DeepWaterAhead { .. })),
+            "no second warning"
+        );
+    }
+
+    #[test]
+    fn rotten_boards_warn_then_drop_you_a_floor() {
+        let mut world = World::new(5);
+        world.despawn_all();
+        let here = world.player().pos;
+        let next = Direction::ALL
+            .into_iter()
+            .map(|d| here + d)
+            .find(|&p| world.map().tile(p) == Tile::Floor)
+            .unwrap();
+        world.floor.set_tile(next, Tile::RottenFloor);
+        let dir = Direction::ALL
+            .into_iter()
+            .find(|&d| here + d == next)
+            .unwrap();
+        assert!(matches!(
+            world.apply(Command::Move(dir))[..],
+            [Event::RottenAhead { .. }]
+        ));
+        let health = world.player().health;
+        let events = world.apply(Command::Move(dir));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::Fell { depth: 2, .. }))
+        );
+        assert_eq!(world.depth(), 2);
+        assert!(world.player().health < health && world.player().health > 0);
     }
 }

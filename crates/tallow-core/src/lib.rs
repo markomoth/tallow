@@ -3,6 +3,7 @@
 //! This crate never prints, reads the clock, or touches the terminal.
 //! Frontends send [`Command`]s to a [`World`] and receive [`Event`]s back.
 
+pub mod abilities;
 pub mod actions;
 mod ai;
 pub mod biome;

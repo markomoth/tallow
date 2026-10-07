@@ -2,6 +2,7 @@
 //! steps of a tile. For driving the real binary in tmux.
 //!
 //! cargo run -p tallow-core --example route -- <seed> <depth> <x> <y> <stop>
+//! (x = -1 heads for the stair down)
 
 use tallow_core::{Direction, Point, Tile, World, map::path};
 
@@ -15,7 +16,22 @@ fn main() {
     };
     let mut world = World::new(seed as u64);
     world.dev_skip_to(depth as u8);
-    let dist = path::distances(world.map(), Point::new(x as i32, y as i32));
+    // x = -1: the stair down.
+    let goal = if x < 0 {
+        world
+            .map()
+            .find(Tile::StairsDown)
+            .next()
+            .expect("a stair down")
+    } else {
+        Point::new(x as i32, y as i32)
+    };
+    // Walk around rotten boards rather than fall through them.
+    let mut solid = world.map().clone();
+    for p in world.map().find(Tile::RottenFloor) {
+        solid.set(p, Tile::Wall);
+    }
+    let dist = path::distances(&solid, goal);
     let mut p = world.player().pos;
     let mut keys = String::new();
     while let Some(here) = dist.at(p).filter(|&d| d > stop as u32) {

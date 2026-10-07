@@ -32,6 +32,8 @@ pub struct Corpse {
     /// Turns of study and rendering done so far. Interrupted work resumes.
     pub studied: u32,
     pub rendered: u32,
+    /// Old bones that were here before you: they don't rot.
+    pub ancient: bool,
 }
 
 /// How a body is doing.
@@ -231,6 +233,7 @@ impl World {
                 died,
                 studied: 0,
                 rendered: 0,
+                ancient: false,
             });
         }
     }
@@ -239,7 +242,7 @@ impl World {
     pub(crate) fn tick_corpses(&mut self, events: &mut Vec<Event>) {
         let now = self.turn();
         let mut rotted = Vec::new();
-        for c in &self.floor.corpses {
+        for c in self.floor.corpses.iter().filter(|c| !c.ancient) {
             let age = now.saturating_sub(c.died);
             if age == SWELL_TURNS && self.floor.is_visible(c.at) {
                 events.push(Event::CorpseSwelling {
@@ -253,7 +256,7 @@ impl World {
         }
         self.floor
             .corpses
-            .retain(|c| now.saturating_sub(c.died) < ROT_TURNS);
+            .retain(|c| c.ancient || now.saturating_sub(c.died) < ROT_TURNS);
         for c in rotted {
             let big = self.content.monster(c.kind).health >= HATCH_HEALTH;
             let free = c.at != self.player.pos && self.floor.monster_at(c.at).is_none();

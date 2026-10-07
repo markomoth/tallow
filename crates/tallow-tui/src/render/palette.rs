@@ -25,6 +25,28 @@ pub const SEAL_FG: Rgb = [236, 214, 130];
 pub const FIRE_FG: [Rgb; 3] = [[255, 200, 80], [255, 130, 40], [230, 70, 30]];
 pub const FIRE_BG: Rgb = [110, 34, 10];
 pub const OIL_BG: Rgb = [52, 46, 18];
+pub const SHALLOW_FG: Rgb = [110, 150, 180];
+pub const SHALLOW_BG: Rgb = [22, 34, 44];
+pub const DEEP_FG: Rgb = [70, 110, 170];
+pub const DEEP_BG: Rgb = [10, 18, 40];
+pub const ROTTEN_FG: Rgb = [130, 100, 60];
+
+/// Each biome tints its stone a little: cold crypt grey, cool Collegium
+/// stone, green-blue damp, yellowed rot, the Throne's red.
+pub fn biome_tint(biome: tallow_core::Biome) -> [f32; 3] {
+    use tallow_core::Biome;
+    match biome {
+        Biome::Crypts => [1.0, 1.0, 1.0],
+        Biome::Collegium => [0.92, 0.96, 1.12],
+        Biome::DrownedStacks => [0.78, 0.98, 1.08],
+        Biome::RotCourt => [1.1, 1.0, 0.7],
+        Biome::Throne => [1.2, 0.82, 0.78],
+    }
+}
+
+pub fn tinted(base: Rgb, tint: [f32; 3]) -> Rgb {
+    [0, 1, 2].map(|i| (f32::from(base[i]) * tint[i]).clamp(0.0, 255.0) as u8)
+}
 
 /// Remembered tiles, out of sight: a cold blue-grey.
 pub const MEMORY_TINT: [f32; 3] = [0.30, 0.34, 0.46];

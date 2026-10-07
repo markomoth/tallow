@@ -35,6 +35,14 @@ impl World {
         if self.turn().is_multiple_of(regen) {
             self.player.health = (self.player.health + 1).min(self.player.max_health);
         }
+        if self
+            .player
+            .blind_until
+            .is_some_and(|until| self.turn() >= until)
+        {
+            self.player.blind_until = None;
+            events.push(Event::SightReturns);
+        }
         self.tick_rites(events);
         self.tick_corpses(events);
         self.tick_fire(events);

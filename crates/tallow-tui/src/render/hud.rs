@@ -175,6 +175,10 @@ fn conditions(world: &World) -> Line<'static> {
         Burden::Overloaded => Some("can't move!"),
     };
     let shroud = world.shrouded().then_some(("shrouded", palette::GOOD));
+    let blind = player
+        .blind_until
+        .is_some()
+        .then_some(("ink in your eyes", palette::DANGER));
     let hush = world.hushed().then_some(("hushed", palette::GOOD));
     let eyes = world
         .borrowed_eyes()
@@ -183,6 +187,7 @@ fn conditions(world: &World) -> Line<'static> {
     for (word, color) in candle
         .into_iter()
         .chain(load.map(|w| (w, palette::DANGER)))
+        .chain(blind)
         .chain(shroud)
         .chain(hush)
         .chain(eyes)
@@ -306,6 +311,12 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
         ]));
         lines.push(Line::styled(def.description.clone(), dim()));
         lines.push(Line::styled(faction_line(def.faction), dim()));
+        if def.boss {
+            lines.push(Line::styled(
+                "One of the great ones below. It resists Binding.",
+                Style::new().fg(palette::DANGER),
+            ));
+        }
         let mind = match info.mind {
             _ if info.compelled > 0 => "bound to your will".to_string(),
             _ if info.terrified > 0 => "fleeing your dread".to_string(),
@@ -533,6 +544,24 @@ fn trait_line(t: &Trait) -> String {
         } => {
             format!("heavy blow, {lo}–{hi}. Aimed a turn ahead at a marked tile.")
         }
+        Trait::Blinds { turns } => format!("its hit shrinks your light for {turns} turns."),
+        Trait::Chants {
+            damage: (lo, hi), ..
+        } => format!(
+            "chants a rite at you ({lo}–{hi}, and dread). Break its line of sight before the chant ends."
+        ),
+        Trait::Drags => "its hit drags you toward deep water.".into(),
+        Trait::Sings { .. } => "its singing raises your dread while it can see you.".into(),
+        Trait::Bursts => "bursts into flies when it dies.".into(),
+        Trait::Summons { max, .. } => {
+            format!("calls up flies in the dark, up to {max} at a time.")
+        }
+        Trait::Raises { range, .. } => {
+            format!("raises bodies within {range} tiles. Render or burn them first.")
+        }
+        Trait::Rewrites { .. } => "locks the doors around it, and sets books alight.".into(),
+        Trait::Chorus => "several bodies, one life: wound one and all bleed.".into(),
+        Trait::Swims => "at home in deep water.".into(),
     }
 }
 
@@ -550,6 +579,14 @@ fn tile_line(tile: Tile) -> &'static str {
         }
         Tile::Bookshelf => "Shelves of crumbling books. They would burn well.",
         Tile::Pew => "A wooden pew. You can climb over it. It would burn.",
+        Tile::ShallowWater => "Black water, ankle-deep. Slow going. Nothing burns here.",
+        Tile::DeepWater => {
+            "Deep water. Wading in puts your candle out, and you can't light it again until you're out. Slow."
+        }
+        Tile::RottenFloor => {
+            "Rotten boards. They will give way under you and drop you to the floor below (you'll be bruised, not killed)."
+        }
+        Tile::Pit => "A hole where the boards gave way. Far below, a floor.",
         Tile::BellRope => {
             "A bell rope. Pull it (walk into it) and the bell rings out: everything within earshot comes to you. The Taken close by cower."
         }

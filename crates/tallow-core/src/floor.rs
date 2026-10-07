@@ -44,6 +44,8 @@ pub struct Floor {
     oil: Grid<bool>,
     /// Doors barred by Seal, and the turn each seal lapses.
     pub(crate) seals: Vec<(Point, u64)>,
+    /// Doors locked against you by a boss, and when each gives.
+    pub(crate) locks: Vec<(Point, u64)>,
 }
 
 /// An item lying on the floor.
@@ -102,6 +104,7 @@ impl Floor {
             fire: Grid::new(w, h, 0),
             oil: Grid::new(w, h, false),
             seals: Vec::new(),
+            locks: Vec::new(),
             map,
             arrival,
             lights,

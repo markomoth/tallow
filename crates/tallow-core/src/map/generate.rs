@@ -9,6 +9,7 @@ use rand::seq::IndexedRandom;
 use rand::{Rng, RngExt};
 
 use super::{Map, Tile, path};
+use crate::biome::Biome;
 use crate::geom::{Direction, Point};
 
 pub const WIDTH: i32 = 80;
@@ -100,15 +101,28 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) ->
             map.set(p, Tile::Floor);
         }
     }
-    let library_floor = depth >= 4;
+    let biome = Biome::for_depth(depth);
     for room in &rooms {
         let big = room.w >= 7 && room.h >= 5;
-        if big && library_floor && rng.random_bool(0.4) {
+        let (shelves, pews) = match biome {
+            Biome::Crypts => (0.0, 0.25),
+            Biome::Collegium => (0.5, 0.0),
+            Biome::DrownedStacks => (0.3, 0.0),
+            Biome::RotCourt | Biome::Throne => (0.0, 0.4),
+        };
+        if big && rng.random_bool(shelves) {
             add_shelves(&mut map, room);
-        } else if big && !library_floor && rng.random_bool(0.25) {
+        } else if big && rng.random_bool(pews) {
             add_pews(&mut map, room);
         } else if room.w >= 9 && room.h >= 5 && rng.random_bool(0.6) {
             add_pillars(&mut map, room);
+        }
+    }
+    if biome == Biome::DrownedStacks {
+        for room in &rooms {
+            if rng.random_bool(0.5) {
+                flood(rng, &mut map, room);
+            }
         }
     }
     for (a, b) in connections(rng, &rooms) {
@@ -127,6 +141,14 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) ->
                     Tile::Brazier
                 };
                 place_somewhere(rng, &mut map, room, tile);
+            }
+        }
+    }
+    // Rotten boards, only where floor surrounds them, so no path needs them.
+    if matches!(biome, Biome::Crypts | Biome::Collegium) {
+        for _ in 0..rng.random_range(0..=2) {
+            if let Some(room) = rooms.choose(rng) {
+                place_somewhere(rng, &mut map, room, Tile::RottenFloor);
             }
         }
     }
@@ -301,6 +323,28 @@ fn add_shelves(map: &mut Map, room: &Room) {
     }
 }
 
+/// Floods a room: shallow water, with a deep pool in the middle of big rooms.
+fn flood<R: Rng + ?Sized>(rng: &mut R, map: &mut Map, room: &Room) {
+    let deep = room.w >= 6 && room.h >= 5 && rng.random_bool(0.6);
+    for p in room.interior() {
+        if map.tile(p) != Tile::Floor {
+            continue;
+        }
+        let inner = p.x > room.x + 1
+            && p.x < room.x + room.w - 2
+            && p.y > room.y + 1
+            && p.y < room.y + room.h - 2;
+        map.set(
+            p,
+            if deep && inner {
+                Tile::DeepWater
+            } else {
+                Tile::ShallowWater
+            },
+        );
+    }
+}
+
 /// Rows of pews facing an aisle. Pews can be walked over.
 fn add_pews(map: &mut Map, room: &Room) {
     let aisle = room.x + room.w / 2;
@@ -413,6 +457,19 @@ mod tests {
             }
         }
         assert!(shelves > 0);
+    }
+
+    #[test]
+    fn the_drowned_stacks_are_wet_and_still_have_dry_stairs() {
+        let mut deep = 0;
+        for seed in 0..100 {
+            let mut rng = Pcg64Mcg::seed_from_u64(seed);
+            let Layout { map, start } = floor(&mut rng, 8, true);
+            deep += map.find(Tile::DeepWater).count();
+            assert!(map.find(Tile::StairsDown).count() == 1);
+            assert_eq!(map.tile(start), Tile::StairsUp);
+        }
+        assert!(deep > 0);
     }
 
     #[test]

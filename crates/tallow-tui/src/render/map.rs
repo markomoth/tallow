@@ -41,6 +41,7 @@ impl Widget for MapView<'_> {
         let player = self.world.player().pos;
         let content = self.world.content();
         let telegraphs: Vec<Point> = self.world.telegraphs().collect();
+        let biome = tallow_core::Biome::for_depth(self.world.depth());
         let pulse = 0.75 + 0.25 * (self.time * 9.0).sin();
         let origin = Point::new(
             camera_origin(map.width(), area.width.into(), player.x),
@@ -56,7 +57,7 @@ impl Widget for MapView<'_> {
                 let Some(cell) = buf.cell_mut((area.x + sx, area.y + sy)) else {
                     continue;
                 };
-                let Some(look) = tile_look(floor, p) else {
+                let Some(look) = tile_look(floor, p, biome) else {
                     cell.set_char(' ')
                         .set_fg(palette::VOID)
                         .set_bg(palette::VOID);
@@ -187,19 +188,40 @@ struct Look {
 
 /// How a tile looks, or `None` if it should not be drawn: never seen, or solid
 /// rock with no open space beside it.
-fn tile_look(floor: &Floor, p: Point) -> Option<Look> {
+fn tile_look(floor: &Floor, p: Point, biome: tallow_core::Biome) -> Option<Look> {
     if !floor.is_explored(p) {
         return None;
     }
     let map = floor.map();
+    let tint = palette::biome_tint(biome);
+    let floor_bg = palette::tinted(palette::FLOOR_BG, tint);
     let plain = |glyph, fg| Look {
         glyph,
         fg,
-        bg: palette::FLOOR_BG,
+        bg: floor_bg,
         emissive: false,
     };
     let look = match map.tile(p) {
-        Tile::Floor => plain('.', palette::FLOOR_FG),
+        Tile::Floor => plain('.', palette::tinted(palette::FLOOR_FG, tint)),
+        Tile::ShallowWater => Look {
+            glyph: '~',
+            fg: palette::SHALLOW_FG,
+            bg: palette::SHALLOW_BG,
+            emissive: false,
+        },
+        Tile::DeepWater => Look {
+            glyph: '~',
+            fg: palette::DEEP_FG,
+            bg: palette::DEEP_BG,
+            emissive: false,
+        },
+        Tile::RottenFloor => plain(',', palette::ROTTEN_FG),
+        Tile::Pit => Look {
+            glyph: ' ',
+            fg: palette::FLOOR_FG,
+            bg: [0, 0, 0],
+            emissive: false,
+        },
         Tile::Door => plain('\'', palette::DOOR_FG),
         Tile::DoorClosed => plain('+', palette::DOOR_FG),
         Tile::DoorSealed => plain('+', palette::SEAL_FG),
@@ -230,8 +252,8 @@ fn tile_look(floor: &Floor, p: Point) -> Option<Look> {
             }
             Look {
                 glyph: '#',
-                fg: palette::WALL_FG,
-                bg: palette::WALL_BG,
+                fg: palette::tinted(palette::WALL_FG, tint),
+                bg: palette::tinted(palette::WALL_BG, tint),
                 emissive: false,
             }
         }
@@ -262,7 +284,8 @@ fn remember(base: Rgb) -> Rgb {
 }
 
 fn remember_bg(base: Rgb) -> Rgb {
-    if base == palette::WALL_BG {
+    // Walls (and shelves) keep a little of their face; open ground goes to the dark.
+    if base.iter().map(|&c| u32::from(c)).sum::<u32>() > 90 {
         remember(base).map(|c| c.max(palette::MEMORY_BG[0]))
     } else {
         palette::MEMORY_BG

@@ -73,7 +73,9 @@ Church (start) ──► Floors 1–12 (descent) ──► Beelzebub ──► A
 
 Target pacing: ~4 minutes per descent floor, ~10 minutes for the ascent, ~1 hour total.
 
-Mini-bosses always drop a **Leaving** (artifact, see §8).
+Mini-bosses always drop a **Leaving** (artifact, see §8; from M9). Each waits by its floor's stair down (`boss_floor` in `monsters.ron`). Bosses resist Binding, can't be freed or banished, and stay out of faction fights: they only want you.
+
+**Biomes in the generator (M8):** the Crypts get chapels (pews) and rotten boards; the Collegium libraries (half its big rooms) and rotten boards; the Drowned Stacks flood half their rooms (shallow water, deep pools in big rooms) and keep a few libraries; the Rot Court and the Throne get pews and old bodies lying about (3–5, they never rot, and the Rot Court's creatures raise them). The Sexton's crypt has 4 old bodies near his stair. Each biome tints its stone.
 
 **The descent is one-way.** The stair behind you is sealed (rubble on deeper floors; on floor 1 the church above is no refuge). No stair-scumming, and the candle clock stays honest. Every floor is generated from the run seed and its depth, independent of other floors.
 
@@ -293,8 +295,8 @@ The room is a weapon. All of these must be readable on screen.
 - **Holy water:** consecrates tiles for N turns. Nightmares avoid, Taken flinch.
 - **Bells:** wall bells and handbells make noise; noise draws nearby creatures. Lure factions into each other.
 - **Doors:** open, close, bar, Seal. Wooden ones burn.
-- **Rotten floors:** look different, collapse under weight, drop you one floor. Never on the critical path without an alternative.
-- **Water:** shallow slows you; deep drowns your candle (confirm prompt). (M8, with the Drowned Stacks.)
+- **Rotten floors** (`,` brown): stepping on them needs a second step; then they give way and you fall to the next floor (2–4 damage, never fatal), landing anywhere on open floor. Only placed where floor surrounds them, so no path needs them. Crypts and Collegium only. Creatures never step on them.
+- **Water** (`~`): shallow costs 1.5× time to wade, and nothing burns or spills there. Deep (dark `~`) costs 2×, needs a second step to wade into, puts your candle out, and you can't relight it while standing in it. Only swimmers (drowned deacons, the Drowned Choir) enter deep water by choice.
 
 **How it works (M7):**
 - **Doors** (`'` open, `+` shut, gold `+` sealed): walk into a shut door to open it (a turn). `C` shuts every open door beside you with nothing in the doorway. 40% of doors start shut; shut doors block sight and light.
@@ -355,6 +357,21 @@ Target for v1: ~30 types. Each has one clear trick.
 | Rot Court | Mother of Maggots | Swarm | Turns corpses into spawn |
 
 Every attack that hits for more than ~30% of your health must be telegraphed one turn ahead.
+
+**As built (M8):** all of the above exist, plus two raised creatures: the risen husk (Dreaming; what the Sexton and courtiers raise) and maggot spawn (what the Mother of Maggots makes of bodies). Tricks, all data in `monsters.ron` and shown by Look once seen:
+
+| Trick | Who | Rule |
+|---|---|---|
+| Blinds | Inkling | A hit shrinks your light to 2 for 12 turns. |
+| Chants | Feverish Scholar | Announces a chant; next action it lands (3–5 and +3 dread) if it can still see you. Break line of sight to stop it. |
+| Drags | Drowned Deacon | A hit pulls you one step toward deep water within 8. |
+| Sings | Bone Choir, Drowned Choir | While it can see you, dread +1.5 (+1 for the Choir) per action. |
+| Bursts | Bloatfly | Dies into a fly swarm. |
+| Summons | Fly Herald | In darkness, calls a fly swarm (3 at most) every 5 actions. |
+| Raises | Sexton, Courtier, Mother of Maggots | Turns a body within range into a risen husk (or maggot spawn). Render or burn bodies to deny them. |
+| Rewrites | Provost | Every 8 actions: locks every door within 8 for 15 turns (you can't open them either, but they burn), or sets a shelf alight. |
+| Chorus | Drowned Choir | Three bodies, one shared life (45). They crowd you in the open; fight them in a doorway. |
+| Swims | Deacon, Choir | Enters deep water. |
 
 ---
 
@@ -525,7 +542,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 
 | # | Milestone | Done when you can… | Est. |
 |---|---|---|---|
-| M8 | Biomes & content | Descend all 12 floors through 4 biomes, beat 3 mini-bosses | 5–6 h |
+| M8 ✅ | Biomes & content | Descend all 12 floors through 4 biomes, beat 3 mini-bosses | 5–6 h |
 | M9 | Leavings | Throw a stone into a Seep room, find an anomaly, take a Leaving, survive its warning | 3–4 h |
 | M10 | Beelzebub & ascent | Beat 3 phases, take the candle, outrun the Following, win at the altar | 5–6 h |
 | M11 | Polish & balance | Save/quit/resume, Journal persists, help screen, sim shows ~0 softlocks | 4–6 h |

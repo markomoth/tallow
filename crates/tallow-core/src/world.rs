@@ -32,6 +32,8 @@ const MAX_RUN_STEPS: u32 = 120;
 const MAX_REST_TURNS: u32 = 200;
 /// Energy a step costs while burdened.
 const BURDENED_MOVE: i32 = ACTION_COST * 3 / 2;
+/// How far your light reaches with ink in your eyes.
+pub const BLIND_RADIUS: i32 = 2;
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -51,6 +53,8 @@ pub struct Player {
     pub rites: Vec<crate::rites::RiteId>,
     /// Rites lasting on the acolyte (Shroud, Borrowed Eyes).
     pub rite_state: crate::rites::Rites,
+    /// Ink in your eyes until this turn: your light shrinks.
+    pub blind_until: Option<u64>,
     pub(crate) energy: i32,
 }
 
@@ -129,7 +133,8 @@ pub struct World {
     pub(crate) studied: HashSet<KindId>,
     pub(crate) rite_rng: GameRng,
     pub(crate) death: Option<Death>,
-    /// You were warned about the fire at this tile; stepping in again goes ahead.
+    /// You were warned about fire, deep water or rotten boards at this tile;
+    /// stepping in again goes ahead.
     fire_warned: Option<Point>,
     /// The warning from the previous command, valid for this one only.
     fire_ok: Option<Point>,
@@ -172,6 +177,7 @@ impl World {
                 boons: Vec::new(),
                 rites: Vec::new(),
                 rite_state: crate::rites::Rites::default(),
+                blind_until: None,
                 energy: ACTION_COST,
             },
             floor,
@@ -225,7 +231,24 @@ impl World {
         let spawns = spawn::populate(&mut rng, content, &layout.map, layout.start, depth);
         let tallow = spawn::place_tallow(&mut rng, &layout.map, layout.start);
         let items = spawn::place_items(&mut rng, content, &layout.map, layout.start, depth);
+        let bosses = spawn::place_boss(&mut rng, content, &layout.map, depth);
+        let remains = spawn::place_remains(&mut rng, content, &layout.map, layout.start, depth);
         let mut floor = Floor::new(layout.map, layout.start);
+        for (kind, at) in remains {
+            floor.corpses.push(crate::corpse::Corpse {
+                at,
+                kind,
+                died: 0,
+                studied: 0,
+                rendered: 0,
+                ancient: true,
+            });
+        }
+        let spawns: Vec<(KindId, Point)> = spawns
+            .into_iter()
+            .filter(|(_, p)| !bosses.iter().any(|(_, b)| b == p))
+            .chain(bosses.iter().copied())
+            .collect();
         for (kind, pos) in spawns {
             floor
                 .monsters
@@ -307,6 +330,35 @@ impl World {
                 count,
             };
             self.add_to_pack(item);
+        }
+    }
+
+    /// Grows to `level`, taking the first boon of each draft. For testing.
+    pub fn dev_level_to(&mut self, level: u32) {
+        while self.player.level < level {
+            let need = crate::progress::insight_for_next(self.player.level) - self.player.insight;
+            self.grant_insight(need);
+            while self.pending_draft().is_some() {
+                self.choose_boon(0);
+            }
+        }
+    }
+
+    /// Moves you to open floor about `steps` from the stair down. For testing bosses.
+    pub fn dev_near_stairs(&mut self, steps: u32) {
+        let Some(stairs) = self.map().find(Tile::StairsDown).next() else {
+            return;
+        };
+        let dist = crate::map::path::distances(self.map(), stairs);
+        let spot = self
+            .map()
+            .points()
+            .filter(|&p| self.map().tile(p) == Tile::Floor && self.floor.monster_at(p).is_none())
+            .filter_map(|p| dist.at(p).map(|d| (d.abs_diff(steps), p)))
+            .min();
+        if let Some((_, p)) = spot {
+            self.player.pos = p;
+            self.update_view();
         }
     }
 
@@ -468,17 +520,42 @@ impl World {
             if !tile.is_walkable() {
                 return vec![Event::PlayerBlocked { at: target, tile }];
             }
-            if self.floor.is_burning(target) && self.fire_ok != Some(target) {
+            let here_tile = self.map().tile(self.player.pos);
+            let warning = if self.floor.is_burning(target) {
+                Some(Event::FireAhead { at: target })
+            } else if tile == Tile::DeepWater && here_tile != Tile::DeepWater {
+                Some(Event::DeepWaterAhead { at: target })
+            } else if tile == Tile::RottenFloor {
+                Some(Event::RottenAhead { at: target })
+            } else {
+                None
+            };
+            if let Some(warning) = warning
+                && self.fire_ok != Some(target)
+            {
                 self.fire_warned = Some(target);
-                return vec![Event::FireAhead { at: target }];
+                return vec![warning];
             }
             match self.burden() {
                 Burden::Overloaded => return vec![Event::TooHeavy],
                 Burden::Burdened => cost = BURDENED_MOVE,
                 Burden::Light => {}
             }
+            cost = cost.max(match tile {
+                Tile::ShallowWater => ACTION_COST * 3 / 2,
+                Tile::DeepWater => ACTION_COST * 2,
+                _ => ACTION_COST,
+            });
             self.player.pos = target;
             events.push(Event::PlayerMoved { to: target });
+            if tile == Tile::RottenFloor {
+                self.fall_through(target, &mut events);
+                return events;
+            }
+            if tile == Tile::DeepWater && self.player.candle.is_lit() {
+                self.player.candle.snuff();
+                events.push(Event::CandleDrowned);
+            }
             if self.slips(target) {
                 events.push(Event::Slipped { who: Who::Player });
                 cost += ACTION_COST;
@@ -500,6 +577,10 @@ impl World {
 
     fn toggle_candle(&mut self) -> Vec<Event> {
         let mut events = Vec::new();
+        let in_water = self.map().tile(self.player.pos) == Tile::DeepWater;
+        if !self.player.candle.is_lit() && in_water {
+            return vec![Event::CantLightInWater];
+        }
         if self.player.candle.is_lit() {
             self.player.candle.snuff();
             events.push(Event::CandleSnuffed);
@@ -625,15 +706,26 @@ impl World {
     ) {
         let monster = &mut self.floor.monsters[id];
         monster.health = monster.health.saturating_sub(damage);
-        if monster.health > 0 {
+        let health = monster.health;
+        let chorus = self.chorus_share(id, health);
+        if health > 0 {
             return;
         }
+        let monster = &self.floor.monsters[id];
         let (kind, at) = (monster.kind, monster.pos);
+        for other in chorus {
+            if let Some(m) = self.floor.monsters.remove(other)
+                && self.floor.is_visible(m.pos)
+            {
+                events.push(Event::MonsterDied { kind, at: m.pos });
+            }
+        }
         self.floor.monsters.remove(id);
         if self.floor.is_visible(at) {
             events.push(Event::MonsterDied { kind, at });
         }
         self.leave_corpse(kind, at);
+        self.on_monster_death(kind, at, events);
         if self
             .player
             .rite_state
@@ -800,30 +892,71 @@ impl World {
         if self.map().tile(self.player.pos) != Tile::StairsDown {
             return vec![Event::NoStairsHere];
         }
-        let fled = self
-            .floor
-            .monsters()
-            .any(|(_, m)| m.kind == self.manifestation);
-        self.depth += 1;
-        self.floor = Self::generate_floor(self.content, self.seed, self.depth, &mut self.next_item);
-        self.player.pos = self.floor.arrival();
-        let mut events = vec![Event::Descended { depth: self.depth }];
-        if fled {
-            events.push(Event::ManifestationEscaped);
-            self.ease_dread(&mut events);
-        }
-        self.trigger(Trigger::Descend, &mut events);
-        self.gain_insight(crate::progress::INSIGHT_NEW_FLOOR, &mut events);
+        let mut events = vec![Event::Descended {
+            depth: self.depth + 1,
+        }];
+        self.enter_next_floor(false, &mut events);
         self.pass_time(&mut events);
         events
+    }
+
+    /// Leaves for the floor below, arriving by the stair or, after a fall, at `landing`.
+    fn enter_next_floor(&mut self, fell: bool, events: &mut Vec<Event>) {
+        let fled = self.manifestation_present();
+        self.depth += 1;
+        self.floor = Self::generate_floor(self.content, self.seed, self.depth, &mut self.next_item);
+        let now = self.turn();
+        for c in &mut self.floor.corpses {
+            c.died = now;
+        }
+        self.player.pos = self.floor.arrival();
+        if fell {
+            // You land somewhere on open floor, not by the stair.
+            let spots: Vec<Point> = self
+                .map()
+                .points()
+                .filter(|&p| {
+                    self.map().tile(p) == Tile::Floor && self.floor.monster_at(p).is_none()
+                })
+                .collect();
+            if let Some(&p) = rand::seq::IndexedRandom::choose(spots.as_slice(), &mut self.ai_rng) {
+                self.player.pos = p;
+            }
+        }
+        self.player.rite_state.borrowed = None;
+        if fled {
+            events.push(Event::ManifestationEscaped);
+            self.ease_dread(events);
+        }
+        self.trigger(Trigger::Descend, events);
+        self.gain_insight(crate::progress::INSIGHT_NEW_FLOOR, events);
+    }
+
+    /// The boards give way: down one floor, with a bruising landing (never fatal).
+    fn fall_through(&mut self, at: Point, events: &mut Vec<Event>) {
+        self.floor.set_tile(at, Tile::Pit);
+        let damage = combat::roll_damage(&mut self.combat_rng, (2, 4))
+            .min(self.player.health.saturating_sub(1));
+        events.push(Event::Fell {
+            depth: self.depth + 1,
+            damage,
+        });
+        self.player.health -= damage;
+        self.enter_next_floor(true, events);
+        self.pass_time(events);
     }
 
     /// Recomputes light and sight. Returns newly spotted landmarks and, when
     /// time has passed, first sightings of creatures.
     pub(crate) fn update_view(&mut self) -> Vec<Event> {
+        let blind = self.player.blind_until.is_some();
         let candle = self.player.candle.radius().map(|radius| LightSource {
             at: self.player.pos,
-            radius,
+            radius: if blind {
+                radius.min(BLIND_RADIUS)
+            } else {
+                radius
+            },
             color: candle::COLOR,
         });
         let feel = if self.has_passive(Passive::DarkSight) {
@@ -1096,7 +1229,12 @@ mod tests {
             .find(Tile::StairsDown)
             .next()
             .expect("stairs exist");
-        let dist = crate::map::path::distances(world.map(), stairs);
+        // Walk around rotten boards rather than fall through them.
+        let mut solid = world.map().clone();
+        for p in world.map().find(Tile::RottenFloor) {
+            solid.set(p, Tile::Wall);
+        }
+        let dist = crate::map::path::distances(&solid, stairs);
         while world.player().pos != stairs {
             let here = dist.at(world.player().pos).expect("stairs reachable");
             let dir = Direction::ALL

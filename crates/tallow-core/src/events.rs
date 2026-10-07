@@ -25,6 +25,10 @@ pub enum Cause {
     Attack(KindId),
     HeavyBlow(KindId),
     Fire,
+    /// A chanted rite.
+    Chant(KindId),
+    /// Falling through rotten boards.
+    Fall,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -423,6 +427,75 @@ pub enum Event {
         at: Point,
     },
     Banished {
+        kind: KindId,
+    },
+
+    /// Wading into deep water needs a second step. Costs no time.
+    DeepWaterAhead {
+        at: Point,
+    },
+    /// Deep water put your candle out.
+    CandleDrowned,
+    /// No lighting a candle while standing in deep water. Costs no time.
+    CantLightInWater,
+    /// Stepping on rotten boards needs a second step. Costs no time.
+    RottenAhead {
+        at: Point,
+    },
+    /// The boards gave way and you fell to the floor below.
+    Fell {
+        depth: u8,
+        damage: u32,
+    },
+    Blinded {
+        kind: KindId,
+    },
+    SightReturns,
+    /// A creature began chanting at you. It lands next action if it can still see you.
+    ChantBegins {
+        kind: KindId,
+    },
+    ChantLands {
+        kind: KindId,
+        damage: u32,
+    },
+    /// You broke its line of sight in time.
+    ChantBroken {
+        kind: KindId,
+    },
+    Dragged {
+        kind: KindId,
+    },
+    /// A creature is singing at you; dread rises.
+    Singing {
+        kind: KindId,
+    },
+    /// A creature burst into another when it died.
+    Burst {
+        kind: KindId,
+        into: KindId,
+    },
+    Summoned {
+        kind: KindId,
+        into: KindId,
+    },
+    /// A creature raised a body as something else.
+    Raised {
+        kind: KindId,
+        body: KindId,
+        into: KindId,
+    },
+    /// A boss locked the doors around it.
+    DoorsLocked {
+        kind: KindId,
+    },
+    BooksIgnited {
+        kind: KindId,
+    },
+    /// The door is locked fast and will give in time. Costs no time.
+    DoorLocked,
+    /// A mini-boss is down.
+    BossDefeated {
         kind: KindId,
     },
 }

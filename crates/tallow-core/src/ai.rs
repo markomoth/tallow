@@ -255,6 +255,11 @@ impl World {
             }
         }
 
+        if matches!(self.floor.monsters[id].mind, Mind::Hunting { .. })
+            && self.use_ability(id, sees, events)
+        {
+            return;
+        }
         let adjacent = m.pos.chebyshev(player) == 1;
         match self.floor.monsters[id].mind {
             Mind::Hunting { last_seen } => {
@@ -401,6 +406,9 @@ impl World {
         }
         if let Some(damage) = damage {
             self.hurt_player(damage, Cause::Attack(kind), events);
+            if self.death.is_none() {
+                self.on_hit_player(id, events);
+            }
             if def.has(|t| *t == Trait::EatsLight) && self.player.candle.is_lit() {
                 let amount = TALLOW_BITTEN.min(self.player.candle.tallow());
                 self.player.candle.eat(amount);
@@ -421,6 +429,8 @@ impl World {
             && p != self.player.pos
             && self.floor.monster_at(p).is_none()
             && tile != Tile::DoorSealed
+            && tile != Tile::RottenFloor
+            && (tile != Tile::DeepWater || heedless || def.has(|t| *t == Trait::Swims))
             && (tile != Tile::DoorClosed || def.faction.opens_doors())
             && (heedless || !self.floor.is_burning(p))
             && (heedless || def.faction != Faction::Swarm || !near_fire())

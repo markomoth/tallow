@@ -35,6 +35,14 @@ pub enum Tile {
     Pew,
     /// A bell rope on the wall. Pull it (walk into it) and the bell rings out.
     BellRope,
+    /// Ankle-deep water. Slow going. Fire can't burn here.
+    ShallowWater,
+    /// Deep water. Wading in puts your candle out.
+    DeepWater,
+    /// Rotten boards. They give way under you and drop you a floor.
+    RottenFloor,
+    /// Where rotten boards gave way.
+    Pit,
 }
 
 impl Tile {
@@ -49,7 +57,14 @@ impl Tile {
                 | Tile::StairsDown
                 | Tile::StairsUp
                 | Tile::Pew
+                | Tile::ShallowWater
+                | Tile::DeepWater
+                | Tile::RottenFloor
         )
+    }
+
+    pub const fn is_water(self) -> bool {
+        matches!(self, Tile::ShallowWater | Tile::DeepWater)
     }
 
     /// Does this tile stop line of sight (and light)?

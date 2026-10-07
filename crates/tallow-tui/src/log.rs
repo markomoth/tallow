@@ -592,6 +592,100 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             ),
             Good,
         ),
+        Event::DeepWaterAhead { .. } => (
+            "Deep water. Your candle will go out in it. Step that way again to wade in.".into(),
+            Danger,
+        ),
+        Event::CandleDrowned => ("The water takes your flame. Darkness.".into(), Danger),
+        Event::CantLightInWater => ("Not while you stand in deep water.".into(), Normal),
+        Event::RottenAhead { .. } => (
+            "The boards ahead are rotten. They will give way. Step that way again to risk it."
+                .into(),
+            Danger,
+        ),
+        Event::Fell { damage, .. } => (
+            format!("The boards give way! You fall, and land hard on the floor below ({damage})."),
+            Danger,
+        ),
+        Event::Blinded { kind } => (
+            format!(
+                "The {} splashes ink in your eyes. Your light shrinks.",
+                name(kind)
+            ),
+            Danger,
+        ),
+        Event::SightReturns => (
+            "You blink the ink away. Your light reaches out again.".into(),
+            Good,
+        ),
+        Event::ChantBegins { kind } => (
+            format!(
+                "The {} begins to chant at you. Get out of its sight!",
+                name(kind)
+            ),
+            Danger,
+        ),
+        Event::ChantLands { kind, damage } => (
+            format!(
+                "The {}'s rite takes hold of you ({damage}). Your dread deepens.",
+                name(kind)
+            ),
+            Danger,
+        ),
+        Event::ChantBroken { kind } => (
+            format!(
+                "The {}'s chant falls apart without you in its sight.",
+                name(kind)
+            ),
+            Good,
+        ),
+        Event::Dragged { kind } => (
+            format!("The {} drags you toward the deep water!", name(kind)),
+            Danger,
+        ),
+        Event::Singing { kind } => (
+            format!("The {} sings. It gets under your skin.", name(kind)),
+            Dread,
+        ),
+        Event::Burst { kind, .. } => (
+            format!("The {} bursts, and flies pour out!", name(kind)),
+            Danger,
+        ),
+        Event::Summoned { kind, .. } => (
+            format!("Flies gather out of the dark around the {}.", name(kind)),
+            Danger,
+        ),
+        Event::Raised { kind, body, into } => (
+            format!(
+                "The {} reaches into the {}'s body. It rises as {}.",
+                name(kind),
+                name(body),
+                with_article(name(into))
+            ),
+            Danger,
+        ),
+        Event::DoorsLocked { kind } => (
+            format!(
+                "The {} raises a hand. Every door around slams and locks.",
+                name(kind)
+            ),
+            Danger,
+        ),
+        Event::BooksIgnited { kind } => (
+            format!(
+                "The {} speaks a word, and the shelves burst into flame!",
+                name(kind)
+            ),
+            Danger,
+        ),
+        Event::DoorLocked => (
+            "The door is locked fast. It will give in time.".into(),
+            Normal,
+        ),
+        Event::BossDefeated { kind } => (
+            format!("The {} is finished. The floor goes very quiet.", name(kind)),
+            Good,
+        ),
         Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => return None,
     };
     Some((text, tone))

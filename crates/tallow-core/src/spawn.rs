@@ -97,6 +97,77 @@ pub fn populate<R: Rng + ?Sized>(
     placed
 }
 
+/// A floor's mini-boss, if it has one, waiting by the stair down.
+pub fn place_boss<R: Rng + ?Sized>(
+    rng: &mut R,
+    content: &Content,
+    map: &Map,
+    depth: u8,
+) -> Vec<(KindId, Point)> {
+    let Some((kind, def)) = content.kinds().find(|(_, d)| d.boss_floor == Some(depth)) else {
+        return Vec::new();
+    };
+    let Some(stairs) = map.find(Tile::StairsDown).next() else {
+        return Vec::new();
+    };
+    let dist = path::distances(map, stairs);
+    let mut spots: Vec<Point> = map
+        .points()
+        .filter(|&p| {
+            matches!(map.tile(p), Tile::Floor | Tile::ShallowWater)
+                && dist.at(p).is_some_and(|d| (1..=5).contains(&d))
+        })
+        .collect();
+    let count = rng.random_range(def.group.0..=def.group.1) as usize;
+    let mut placed = Vec::new();
+    while placed.len() < count && !spots.is_empty() {
+        let at = spots.swap_remove(rng.random_range(0..spots.len()));
+        placed.push((kind, at));
+    }
+    placed
+}
+
+/// Old bodies lying about before you came: the Sexton's crypt and the Rot Court.
+pub fn place_remains<R: Rng + ?Sized>(
+    rng: &mut R,
+    content: &Content,
+    map: &Map,
+    start: Point,
+    depth: u8,
+) -> Vec<(KindId, Point)> {
+    let Some(kind) = content.kind_by_id("parishioner") else {
+        return Vec::new();
+    };
+    let (count, near_stairs) = match depth {
+        3 => (4, true),
+        10..=12 => (rng.random_range(3..=5), false),
+        _ => return Vec::new(),
+    };
+    let anchor = if near_stairs {
+        map.find(Tile::StairsDown).next().unwrap_or(start)
+    } else {
+        start
+    };
+    let dist = path::distances(map, anchor);
+    let mut spots: Vec<Point> = map
+        .points()
+        .filter(|&p| {
+            map.tile(p) == Tile::Floor
+                && dist
+                    .at(p)
+                    .is_some_and(|d| if near_stairs { d <= 7 } else { d >= 6 })
+        })
+        .collect();
+    let mut placed = Vec::new();
+    for _ in 0..count {
+        if spots.is_empty() {
+            break;
+        }
+        placed.push((kind, spots.swap_remove(rng.random_range(0..spots.len()))));
+    }
+    placed
+}
+
 /// Items lying about on a fresh floor.
 const ITEMS_PER_FLOOR: (u32, u32) = (3, 5);
 
@@ -225,6 +296,27 @@ mod tests {
                 "seed {seed}"
             );
         }
+    }
+
+    #[test]
+    fn mini_bosses_wait_by_the_stairs_on_their_floors() {
+        let content = Content::bundled();
+        for (depth, id, count) in [(3, "sexton", 1), (6, "provost", 1), (9, "drowned_choir", 3)] {
+            for seed in 0..30 {
+                let mut r = rng::floor_rng(seed, depth);
+                let layout = generate::floor(&mut r, depth, true);
+                let bosses = place_boss(&mut r, content, &layout.map, depth);
+                assert_eq!(bosses.len(), count, "{id} seed {seed}");
+                assert!(
+                    bosses
+                        .iter()
+                        .all(|&(k, _)| k == content.kind_by_id(id).unwrap())
+                );
+            }
+        }
+        let mut r = rng::floor_rng(1, 4);
+        let layout = generate::floor(&mut r, 4, true);
+        assert!(place_boss(&mut r, content, &layout.map, 4).is_empty());
     }
 
     #[test]

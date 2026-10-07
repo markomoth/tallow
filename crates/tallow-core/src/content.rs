@@ -66,6 +66,26 @@ pub enum Trait {
     Relentless,
     /// Winds up for one action, then strikes a marked tile hard.
     HeavyBlow { damage: (u32, u32), cooldown: u32 },
+    /// Its hit gets in your eyes: your light shrinks for a while.
+    Blinds { turns: u32 },
+    /// Chants a rite at you for one action, then it lands if it can still see you.
+    Chants { damage: (u32, u32), cooldown: u32 },
+    /// Its hit drags you a step toward deep water.
+    Drags,
+    /// Its singing raises your dread while it can see you (hundredths per action).
+    Sings { dread: u32 },
+    /// Bursts into its `spawns` creature when it dies.
+    Bursts,
+    /// In darkness, calls up its `spawns` creature, up to `max` at a time.
+    Summons { cooldown: u32, max: u32 },
+    /// Raises a nearby body as its `spawns` creature.
+    Raises { range: i32, cooldown: u32 },
+    /// Locks the doors around it and sets books alight.
+    Rewrites { cooldown: u32 },
+    /// Several bodies, one life: a wound to one is a wound to all.
+    Chorus,
+    /// At home in deep water.
+    Swims,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -99,6 +119,15 @@ pub struct MonsterDef {
     /// Rites that studying its body teaches, in order (rite ids).
     #[serde(default)]
     pub teaches: Vec<String>,
+    /// What it bursts into, summons or raises (a monster id).
+    #[serde(default)]
+    pub spawns: Option<String>,
+    /// Resolved `spawns`, filled in when content loads.
+    #[serde(skip)]
+    pub spawn: Option<KindId>,
+    /// The floor a boss waits on, by the stair down.
+    #[serde(default)]
+    pub boss_floor: Option<u8>,
     pub traits: Vec<Trait>,
     pub barks: Vec<String>,
 }
@@ -168,7 +197,17 @@ impl Content {
         skills: &str,
         rites: &str,
     ) -> Result<Content, ContentError> {
-        let monsters: Vec<MonsterDef> = ron::from_str(monsters)?;
+        let mut monsters: Vec<MonsterDef> = ron::from_str(monsters)?;
+        let ids: Vec<String> = monsters.iter().map(|d| d.id.clone()).collect();
+        for def in &mut monsters {
+            if let Some(id) = &def.spawns {
+                let index = ids
+                    .iter()
+                    .position(|i| i == id)
+                    .ok_or_else(|| ContentError::Missing(id.clone()))?;
+                def.spawn = Some(KindId(index as u16));
+            }
+        }
         let items: Vec<ItemDef> = ron::from_str(items)?;
         let skills: Vec<SkillDef> = ron::from_str(skills)?;
         let rites: Vec<RiteDef> = ron::from_str(rites)?;
