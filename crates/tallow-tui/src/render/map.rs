@@ -17,11 +17,17 @@ pub struct MapView<'a> {
     world: &'a World,
     /// Seconds since start; drives flicker. Visual only, never affects rules.
     time: f32,
+    /// The Look cursor, if looking.
+    cursor: Option<Point>,
 }
 
 impl<'a> MapView<'a> {
-    pub fn new(world: &'a World, time: f32) -> Self {
-        Self { world, time }
+    pub fn new(world: &'a World, time: f32, cursor: Option<Point>) -> Self {
+        Self {
+            world,
+            time,
+            cursor,
+        }
     }
 }
 
@@ -29,7 +35,10 @@ impl Widget for MapView<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let floor = self.world.floor();
         let map = floor.map();
-        let player = self.world.player();
+        let player = self.world.player().pos;
+        let content = self.world.content();
+        let telegraphs: Vec<Point> = self.world.telegraphs().collect();
+        let pulse = 0.75 + 0.25 * (self.time * 9.0).sin();
         let origin = Point::new(
             camera_origin(map.width(), area.width.into(), player.x),
             camera_origin(map.height(), area.height.into(), player.y),
@@ -64,12 +73,29 @@ impl Widget for MapView<'_> {
                     (remember(look.fg), remember_bg(look.bg))
                 };
 
+                let bg = if telegraphs.contains(&p) {
+                    palette::TELEGRAPH.map(|c| (f32::from(c) * pulse) as u8)
+                } else {
+                    bg
+                };
+                let monster = floor
+                    .monster_at(p)
+                    .filter(|_| floor.is_visible(p))
+                    .and_then(|id| floor.monster(id));
                 if p == player {
-                    let bg = shade(palette::FLOOR_BG, floor.light(p), global_flicker);
                     cell.set_char('@').set_fg(palette::PLAYER).set_bg(rgb(bg));
+                    cell.modifier.insert(Modifier::BOLD);
+                } else if let Some(monster) = monster {
+                    let def = content.monster(monster.kind);
+                    cell.set_char(def.glyph)
+                        .set_fg(rgb(def.color))
+                        .set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
                 } else {
                     cell.set_char(look.glyph).set_fg(rgb(fg)).set_bg(rgb(bg));
+                }
+                if self.cursor == Some(p) {
+                    cell.modifier.insert(Modifier::REVERSED);
                 }
             }
         }

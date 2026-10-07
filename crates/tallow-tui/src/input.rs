@@ -1,11 +1,20 @@
-//! Key bindings: turns terminal key presses into app actions.
+//! Key bindings: turns terminal key presses into actions. What an action
+//! means depends on the screen (see `app.rs`).
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use tallow_core::{Command, Direction};
+use tallow_core::Direction;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
-    Game(Command),
+    Move(Direction),
+    Run(Direction),
+    Wait,
+    Descend,
+    Ascend,
+    Look,
+    NextTarget,
+    Cancel,
+    Confirm,
     Quit,
 }
 
@@ -18,17 +27,20 @@ pub fn map_key(key: KeyEvent) -> Option<Action> {
     if let Some(dir) = direction(key.code) {
         let run = key.modifiers.contains(KeyModifiers::SHIFT)
             || matches!(key.code, KeyCode::Char(c) if c.is_ascii_uppercase());
-        let command = if run {
-            Command::Run(dir)
+        return Some(if run {
+            Action::Run(dir)
         } else {
-            Command::Move(dir)
-        };
-        return Some(Action::Game(command));
+            Action::Move(dir)
+        });
     }
     match key.code {
-        KeyCode::Char('.' | '5') => Some(Action::Game(Command::Wait)),
-        KeyCode::Char('>') => Some(Action::Game(Command::Descend)),
-        KeyCode::Char('<') => Some(Action::Game(Command::Ascend)),
+        KeyCode::Char('.' | '5') => Some(Action::Wait),
+        KeyCode::Char('>') => Some(Action::Descend),
+        KeyCode::Char('<') => Some(Action::Ascend),
+        KeyCode::Char('x') => Some(Action::Look),
+        KeyCode::Tab => Some(Action::NextTarget),
+        KeyCode::Esc => Some(Action::Cancel),
+        KeyCode::Enter => Some(Action::Confirm),
         KeyCode::Char('q') => Some(Action::Quit),
         _ => None,
     }
@@ -68,10 +80,6 @@ mod tests {
         map_key(KeyEvent::new(code, KeyModifiers::NONE))
     }
 
-    fn game(command: Command) -> Option<Action> {
-        Some(Action::Game(command))
-    }
-
     #[test]
     fn arrows_vi_keys_and_numbers_agree() {
         for (a, b, c) in [
@@ -87,21 +95,25 @@ mod tests {
 
     #[test]
     fn shift_runs() {
-        assert_eq!(press(KeyCode::Char('L')), game(Command::Run(Direction::E)));
-        assert_eq!(press(KeyCode::Char('Y')), game(Command::Run(Direction::NW)));
+        assert_eq!(press(KeyCode::Char('L')), Some(Action::Run(Direction::E)));
+        assert_eq!(press(KeyCode::Char('Y')), Some(Action::Run(Direction::NW)));
         let shift_up = KeyEvent::new(KeyCode::Up, KeyModifiers::SHIFT);
-        assert_eq!(map_key(shift_up), game(Command::Run(Direction::N)));
+        assert_eq!(map_key(shift_up), Some(Action::Run(Direction::N)));
         // Terminals report Shift on uppercase letters too; that's still a run.
         let shift_j = KeyEvent::new(KeyCode::Char('J'), KeyModifiers::SHIFT);
-        assert_eq!(map_key(shift_j), game(Command::Run(Direction::S)));
+        assert_eq!(map_key(shift_j), Some(Action::Run(Direction::S)));
     }
 
     #[test]
-    fn wait_stairs_and_quit() {
-        assert_eq!(press(KeyCode::Char('.')), game(Command::Wait));
-        assert_eq!(press(KeyCode::Char('5')), game(Command::Wait));
-        assert_eq!(press(KeyCode::Char('>')), game(Command::Descend));
-        assert_eq!(press(KeyCode::Char('<')), game(Command::Ascend));
+    fn other_keys() {
+        assert_eq!(press(KeyCode::Char('.')), Some(Action::Wait));
+        assert_eq!(press(KeyCode::Char('5')), Some(Action::Wait));
+        assert_eq!(press(KeyCode::Char('>')), Some(Action::Descend));
+        assert_eq!(press(KeyCode::Char('<')), Some(Action::Ascend));
+        assert_eq!(press(KeyCode::Char('x')), Some(Action::Look));
+        assert_eq!(press(KeyCode::Tab), Some(Action::NextTarget));
+        assert_eq!(press(KeyCode::Esc), Some(Action::Cancel));
+        assert_eq!(press(KeyCode::Enter), Some(Action::Confirm));
         assert_eq!(press(KeyCode::Char('q')), Some(Action::Quit));
         let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
         assert_eq!(map_key(ctrl_c), Some(Action::Quit));

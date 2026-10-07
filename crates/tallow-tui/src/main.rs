@@ -33,6 +33,9 @@ fn run(terminal: &mut DefaultTerminal, seed: u64) -> Result<()> {
     let mut app = App::new(seed);
     let started = Instant::now();
     while !app.should_quit() {
+        if app.wants_restart() {
+            app = App::new(random_seed());
+        }
         let time = started.elapsed().as_secs_f32();
         terminal.draw(|frame| render::draw(frame, &app, time))?;
         if event::poll(FRAME)?

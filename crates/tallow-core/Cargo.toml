@@ -8,6 +8,9 @@ rust-version.workspace = true
 [dependencies]
 rand.workspace = true
 rand_pcg.workspace = true
+serde.workspace = true
+ron.workspace = true
+slotmap.workspace = true
 
 [lints]
 workspace = true

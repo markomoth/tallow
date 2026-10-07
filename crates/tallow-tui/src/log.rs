@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 
-use tallow_core::{Event, Tile};
+use tallow_core::{Content, Event, Faction, KindId, Tile, Who};
 
 const CAPACITY: usize = 200;
 
@@ -40,24 +40,116 @@ impl MessageLog {
 }
 
 /// The log line for an event, if it deserves one. Routine movement stays quiet.
-pub fn narrate(event: &Event) -> Option<&'static str> {
-    match *event {
+pub fn narrate(event: &Event, content: &Content) -> Option<String> {
+    let name = |kind: KindId| &content.monster(kind).name;
+    let text = match *event {
         Event::PlayerBlocked {
             tile: Tile::Wall, ..
-        } => Some("Cold stone. The wall does not give."),
-        Event::PlayerBlocked { .. } => Some("Something blocks the way."),
+        } => "Cold stone. The wall does not give.".into(),
+        Event::PlayerBlocked { .. } => "Something blocks the way.".into(),
         Event::Spotted {
             tile: Tile::StairsDown,
             ..
-        } => Some("A stair leads further down."),
-        Event::Descended { depth } => Some(descent_line(depth)),
-        Event::NoStairsHere => Some("There are no stairs here."),
+        } => "A stair leads further down.".into(),
+        Event::Descended { depth } => descent_line(depth).into(),
+        Event::NoStairsHere => "There are no stairs here.".into(),
         Event::StairsSealed { depth: 1 } => {
-            Some("Above is only the church, and the dreamers. Not yet.")
+            "Above is only the church, and the dreamers. Not yet.".into()
         }
-        Event::StairsSealed { .. } => Some("Rubble chokes the stair behind you. The way is down."),
-        Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => None,
+        Event::StairsSealed { .. } => "Rubble chokes the stair behind you. The way is down.".into(),
+        Event::RunRefused => "Not with something watching.".into(),
+
+        Event::FirstSighting { kind } => {
+            let def = content.monster(kind);
+            format!(
+                "{}. {}",
+                capitalize(&with_article(&def.name)),
+                def.description
+            )
+        }
+        Event::Noticed { kind, seen: true } => format!("The {} notices you.", name(kind)),
+        Event::Noticed { seen: false, .. } => {
+            "Something in the dark has noticed your light.".into()
+        }
+        Event::Bark { kind, line } => {
+            let def = content.monster(kind);
+            format!("The {} whispers: {}", def.name, def.barks.get(line)?)
+        }
+        Event::Attack {
+            attacker: Who::Player,
+            defender: Who::Monster(kind),
+            damage: Some(d),
+        } => {
+            format!("You strike the {} ({d}).", name(kind))
+        }
+        Event::Attack {
+            attacker: Who::Player,
+            defender: Who::Monster(kind),
+            damage: None,
+        } => {
+            format!("You miss the {}.", name(kind))
+        }
+        Event::Attack {
+            attacker: Who::Monster(kind),
+            damage: Some(d),
+            ..
+        } => {
+            format!("The {} hits you ({d}).", name(kind))
+        }
+        Event::Attack {
+            attacker: Who::Monster(kind),
+            damage: None,
+            ..
+        } => {
+            format!("The {} misses you.", name(kind))
+        }
+        Event::Attack {
+            attacker: Who::Player,
+            defender: Who::Player,
+            ..
+        } => return None,
+        Event::WindUp { kind, .. } => {
+            format!("The {} raises something heavy over you. Move!", name(kind))
+        }
+        Event::HeavyBlow {
+            damage: Some(d), ..
+        } => format!("The heavy blow lands ({d})."),
+        Event::HeavyBlow {
+            kind, damage: None, ..
+        } => {
+            format!("The {}'s blow smashes empty floor.", name(kind))
+        }
+        Event::Fled { kind } => format!("The {} squeals and breaks away.", name(kind)),
+        Event::MonsterDied { kind, .. } => death_line(content, kind),
+        Event::PlayerDied { .. } => "You die.".into(),
+        Event::Spotted { .. } | Event::PlayerMoved { .. } | Event::PlayerWaited => return None,
+    };
+    Some(text)
+}
+
+fn death_line(content: &Content, kind: KindId) -> String {
+    let def = content.monster(kind);
+    match def.faction {
+        Faction::Taken => format!("The {} falls, and does not get up.", def.name),
+        Faction::Dreaming => format!("The {} comes apart like smoke.", def.name),
+        Faction::Swarm | Faction::Remnant => format!("The {} dies.", def.name),
     }
+}
+
+/// "a gnawer", "an eel".
+pub fn with_article(name: &str) -> String {
+    let vowel = name
+        .chars()
+        .next()
+        .is_some_and(|c| "aeiouAEIOU".contains(c));
+    format!("{} {name}", if vowel { "an" } else { "a" })
+}
+
+pub fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 fn descent_line(depth: u8) -> &'static str {
@@ -106,8 +198,32 @@ mod tests {
     #[test]
     fn every_depth_has_a_descent_line() {
         for depth in 2..=tallow_core::MAX_DEPTH {
-            assert!(narrate(&Event::Descended { depth }).is_some());
+            assert!(narrate(&Event::Descended { depth }, Content::bundled()).is_some());
         }
+    }
+
+    #[test]
+    fn combat_lines_name_the_creature_and_show_damage() {
+        let content = Content::bundled();
+        let gnawer = content.kind_by_id("gnawer").unwrap();
+        let hit = Event::Attack {
+            attacker: Who::Player,
+            defender: Who::Monster(gnawer),
+            damage: Some(3),
+        };
+        assert_eq!(
+            narrate(&hit, content).unwrap(),
+            "You strike the gnawer (3)."
+        );
+        let sight = narrate(&Event::FirstSighting { kind: gnawer }, content).unwrap();
+        assert!(sight.starts_with("A gnawer. A rat"));
+    }
+
+    #[test]
+    fn articles() {
+        assert_eq!(with_article("gnawer"), "a gnawer");
+        assert_eq!(with_article("eel"), "an eel");
+        assert_eq!(capitalize("a gnawer"), "A gnawer");
     }
 
     #[test]

@@ -23,6 +23,12 @@ pub const MEMORY_BG: Rgb = [11, 12, 16];
 
 pub const PLAYER: Color = Color::Rgb(255, 210, 128);
 
+/// Background of a tile about to be struck. Pulses.
+pub const TELEGRAPH: Rgb = [150, 34, 26];
+pub const HEALTH: Color = Color::Rgb(178, 64, 52);
+pub const HEALTH_EMPTY: Color = Color::Rgb(58, 30, 28);
+pub const DANGER: Color = Color::Rgb(232, 96, 72);
+
 pub const TEXT: Color = Color::Rgb(196, 186, 170);
 pub const TEXT_DIM: Color = Color::Rgb(110, 102, 92);
 pub const ACCENT: Color = Color::Rgb(214, 160, 86);

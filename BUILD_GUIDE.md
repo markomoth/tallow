@@ -151,6 +151,16 @@ No attributes. No skill trees. No classes. Your build is what you do.
 - **Meaningful use only:** XP counts only against creatures that are a real threat (no grinding rats).
 - Ranks unlock fixed techniques (e.g. Blades 3: riposte; Reach 4: hit two tiles; Missiles 5: pin to wall). Hand-written, listed in data files.
 
+### Combat basics
+
+- **Hit chance** = attacker accuracy − defender defense, clamped to 5–95%. Look shows the exact numbers.
+- **Speed:** 10 is one action per turn. Energy-based: faster creatures act more often.
+- **Health:** the acolyte starts with 24 and regains 1 every 12 turns. The candle clock keeps resting honest.
+- **Telegraphs:** a raised heavy blow marks its target tile in pulsing red and always waits for your next action.
+- **Sight is symmetric:** anything in your line of sight can see your candle. Monsters in the dark can notice you before you see them; the log always says so ("Something in the dark has noticed your light.").
+- **First sight** of each creature kind prints its description, so you learn its trick before it matters.
+- **Runs** are refused while anything hostile is in view.
+
 ### Character level
 
 - XP from: first-time discoveries (new monster, new rite, new floor), studying, defeating threats.
@@ -253,7 +263,8 @@ Target for v1: ~30 types. Each has one clear trick.
 |---|---|---|---|
 | Crypts | Gnawer pack | Swarm | Weak alone, flanks in groups |
 | Crypts | Taken Parishioner | Taken | Slow, pleads; Exorcise frees them |
-| Crypts | Lantern-Eater | Dreaming | Snuffs nearby light |
+| Crypts | Lantern-Eater | Dreaming | Won't cross brazier light; snuffs nearby light (M3) |
+| Crypts | Pallbearer | Taken | Raises a heavy blow at a marked tile; step aside |
 | Crypts | **The Sexton** | Taken | Buries and raises corpses |
 | Collegium | Inkling | Dreaming | Blinds (radius drop) |
 | Collegium | Proctor | Remnant | Attacks any intruder, even nightmares |
@@ -311,7 +322,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `z` | Cast rite |
 | `f` | Fire ranged |
 | `t` | Throw |
-| `x` | Look |
+| `x` | Look (cursor; Tab cycles creatures, Esc leaves) |
 | `s` | Study / render corpse |
 | `c` | Snuff / relight candle |
 | `o` | Auto-explore |
@@ -420,7 +431,7 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 |---|---|---|---|
 | M0 ✅ | Skeleton | Run `cargo run`, see `@` on a map, move, quit | 1–2 h |
 | M1 ✅ | Map & sight | Walk procedurally generated floors with FOV, candlelight falloff, fog, stairs down | 3–4 h |
-| M2 | Combat & monsters | Fight 4 crypt monsters with energy-based turns, see the log, die, see death recap | 3–4 h |
+| M2 ✅ | Combat & monsters | Fight 4 crypt monsters with energy-based turns, see the log, die, see death recap | 3–4 h |
 | M3 | Candle & dread | Watch the candle burn, snuff it, gain dread, trigger a Manifestation | 2–3 h |
 
 ### Phase B: Depth (~2–3 days)

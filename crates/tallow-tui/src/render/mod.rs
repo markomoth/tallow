@@ -6,12 +6,16 @@ mod palette;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
+use tallow_core::{Cause, MAX_DEPTH, World};
 
-use crate::app::App;
-use crate::log::MessageLog;
+use crate::app::{App, Mode};
+use crate::log::{MessageLog, with_article};
+
+/// How many log lines the death screen replays.
+const LAST_MOMENTS: usize = 5;
 
 pub const MIN_WIDTH: u16 = 100;
 pub const MIN_HEIGHT: u16 = 30;
@@ -33,40 +37,152 @@ pub fn draw(frame: &mut Frame, app: &App, time: f32) {
     let [map_area, hud_area] =
         Layout::horizontal([Constraint::Min(0), Constraint::Length(SIDEBAR_WIDTH)]).areas(top);
 
-    frame.render_widget(map::MapView::new(app.world(), time), map_area);
-    frame.render_widget(hud::Hud::new(app.world()), hud_area);
+    let cursor = match app.mode() {
+        Mode::Look { cursor } => Some(cursor),
+        Mode::Play | Mode::Dead => None,
+    };
+    frame.render_widget(map::MapView::new(app.world(), time, cursor), map_area);
+    frame.render_widget(hud::Hud::new(app), hud_area);
     draw_log(frame, log_area, app.log());
+    if app.mode() == Mode::Dead {
+        draw_death(frame, map_area, app);
+    }
+}
+
+fn draw_death(frame: &mut Frame, area: Rect, app: &App) {
+    let world = app.world();
+    let Some(death) = world.death() else { return };
+    let dim = Style::new().fg(palette::TEXT_DIM);
+    let text = Style::new().fg(palette::TEXT);
+
+    let mut lines = vec![
+        Line::styled(
+            "Your candle goes out.",
+            Style::new()
+                .fg(palette::DANGER)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Line::default(),
+        Line::styled(
+            format!(
+                "{} on floor {} of {MAX_DEPTH}, turn {}.",
+                cause_line(world, death.cause),
+                death.depth,
+                death.turn
+            ),
+            text,
+        ),
+        Line::default(),
+        Line::styled("─ last moments ─", dim),
+    ];
+    let recent: Vec<_> = app.log().entries().rev().take(LAST_MOMENTS).collect();
+    lines.extend(
+        recent
+            .into_iter()
+            .rev()
+            .map(|e| Line::styled(e.text.clone(), dim)),
+    );
+    lines.extend([
+        Line::default(),
+        Line::styled(format!("seed {}", world.seed()), dim),
+        Line::styled("Enter  begin again        q  quit", text),
+    ]);
+
+    let width = area.width.min(72);
+    let height = (lines.len() as u16 + 2).min(area.height);
+    let [_, column, _] = Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Length(width),
+        Constraint::Fill(1),
+    ])
+    .areas(area);
+    let [_, popup, _] = Layout::vertical([
+        Constraint::Fill(1),
+        Constraint::Length(height),
+        Constraint::Fill(1),
+    ])
+    .areas(column);
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
+            Block::bordered()
+                .border_style(Style::new().fg(palette::BORDER))
+                .padding(Padding::horizontal(1))
+                .style(Style::new().bg(palette::VOID)),
+        ),
+        popup,
+    );
+}
+
+fn cause_line(world: &World, cause: Cause) -> String {
+    let name = |kind| &world.content().monster(kind).name;
+    match cause {
+        Cause::Attack(kind) => format!("Killed by {}", with_article(name(kind))),
+        Cause::HeavyBlow(kind) => format!("Crushed by {}'s heavy blow", with_article(name(kind))),
+    }
 }
 
 fn draw_log(frame: &mut Frame, area: Rect, log: &MessageLog) {
     let block = Block::new()
         .borders(Borders::TOP)
         .border_style(Style::new().fg(palette::BORDER));
-    let rows = block.inner(area).height as usize;
+    let inner = block.inner(area);
+    let (rows, width) = (usize::from(inner.height), usize::from(inner.width));
 
-    // Newest line at the bottom, in full color; older lines fade.
-    let entries: Vec<_> = log.entries().rev().take(rows).collect();
-    let lines: Vec<Line> = entries
-        .iter()
-        .rev()
-        .enumerate()
-        .map(|(i, entry)| {
-            let newest = i + 1 == entries.len();
-            let color = if newest {
-                palette::TEXT
-            } else {
-                palette::TEXT_DIM
-            };
-            let text = if entry.count > 1 {
-                format!("{} (×{})", entry.text, entry.count)
-            } else {
-                entry.text.clone()
-            };
-            Line::styled(text, Style::new().fg(color))
-        })
-        .collect();
+    // Newest entry at the bottom in full color; older ones fade. Long entries wrap.
+    let mut lines: Vec<Line> = Vec::new();
+    for (age, entry) in log.entries().rev().enumerate() {
+        if lines.len() >= rows {
+            break;
+        }
+        let color = if age == 0 {
+            palette::TEXT
+        } else {
+            palette::TEXT_DIM
+        };
+        let text = if entry.count > 1 {
+            format!("{} (×{})", entry.text, entry.count)
+        } else {
+            entry.text.clone()
+        };
+        for row in wrap(&text, width).into_iter().rev() {
+            lines.push(Line::styled(row, Style::new().fg(color)));
+        }
+    }
+    lines.truncate(rows);
+    lines.reverse();
 
     frame.render_widget(Paragraph::new(lines).block(block), area);
+}
+
+/// Greedy word wrap to `width` columns. Words longer than a line are split.
+fn wrap(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut rows = Vec::new();
+    let mut row = String::new();
+    for word in text.split_whitespace() {
+        let mut word = word.to_string();
+        while word.chars().count() > width {
+            if !row.is_empty() {
+                rows.push(std::mem::take(&mut row));
+            }
+            let split: String = word.chars().take(width).collect();
+            word = word.chars().skip(width).collect();
+            rows.push(split);
+        }
+        let needed = row.chars().count() + usize::from(!row.is_empty()) + word.chars().count();
+        if needed > width && !row.is_empty() {
+            rows.push(std::mem::take(&mut row));
+        }
+        if !row.is_empty() {
+            row.push(' ');
+        }
+        row.push_str(&word);
+    }
+    if !row.is_empty() || rows.is_empty() {
+        rows.push(row);
+    }
+    rows
 }
 
 fn draw_too_small(frame: &mut Frame, area: Rect) {
@@ -93,19 +209,93 @@ fn draw_too_small(frame: &mut Frame, area: Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::Action;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
+    /// Renders a frame to text, one line per row. Set `SHOW_SCREEN=1` to print it.
     fn render(width: u16, height: u16, app: &App) -> String {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal.draw(|frame| draw(frame, app, 0.0)).unwrap();
-        terminal
-            .backend()
-            .buffer()
+        let buffer = terminal.backend().buffer();
+        let screen: String = buffer
             .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect()
+            .chunks(usize::from(width))
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>() + "\n")
+            .collect();
+        if std::env::var_os("SHOW_SCREEN").is_some() {
+            println!("{screen}");
+        }
+        screen
+    }
+
+    /// A cleared floor with one monster of `id` hunting the player from the east.
+    fn scene(id: &str) -> App {
+        use tallow_core::Direction;
+        let mut app = App::new(7);
+        app.clear_floor_for_test();
+        let world = app.world_mut();
+        let here = world.player().pos;
+        let spot = Direction::ALL
+            .into_iter()
+            .map(|d| here + d)
+            .find(|&p| world.map().is_walkable(p))
+            .unwrap();
+        let kind = world.content().kind_by_id(id).unwrap();
+        world.spawn_monster(kind, spot);
+        app
+    }
+
+    #[test]
+    fn a_raised_blow_is_flagged_in_view() {
+        let mut app = scene("pallbearer");
+        for _ in 0..20 {
+            if app.world().telegraphs().next().is_some() {
+                break;
+            }
+            app.handle(Action::Wait);
+        }
+        assert!(
+            app.world().telegraphs().next().is_some(),
+            "the pallbearer wound up"
+        );
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("─ in view ─"));
+        assert!(screen.contains("pallbearer !"));
+        assert!(
+            screen.contains("A pallbearer. A big man"),
+            "introduced on first sight"
+        );
+        assert!(screen.contains("raises something heavy over you. Move!"));
+    }
+
+    #[test]
+    fn look_shows_hit_chances() {
+        let mut app = scene("gnawer");
+        app.handle(Action::Look);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("─ look ─"));
+        assert!(screen.contains("You hit it   70%"));
+        assert!(screen.contains("It hits you  50% · 1–2"));
+    }
+
+    #[test]
+    fn death_screen_recaps_the_end() {
+        let mut app = scene("parishioner");
+        for _ in 0..500 {
+            if app.mode() == Mode::Dead {
+                break;
+            }
+            app.handle(Action::Wait);
+        }
+        assert_eq!(app.mode(), Mode::Dead);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("Your candle goes out."));
+        assert!(screen.contains("Killed by a Taken parishioner on floor 1 of 12"));
+        assert!(screen.contains("─ last moments ─"));
+        assert!(screen.contains("Enter  begin again"));
+        app.handle(Action::Confirm);
+        assert!(app.wants_restart());
     }
 
     #[test]
@@ -120,25 +310,43 @@ mod tests {
 
     #[test]
     fn descending_updates_the_hud_and_log() {
-        use crate::input::Action;
-        use tallow_core::{Command, Direction, Tile, map::path};
+        use tallow_core::{Direction, Tile, map::path};
 
         let mut app = App::new(7);
+        app.clear_floor_for_test();
         let stairs = app.world().map().find(Tile::StairsDown).next().unwrap();
         let dist = path::distances(app.world().map(), stairs);
-        while app.world().player() != stairs {
-            let here = app.world().player();
+        while app.world().player().pos != stairs {
+            let here = app.world().player().pos;
             let dir = Direction::ALL
                 .into_iter()
                 .find(|&d| dist.at(here + d).is_some_and(|n| Some(n) < dist.at(here)))
                 .unwrap();
-            app.handle(Action::Game(Command::Move(dir)));
+            app.handle(Action::Move(dir));
         }
-        app.handle(Action::Game(Command::Descend));
+        app.handle(Action::Descend);
 
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(screen.contains("Floor 2 of 12"));
         assert!(screen.contains("The stair turns more times than it should."));
+    }
+
+    #[test]
+    fn wrap_breaks_on_words_and_splits_long_ones() {
+        assert_eq!(wrap("one two three", 7), vec!["one two", "three"]);
+        assert_eq!(wrap("abcdefghij", 4), vec!["abcd", "efgh", "ij"]);
+        assert_eq!(wrap("", 5), vec![""]);
+    }
+
+    #[test]
+    fn long_log_lines_wrap_instead_of_being_cut() {
+        let mut app = scene("parishioner");
+        app.handle(Action::Wait);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(
+            screen.contains("strikes without anger."),
+            "the end of the description is on screen"
+        );
     }
 
     #[test]

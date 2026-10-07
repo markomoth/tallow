@@ -19,6 +19,7 @@ cargo run --release -- --seed 42   # replay a specific dungeon
 | `yubn` | Move diagonally |
 | Shift + direction | Run |
 | `>` | Descend stairs |
+| `x` | Look (Tab cycles creatures) |
 | `.` / `5` | Wait |
 | `q` | Quit |
 

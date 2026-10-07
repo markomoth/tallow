@@ -12,6 +12,18 @@ pub fn floor_rng(seed: u64, depth: u8) -> GameRng {
     GameRng::seed_from_u64(splitmix64(seed ^ splitmix64(u64::from(depth))))
 }
 
+/// Run-wide streams for things that aren't map generation. Separate streams mean
+/// a change in how often monsters roll for wandering never changes combat rolls.
+#[derive(Debug, Clone, Copy)]
+pub enum Stream {
+    Combat = 1,
+    Ai = 2,
+}
+
+pub fn stream(seed: u64, stream: Stream) -> GameRng {
+    GameRng::seed_from_u64(splitmix64(seed ^ splitmix64(0x1000 + stream as u64)))
+}
+
 /// A fast, well-distributed 64-bit mixer.
 pub const fn splitmix64(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);

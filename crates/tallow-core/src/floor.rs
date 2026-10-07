@@ -1,10 +1,13 @@
 //! One floor of the labyrinth: its map plus what the player sees and remembers.
 
+use slotmap::SlotMap;
+
 use crate::events::Event;
 use crate::geom::Point;
 use crate::grid::Grid;
 use crate::map::light::{self, Light, LightSource, Rgb};
 use crate::map::{Map, Tile, fov};
+use crate::monster::{Monster, MonsterId};
 
 pub const BRAZIER_RADIUS: i32 = 5;
 pub const BRAZIER_COLOR: Rgb = [255, 138, 64];
@@ -17,9 +20,15 @@ pub struct Floor {
     map: Map,
     arrival: Point,
     lights: Vec<LightSource>,
+    /// Light from fixed sources only (braziers), without the player's candle.
+    ambient: Grid<Light>,
     light: Grid<Light>,
+    /// In unbroken line of sight from the player, lit or not. Sight is
+    /// symmetric, so this is also everywhere that can see the player.
+    in_sight: Grid<bool>,
     visible: Grid<bool>,
     explored: Grid<bool>,
+    pub(crate) monsters: SlotMap<MonsterId, Monster>,
 }
 
 impl Floor {
@@ -32,15 +41,18 @@ impl Floor {
                 radius: BRAZIER_RADIUS,
                 color: BRAZIER_COLOR,
             })
-            .collect();
+            .collect::<Vec<_>>();
         let (w, h) = (map.width(), map.height());
         Self {
+            ambient: light::compute(&map, &lights),
             map,
             arrival,
             lights,
             light: Grid::new(w, h, Light::default()),
+            in_sight: Grid::new(w, h, false),
             visible: Grid::new(w, h, false),
             explored: Grid::new(w, h, false),
+            monsters: SlotMap::with_key(),
         }
     }
 
@@ -55,6 +67,43 @@ impl Floor {
     /// Light reaching a tile this turn.
     pub fn light(&self, p: Point) -> Light {
         self.light.at(p)
+    }
+
+    /// Light from braziers alone, ignoring the player's candle.
+    pub fn ambient_light(&self, p: Point) -> Light {
+        self.ambient.at(p)
+    }
+
+    /// In line of sight of the player (lit or not).
+    pub fn in_sight(&self, p: Point) -> bool {
+        self.in_sight.at(p)
+    }
+
+    pub fn monsters(&self) -> impl Iterator<Item = (MonsterId, &Monster)> {
+        self.monsters.iter()
+    }
+
+    pub fn monster(&self, id: MonsterId) -> Option<&Monster> {
+        self.monsters.get(id)
+    }
+
+    pub fn monster_at(&self, p: Point) -> Option<MonsterId> {
+        self.monsters
+            .iter()
+            .find(|(_, m)| m.pos == p)
+            .map(|(id, _)| id)
+    }
+
+    /// Monsters the player can see right now, nearest first.
+    pub fn visible_monsters(&self, from: Point) -> Vec<MonsterId> {
+        let mut seen: Vec<(i32, MonsterId)> = self
+            .monsters
+            .iter()
+            .filter(|(_, m)| self.is_visible(m.pos))
+            .map(|(id, m)| (m.pos.distance_squared(from), id))
+            .collect();
+        seen.sort_by_key(|&(d, _)| d);
+        seen.into_iter().map(|(_, id)| id).collect()
     }
 
     /// In view right now.
@@ -82,12 +131,15 @@ impl Floor {
         self.light = light::compute(&self.map, &sources);
 
         self.visible.fill(false);
-        let (map, light, visible) = (&self.map, &self.light, &mut self.visible);
+        self.in_sight.fill(false);
+        let (map, light) = (&self.map, &self.light);
+        let (visible, in_sight) = (&mut self.visible, &mut self.in_sight);
         fov::compute(
             eye,
             SIGHT_RADIUS,
             |p| map.blocks_sight(p),
             |p| {
+                in_sight.set(p, true);
                 if light.at(p).is_lit() || p.chebyshev(eye) <= 1 {
                     visible.set(p, true);
                 }

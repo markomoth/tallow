@@ -13,6 +13,9 @@ tallow-core = { path = "crates/tallow-core" }
 ratatui = "0.30"
 rand = { version = "0.10", default-features = false, features = ["alloc"] }
 rand_pcg = { version = "0.10", default-features = false }
+serde = { version = "1", features = ["derive"] }
+ron = "0.12"
+slotmap = "1"
 anyhow = "1"
 
 [workspace.lints.rust]

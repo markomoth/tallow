@@ -13,15 +13,17 @@ cargo clippy --workspace --all-targets     # must be warning-free
 cargo fmt --all                            # format before committing
 cargo run -p tallow-core --example floor -- <seed> <depth>   # print a generated floor as ASCII
 cargo run -- --seed 7                      # replay a specific dungeon
+cargo run --release -p tallow-core --example bot -- 300   # balance smoke test: where a dumb bot dies
+SHOW_SCREEN=1 cargo test -p tallow-tui -- --nocapture   # print rendered test screens
 ```
 
 ## Layout
 
 - `crates/tallow-core` — pure game logic. `World::apply(Command) -> Vec<Event>`.
 - `crates/tallow-tui` — the `tallow` binary: ratatui rendering, key bindings, message log.
-- `assets/` — not created yet. From M4 on: RON content and prefab vaults, embedded with `include_str!`.
+- `assets/` — RON content embedded with `include_str!` (`monsters.ron` now; items, rites, boons later). Loaded by `content.rs`.
 
-Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor seeded streams).
+Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor and per-system seeded streams), `monster.rs` + `ai.rs` (monsters and their decisions), `combat.rs`, `time.rs` (energy scheduler), `spawn.rs`.
 
 ## Rules for the code
 
