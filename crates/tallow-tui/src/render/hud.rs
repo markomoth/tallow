@@ -170,7 +170,8 @@ impl Widget for Hud<'_> {
             Mode::Target { aim, cursor } => {
                 lines.extend(target_panel(world, aim, cursor, self.app.aim_path().len()));
             }
-            Mode::Play
+            Mode::Title(_)
+            | Mode::Play
             | Mode::Dead
             | Mode::Won
             | Mode::Help

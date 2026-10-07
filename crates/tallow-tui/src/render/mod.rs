@@ -6,6 +6,7 @@ mod pack;
 mod palette;
 mod sheet;
 mod simple;
+mod title;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -44,6 +45,11 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
         return;
     }
 
+    if let Mode::Title(choice) = app.mode() {
+        title::draw(frame, area, app, choice, time);
+        return;
+    }
+
     let [top, log_area] =
         Layout::vertical([Constraint::Min(0), Constraint::Length(LOG_HEIGHT)]).areas(area);
     let [map_area, hud_area] =
@@ -51,7 +57,8 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
 
     let cursor = match app.mode() {
         Mode::Look { cursor } | Mode::Target { cursor, .. } => Some(cursor),
-        Mode::Play
+        Mode::Title(_)
+        | Mode::Play
         | Mode::Dead
         | Mode::Won
         | Mode::Help
@@ -82,7 +89,7 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
         Mode::Rites => sheet::draw_rites(frame, map_area, app.world()),
         Mode::Corpse => sheet::draw_corpse(frame, map_area, app.world()),
         Mode::Leaving(id) => pack::draw_leaving(frame, map_area, app.world(), id),
-        Mode::Play | Mode::Look { .. } | Mode::Target { .. } => {}
+        Mode::Title(_) | Mode::Play | Mode::Look { .. } | Mode::Target { .. } => {}
     }
 }
 
@@ -451,6 +458,19 @@ mod tests {
         assert!(screen.contains("floorboards"));
         assert!(screen.contains("Floor 1/12 · Level 1"));
         assert!(screen.contains("seed 7"));
+    }
+
+    #[test]
+    fn the_start_menu_fits_the_smallest_screen() {
+        let mut app = App::new(7);
+        app.show_title();
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        let rows: Vec<&str> = screen.lines().collect();
+        assert!(rows[0].contains('|'), "the spire's cross isn't cut off");
+        assert!(screen.contains("T A L L O W"));
+        assert!(screen.contains("▸ p  Play now"));
+        assert!(screen.contains("q  Quit"));
+        assert!(!screen.contains("floorboards"), "the run isn't shown yet");
     }
 
     #[test]

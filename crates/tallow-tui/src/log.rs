@@ -856,6 +856,32 @@ fn death_line(content: &Content, kind: KindId) -> String {
     }
 }
 
+/// What lies where you stand, one line per thing: its name and what it is.
+pub fn underfoot(world: &World) -> Vec<String> {
+    let here = world.player().pos;
+    let floor = world.floor();
+    let items = floor.items_at(here).map(|f| {
+        let def = world.content().item(f.item.kind);
+        format!(
+            "Underfoot: {}. {} (g to pick up)",
+            item_phrase(world, f.item.kind, f.item.count),
+            def.description
+        )
+    });
+    let leavings = floor
+        .leavings()
+        .iter()
+        .filter(|&&(at, _)| at == here)
+        .map(|&(_, id)| {
+            format!(
+                "Underfoot: {}. {} (g to pick up)",
+                crate::names::leaving_name(world, id),
+                crate::names::leaving_tell(world, id)
+            )
+        });
+    items.chain(leavings).collect()
+}
+
 /// "a gnawer", "an eel".
 pub fn with_article(name: &str) -> String {
     let vowel = name

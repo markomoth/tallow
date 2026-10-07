@@ -2,11 +2,11 @@
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use tallow_core::inventory::THROW_RANGE;
-use tallow_core::{Command, Event, ItemId, MonsterId, Point, RiteId, RiteTarget, World};
+use tallow_core::{Command, Direction, Event, ItemId, MonsterId, Point, RiteId, RiteTarget, World};
 
 use crate::input::{Action, map_key};
 use crate::journal::Journal;
-use crate::log::{MessageLog, Tone, narrate};
+use crate::log::{MessageLog, Tone, narrate, underfoot};
 use crate::save::Save;
 
 /// How far a Shift+direction moves a cursor.
@@ -31,6 +31,8 @@ pub enum Aim {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
+    /// The start menu, before the run begins. Holds the highlighted choice.
+    Title(TitleChoice),
     Play,
     /// Examining the map. The world is paused.
     Look {
@@ -66,6 +68,13 @@ pub enum Mode {
     Journal(Option<usize>),
 }
 
+/// What the start menu offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TitleChoice {
+    Play,
+    Quit,
+}
+
 pub struct App {
     world: World,
     log: MessageLog,
@@ -77,6 +86,8 @@ pub struct App {
     journal: Journal,
     /// `--simple`: plain terminal colors, no animation.
     simple: bool,
+    /// Picked up from a save rather than begun fresh.
+    resumed: bool,
 }
 
 impl App {
@@ -99,6 +110,7 @@ impl App {
             commands: Vec::new(),
             journal: Journal::default(),
             simple: false,
+            resumed: false,
         }
     }
 
@@ -112,7 +124,23 @@ impl App {
             "You wake where you left off. The candle is still burning.",
             Tone::Normal,
         );
+        app.resumed = true;
         app
+    }
+
+    /// Opens on the start menu instead of dropping straight into the run.
+    pub fn show_title(&mut self) {
+        self.mode = Mode::Title(TitleChoice::Play);
+    }
+
+    /// Picked up from a save, so the menu offers to continue.
+    pub fn resumed(&self) -> bool {
+        self.resumed
+    }
+
+    /// At least one command has been given: there is a run worth saving.
+    pub fn started(&self) -> bool {
+        !self.commands.is_empty()
     }
 
     /// The run so far, as a save.
@@ -181,6 +209,7 @@ impl App {
     /// through the key bindings.
     pub fn handle_key(&mut self, key: KeyEvent) {
         match self.mode {
+            Mode::Title(choice) => self.handle_title_key(key, choice),
             Mode::Pack { purpose, selected } => self.handle_pack_key(key, purpose, selected),
             Mode::Draft => {
                 if let KeyCode::Char(c @ '1'..='3') = key.code {
@@ -260,7 +289,12 @@ impl App {
                 }
             }
             Mode::Target { aim, cursor } => self.handle_target(action, aim, cursor),
-            Mode::Pack { .. } | Mode::Draft | Mode::Corpse | Mode::Rites | Mode::Leaving(_) => {}
+            Mode::Title(_)
+            | Mode::Pack { .. }
+            | Mode::Draft
+            | Mode::Corpse
+            | Mode::Rites
+            | Mode::Leaving(_) => {}
             Mode::Sheet | Mode::Help | Mode::Journal(_) => {
                 if matches!(
                     action,
@@ -393,6 +427,27 @@ impl App {
         }
     }
 
+    /// Up and down move between the choices; Enter takes one. `p` plays, `q` quits.
+    fn handle_title_key(&mut self, key: KeyEvent, choice: TitleChoice) {
+        let chosen = match (key.code, map_key(key)) {
+            (KeyCode::Char('p'), _) => TitleChoice::Play,
+            (_, Some(Action::Quit | Action::Cancel)) => TitleChoice::Quit,
+            (_, Some(Action::Confirm)) => choice,
+            (_, Some(Action::Move(Direction::N | Direction::S))) => {
+                self.mode = Mode::Title(match choice {
+                    TitleChoice::Play => TitleChoice::Quit,
+                    TitleChoice::Quit => TitleChoice::Play,
+                });
+                return;
+            }
+            _ => return,
+        };
+        match chosen {
+            TitleChoice::Play => self.mode = Mode::Play,
+            TitleChoice::Quit => self.quit = true,
+        }
+    }
+
     fn handle_rites_key(&mut self, key: KeyEvent) {
         let KeyCode::Char(c) = key.code else {
             if key.code == KeyCode::Esc {
@@ -491,9 +546,16 @@ impl App {
     /// Applies a command and writes what happened to the log.
     fn play(&mut self, command: Command) {
         self.commands.push(command);
+        let from = self.world.player().pos;
         for event in self.world.apply(command) {
             if let Some((text, tone)) = narrate(&event, &self.world) {
                 self.log.push(text, tone);
+            }
+        }
+        // Stepping onto something says what it is.
+        if self.world.player().pos != from && self.world.death().is_none() {
+            for line in underfoot(&self.world) {
+                self.log.push(line, Tone::Normal);
             }
         }
         if self.world.death().is_some() {
@@ -588,7 +650,6 @@ impl App {
 mod tests {
     use super::*;
     use ratatui::crossterm::event::KeyModifiers;
-    use tallow_core::Direction;
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
@@ -743,6 +804,49 @@ mod tests {
         assert_eq!(resumed.world().player().pos, app.world().player().pos);
         assert_eq!(resumed.world().player().health, app.world().player().health);
         assert_eq!(resumed.save(), save);
+    }
+
+    #[test]
+    fn stepping_onto_an_item_says_what_it_is() {
+        let mut app = App::new(3);
+        app.clear_floor_for_test();
+        let world = app.world_mut();
+        let here = world.player().pos;
+        let dir = Direction::ALL
+            .into_iter()
+            .find(|&d| world.map().is_walkable(here + d))
+            .unwrap();
+        let sickle = world.content().item_by_id("sickle").unwrap();
+        world.place_item(here + dir, sickle, 1);
+        app.handle(Action::Move(dir));
+        let last = &app.log().entries().last().unwrap().text;
+        assert!(last.starts_with("Underfoot: a sickle."), "{last}");
+        assert!(last.contains("A churchyard sickle"), "{last}");
+        app.handle(Action::Wait);
+        let underfoot = app
+            .log()
+            .entries()
+            .filter(|e| e.text.starts_with("Underfoot"))
+            .count();
+        assert_eq!(underfoot, 1, "standing still doesn't repeat it");
+    }
+
+    #[test]
+    fn the_start_menu_plays_or_quits() {
+        let mut app = App::new(3);
+        app.show_title();
+        assert_eq!(app.mode(), Mode::Title(TitleChoice::Play));
+        app.handle_key(key('j'));
+        assert_eq!(app.mode(), Mode::Title(TitleChoice::Quit));
+        app.handle_key(key('k'));
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode(), Mode::Play);
+        assert!(!app.started(), "the menu gives no commands");
+
+        let mut app = App::new(3);
+        app.show_title();
+        app.handle_key(key('q'));
+        assert!(app.should_quit());
     }
 
     #[test]

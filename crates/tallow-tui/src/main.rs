@@ -77,6 +77,10 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
     };
     app.set_journal(journal.clone());
     app.set_simple(options.simple);
+    // Dev runs go straight in; everyone else starts at the church door.
+    if !dev {
+        app.show_title();
+    }
     let mut recorded = false;
     // Simple mode doesn't animate, so it only needs to redraw on input.
     let frame = if options.simple { IDLE } else { FRAME };
@@ -132,7 +136,8 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         }
     }
     // Quitting mid-run saves it; what you learned goes into the journal either way.
-    if !app.is_over() {
+    // Leaving from the start menu before a single move saves nothing.
+    if !app.is_over() && app.started() {
         journal.record(app.world());
         if let Some(path) = &save_path {
             app.save().write(path)?;
