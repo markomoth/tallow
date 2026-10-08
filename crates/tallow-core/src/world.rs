@@ -1843,7 +1843,9 @@ mod tests {
     #[test]
     fn bumping_a_monster_attacks_it_until_it_dies() {
         let mut world = world_from("######\n#@...#\n######");
-        let id = world.spawn_monster(kind("gnawer"), Point::new(2, 1));
+        // Flesh, and slow to run: blunt blows land in full.
+        let id = world.spawn_monster(kind("parishioner"), Point::new(2, 1));
+        world.player.health = 999;
         let mut died = false;
         for _ in 0..50 {
             let events = world.apply(Command::Move(Direction::E));
@@ -1864,7 +1866,7 @@ mod tests {
                 break;
             }
         }
-        assert!(died, "a lone gnawer should die within 50 swings");
+        assert!(died, "a parishioner should die within 50 swings");
         assert_eq!(
             world.player().pos,
             Point::new(1, 1),

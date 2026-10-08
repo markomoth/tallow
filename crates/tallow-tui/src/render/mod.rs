@@ -435,7 +435,7 @@ mod tests {
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(screen.contains("─ look ─"));
         assert!(
-            screen.contains("You hit it   70% · 2–4"),
+            screen.contains("You hit it   70% · 2–3"),
             "halved: blunt on a swarm"
         );
         assert!(screen.contains("It hits you  50% · 1–2"));
