@@ -17,6 +17,10 @@
     <link data-trunk rel="copy-dir" href="fonts" />
     <link rel="preload" href="fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="fonts/IMFellEnglishSC-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <script>
+      // Inside a frame (itch.io), the page around it carries the title and links.
+      if (window.self !== window.top) document.documentElement.classList.add("framed");
+    </script>
     <style>
       @font-face {
         font-family: "JetBrains Mono";
@@ -465,6 +469,41 @@
 
       /* ── Narrow and touch screens ────────────────────── */
 
+      /* In a frame, only the screen and the key line: the host page says the rest. */
+      /* Each part keeps its row when another is hidden. */
+      .masthead {
+        grid-row: 1;
+      }
+      .nave {
+        grid-row: 2;
+      }
+      .rubric {
+        grid-row: 3;
+      }
+
+      .framed .masthead,
+      .framed .colophon {
+        display: none;
+      }
+      .framed .rubric {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .framed .nave {
+        padding-top: 8px;
+      }
+
+      /* Too short for words around it: the screen alone. */
+      @media (max-height: 560px) {
+        .masthead,
+        .rubric {
+          display: none;
+        }
+        .nave {
+          padding: 0;
+        }
+      }
+
       @media (max-width: 720px) {
         body {
           font-size: 16px;
@@ -617,14 +656,16 @@
         if (touchOnly) mode("touch");
 
         // The drawn screen is exactly 100×30 cells at the font size picked on
-        // load. If the window shrinks after that, scale it down to fit, and
-        // keep the words above and below aligned with its edges.
+        // load. When the window changes after that (itch's fullscreen button),
+        // scale it to fit, and keep the words above and below aligned with its
+        // edges. Within a few percent of its own size it stays unscaled, sharp.
         const fit = () => {
           const canvas = screen.querySelector("canvas");
           if (!canvas) return;
           const w = canvas.offsetWidth;
           const h = canvas.offsetHeight;
-          const scale = Math.min(1, screen.clientWidth / w, screen.clientHeight / h);
+          const fits = Math.min(screen.clientWidth / w, screen.clientHeight / h);
+          const scale = fits < 1 || fits > 1.08 ? fits : 1;
           canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
           document.documentElement.style.setProperty("--screen-w", `${Math.round(w * scale)}px`);
         };
