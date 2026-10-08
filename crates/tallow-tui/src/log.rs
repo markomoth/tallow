@@ -201,6 +201,25 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             },
             Dread,
         ),
+        Event::Resisted { kind } => (
+            format!(
+                "Your blow barely bites: the {} shrugs off half of it. {}",
+                name(kind),
+                match content.monster(kind).faction {
+                    tallow_core::content::Faction::Swarm => "Blunt things are wasted on a swarm.",
+                    tallow_core::content::Faction::Remnant => "Blades only nick paper and brass.",
+                    _ => "In the dark it is barely there. Light holds it.",
+                }
+            ),
+            Normal,
+        ),
+        Event::Bleeding { kind } => (format!("The {} bleeds.", name(kind)), Normal),
+        Event::Kindled { kind } => (
+            format!("Sparks fly from the censer. The ground under the {} catches!", name(kind)),
+            Danger,
+        ),
+        Event::Hooked { kind } => (format!("You haul the {} in.", name(kind)), Normal),
+        Event::Shoved { kind } => (format!("The {} is driven back.", name(kind)), Normal),
         Event::FedOnFear { kind, dread } => (
             format!("The {}'s touch is cold. Your fear grows (+{dread} dread).", name(kind)),
             Dread,

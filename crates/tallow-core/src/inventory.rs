@@ -9,8 +9,8 @@ use crate::events::Event;
 use crate::floor::FloorItem;
 use crate::geom::Point;
 use crate::item::{
-    self, BITTER_DREAD, Burden, Item, ItemClass, ItemId, ItemKindId, SideEffect, Slot, ThrowStats,
-    TinctureEffect,
+    self, BITTER_DREAD, Burden, Item, ItemClass, ItemId, ItemKindId, Quirk, SideEffect, Slot,
+    ThrowStats, TinctureEffect,
 };
 use crate::monster::MonsterId;
 use crate::progress::Source;
@@ -98,11 +98,24 @@ impl World {
     pub fn player_damage(&self) -> (u32, u32) {
         let (lo, hi) = self.melee().map_or(FISTS, |(_, dmg)| dmg);
         let family = self.wielded_family();
-        let bonus = self.passive_sum(|p| match p {
+        let mut bonus = self.passive_sum(|p| match p {
             Passive::FamilyDamage(f) if Some(f) == family => Some(1),
             _ => None,
         }) as u32;
+        if let Some(Quirk::Candlelit { damage }) = self.wielded_quirk()
+            && (self.player.candle.is_lit() || self.player.vigil)
+        {
+            bonus += damage;
+        }
         (lo + bonus, hi + bonus)
+    }
+
+    /// What sets the wielded weapon apart, if anything.
+    pub fn wielded_quirk(&self) -> Option<Quirk> {
+        match self.equipped_def(Slot::Melee)? {
+            ItemClass::Melee { quirk, .. } => *quirk,
+            _ => None,
+        }
     }
 
     pub fn player_defense(&self) -> i32 {
@@ -488,7 +501,16 @@ impl World {
                 Faction::Taken => combat::roll_damage(&mut self.combat_rng, holy.taken),
                 Faction::Swarm | Faction::Remnant => 0,
             }),
-            (true, None) => Some(combat::roll_damage(&mut self.combat_rng, shot.damage)),
+            (true, None) => {
+                let roll = combat::roll_damage(&mut self.combat_rng, shot.damage);
+                Some(
+                    if combat::resists(def.faction, combat::Weapon::Missile, self.in_the_dark(at)) {
+                        combat::halve(roll)
+                    } else {
+                        roll
+                    },
+                )
+            }
         };
         events.push(Event::ProjectileHit {
             item: shot.item,

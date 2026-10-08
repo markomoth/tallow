@@ -68,6 +68,8 @@ pub struct Monster {
     pub grown: u32,
     /// Actions until it can put out your candle again.
     pub(crate) snuff_cooldown: u32,
+    /// Actions left bleeding, 1 health each.
+    pub bleeding: u32,
 }
 
 impl Monster {
@@ -99,6 +101,7 @@ impl Monster {
             stunned: 0,
             grown: 0,
             snuff_cooldown: 0,
+            bleeding: 0,
         }
     }
 }

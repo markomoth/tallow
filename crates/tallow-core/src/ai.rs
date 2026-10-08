@@ -37,6 +37,14 @@ const AGGRO_RANGE: i32 = 5;
 
 impl World {
     pub(crate) fn monster_act(&mut self, id: MonsterId, events: &mut Vec<Event>) {
+        // An open wound bleeds before it does anything else.
+        if self.floor.monsters[id].bleeding > 0 {
+            self.floor.monsters[id].bleeding -= 1;
+            self.damage_monster(id, 1, Source::Melee(Some(Family::Blade)), events);
+            if !self.floor.monsters.contains_key(id) {
+                return;
+            }
+        }
         self.monster_decide(id, events);
         // A pin holds for whole actions: it wears off once the action is spent.
         if let Some(m) = self.floor.monsters.get_mut(id) {
@@ -454,7 +462,7 @@ impl World {
     }
 
     /// Whether a monster may step onto `p`.
-    fn can_enter(&self, id: MonsterId, p: Point) -> bool {
+    pub(crate) fn can_enter(&self, id: MonsterId, p: Point) -> bool {
         let m = &self.floor.monsters[id];
         let def = self.content.monster(m.kind);
         let heedless = m.beckoned > 0;

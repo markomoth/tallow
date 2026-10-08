@@ -45,8 +45,8 @@ pub use events::{Cause, Event, Who};
 pub use floor::{Floor, FloorItem, Tallow};
 pub use geom::{Direction, Point};
 pub use item::{
-    Burden, Equipment, Family, Item, ItemClass, ItemDef, ItemId, ItemKindId, Potency, SideEffect,
-    Slot, TinctureEffect, TinctureLore,
+    Burden, Equipment, Family, Item, ItemClass, ItemDef, ItemId, ItemKindId, Potency, Quirk,
+    SideEffect, Slot, TinctureEffect, TinctureLore,
 };
 pub use map::light::{Light, Rgb};
 pub use map::{Map, Tile};

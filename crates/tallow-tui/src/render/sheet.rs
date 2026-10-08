@@ -11,7 +11,7 @@ use tallow_core::{Skill, World};
 
 use super::palette;
 use crate::names::{boon_text, rite_numbers, school_name, skill_name, technique_text};
-use tallow_core::corpse::{RENDER_TURNS, render_yield, study_turns};
+use tallow_core::corpse::{RENDER_TURNS, study_turns};
 
 const BAR: usize = 10;
 
@@ -318,7 +318,7 @@ pub fn draw_corpse(frame: &mut Frame, area: Rect, world: &World) {
     } else {
         format!(
             "r  render it ({left} turns): +{} tallow. The body is gone after.",
-            render_yield(def.faction, def.health)
+            world.corpse_tallow(corpse)
         )
     };
     let lines = vec![

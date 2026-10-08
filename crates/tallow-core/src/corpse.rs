@@ -36,6 +36,8 @@ pub struct Corpse {
     pub ancient: bool,
     /// Opened up by study: the fat is spoiled and it won't render.
     pub spoiled: bool,
+    /// Killed with a butcher's blade: it renders for half again as much.
+    pub butchered: bool,
 }
 
 /// How a body is doing.
@@ -87,6 +89,13 @@ enum Work {
 }
 
 impl World {
+    /// Tallow this body would render into, before Tallow Thief.
+    pub fn corpse_tallow(&self, corpse: &Corpse) -> u32 {
+        let def = self.content.monster(corpse.kind);
+        let base = render_yield(def.faction, def.health);
+        if corpse.butchered { base * 3 / 2 } else { base }
+    }
+
     pub fn corpse_here(&self) -> Option<&Corpse> {
         self.floor.corpses.iter().find(|c| c.at == self.player.pos)
     }
@@ -169,8 +178,7 @@ impl World {
         if done {
             let here = self.player.pos;
             self.floor.corpses.retain(|c| c.at != here);
-            let def = self.content.monster(corpse.kind);
-            let tallow = self.thieving(render_yield(def.faction, def.health));
+            let tallow = self.thieving(self.corpse_tallow(&corpse));
             events.push(Event::Rendered {
                 kind: corpse.kind,
                 tallow,
@@ -281,6 +289,7 @@ impl World {
                 rendered: 0,
                 ancient: false,
                 spoiled: false,
+                butchered: false,
             });
         }
     }

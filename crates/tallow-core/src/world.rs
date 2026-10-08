@@ -106,8 +106,11 @@ pub struct MonsterInfo {
     pub health: u32,
     pub max_health: u32,
     pub mind: Mind,
-    /// Percent chance your blow lands on it.
+    /// Percent chance your blow lands on it, and for how much.
     pub your_hit_chance: u32,
+    pub your_damage: (u32, u32),
+    /// It shrugs off half of what you're wielding.
+    pub resists: bool,
     /// Percent chance its ordinary blow lands on you, and for how much.
     pub its_hit_chance: u32,
     pub its_damage: (u32, u32),
@@ -155,6 +158,8 @@ pub struct World {
     witnessed: HashSet<(KindId, Trait)>,
     /// Kinds whose bodies you've studied.
     pub(crate) studied: HashSet<KindId>,
+    /// Kinds whose armour you've already been told about.
+    pub(crate) armour_noted: HashSet<KindId>,
     pub(crate) rite_rng: GameRng,
     pub(crate) death: Option<Death>,
     /// You were warned about fire, deep water or rotten boards at this tile;
@@ -248,6 +253,7 @@ impl World {
             sighted: HashSet::new(),
             witnessed: HashSet::new(),
             studied: HashSet::new(),
+            armour_noted: HashSet::new(),
             rite_rng: rng::stream(seed, Stream::Rites),
             death: None,
             fire_warned: None,
@@ -311,6 +317,7 @@ impl World {
                     rendered: 0,
                     ancient: true,
                     spoiled: false,
+                    butchered: false,
                 });
             }
             let court = content.kind_by_id("beelzebub").expect("defined");
@@ -385,6 +392,7 @@ impl World {
                 rendered: 0,
                 ancient: true,
                 spoiled: false,
+                butchered: false,
             });
         }
         let spawns: Vec<(KindId, Point)> = spawns
@@ -576,6 +584,15 @@ impl World {
             health: m.health,
             max_health: m.max_health,
             mind: m.mind,
+            your_damage: {
+                let (lo, hi) = self.player_damage();
+                if self.resists_wielded(m) {
+                    (combat::halve(lo), combat::halve(hi))
+                } else {
+                    (lo, hi)
+                }
+            },
+            resists: self.resists_wielded(m),
             your_hit_chance: combat::hit_chance(
                 self.player_accuracy() - self.dark_penalty(m.pos),
                 def.defense,
@@ -837,7 +854,14 @@ impl World {
         let weapon = self.player_damage();
         let health_before = self.floor.monsters[id].health;
         let family = self.wielded_family();
-        let damage = combat::roll_attack(&mut self.combat_rng, chance, weapon);
+        let quirk = self.wielded_quirk();
+        let rolled = combat::roll_attack(&mut self.combat_rng, chance, weapon);
+        let armoured = combat::resists(
+            def.faction,
+            combat::Weapon::Melee(family),
+            self.in_the_dark(at),
+        );
+        let damage = rolled.map(|d| if armoured { combat::halve(d) } else { d });
         events.push(Event::Attack {
             attacker: Who::Player,
             defender: Who::Monster(kind),
@@ -847,10 +871,17 @@ impl World {
         self.wake(id);
         self.fight_noise();
         let Some(damage) = damage else { return };
+        if armoured && self.armour_noted.insert(kind) {
+            events.push(Event::Resisted { kind });
+        }
         if let Some(family) = family {
             self.train(Skill::of_family(family), damage.min(health_before), events);
         }
         self.damage_monster(id, damage, Source::Melee(family), events);
+        if let Some(quirk) = quirk {
+            let best = rolled == Some(weapon.1);
+            self.weapon_quirk(id, quirk, at, best, events);
+        }
         if family == Some(Family::Bludgeon)
             && let Some(Technique::Stagger { chance }) =
                 self.melee_technique(|t| matches!(t, Technique::Stagger { .. }))
@@ -861,6 +892,79 @@ impl World {
             self.floor.monsters[id].energy -= ACTION_COST;
             events.push(Event::Staggered { kind });
         }
+    }
+
+    /// What the wielded weapon does beyond its damage, after a blow lands.
+    fn weapon_quirk(
+        &mut self,
+        id: MonsterId,
+        quirk: crate::item::Quirk,
+        at: Point,
+        best: bool,
+        events: &mut Vec<Event>,
+    ) {
+        use crate::item::Quirk;
+        let alive = self.floor.monsters.get(id).map(|m| (m.kind, m.pos));
+        let big = alive.is_some_and(|(kind, _)| self.content.monster(kind).boss);
+        match (quirk, alive) {
+            (Quirk::Bleeds { turns }, Some((kind, _))) => {
+                if !self.content.monster(kind).has(|t| *t == Trait::Undying) {
+                    let m = &mut self.floor.monsters[id];
+                    m.bleeding = m.bleeding.max(turns);
+                    events.push(Event::Bleeding { kind });
+                }
+            }
+            (Quirk::Kindles, Some((kind, pos))) if best => {
+                if self.ignite(pos, true) {
+                    events.push(Event::Kindled { kind });
+                }
+            }
+            (Quirk::Hooks, Some((kind, pos))) if !big => {
+                // Out at the end of the pole it is hauled in; beside you it is
+                // held there a moment.
+                let to = pos + pos.direction_to(self.player.pos);
+                if to != self.player.pos && self.can_enter(id, to) {
+                    self.floor.monsters[id].pos = to;
+                } else {
+                    let m = &mut self.floor.monsters[id];
+                    m.pinned = m.pinned.max(1);
+                }
+                events.push(Event::Hooked { kind });
+            }
+            (Quirk::Shoves, Some((kind, pos))) if !big => {
+                let to = pos + self.player.pos.direction_to(pos);
+                let open = self.map().is_walkable(to)
+                    && !matches!(self.map().tile(to), Tile::DoorClosed | Tile::DoorSealed)
+                    && self.floor.monster_at(to).is_none()
+                    && self.anomaly_at(to).is_none()
+                    && to != self.player.pos;
+                if open {
+                    self.floor.monsters[id].pos = to;
+                    events.push(Event::Shoved { kind });
+                }
+            }
+            (Quirk::Butchers, None) => {
+                let now = self.turn();
+                if let Some(c) = self
+                    .floor
+                    .corpses
+                    .iter_mut()
+                    .find(|c| c.at == at && c.died == now)
+                {
+                    c.butchered = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Whether this creature shrugs off half of your wielded weapon.
+    pub fn resists_wielded(&self, m: &crate::monster::Monster) -> bool {
+        combat::resists(
+            self.content.monster(m.kind).faction,
+            combat::Weapon::Melee(self.wielded_family()),
+            self.in_the_dark(m.pos),
+        )
     }
 
     /// No light reaches this tile: not your candle, not a brazier, not fire.
@@ -1543,6 +1647,110 @@ mod tests {
             world.player().dread.value() >= before + 2,
             "blows in the dark feed dread"
         );
+    }
+
+    fn wield(world: &mut World, id: &str) {
+        world.dev_give(id, 1);
+        let item = world
+            .player()
+            .inventory
+            .iter()
+            .find(|i| world.content().item(i.kind).id == id)
+            .unwrap()
+            .id;
+        world.apply(Command::Equip(item));
+        assert!(world.wielded_quirk().is_some(), "{id} in hand");
+    }
+
+    #[test]
+    fn each_faction_shrugs_off_something() {
+        let mut world = world_from("##########\n#@.......#\n##########");
+        let at = Point::new(2, 1);
+        let proctor = world.spawn_monster(kind("proctor"), at);
+        world.floor.monsters[proctor].energy = -10_000;
+        wield(&mut world, "sickle");
+        let info = world.inspect(proctor).unwrap();
+        assert!(info.resists, "blades only nick the Remnant");
+        let (lo, hi) = world.player_damage();
+        assert_eq!(info.your_damage, (combat::halve(lo), combat::halve(hi)));
+        wield(&mut world, "censer");
+        assert!(!world.inspect(proctor).unwrap().resists);
+        world.despawn_all();
+
+        let flies = world.spawn_monster(kind("fly_swarm"), at);
+        world.floor.monsters[flies].energy = -10_000;
+        assert!(
+            world.inspect(flies).unwrap().resists,
+            "blunt things are wasted on flies"
+        );
+        world.despawn_all();
+
+        let eater = world.spawn_monster(kind("lantern_eater"), at);
+        world.floor.monsters[eater].energy = -10_000;
+        assert!(
+            !world.inspect(eater).unwrap().resists,
+            "light holds the Dreaming"
+        );
+        world.apply(Command::ToggleCandle);
+        assert!(
+            world.inspect(eater).unwrap().resists,
+            "in the dark it is barely there"
+        );
+    }
+
+    #[test]
+    fn weapons_do_more_than_damage() {
+        let mut world = world_from("##########\n#@.......#\n##########");
+        let at = Point::new(2, 1);
+        let mut events = Vec::new();
+
+        // The sickle's wounds bleed.
+        wield(&mut world, "sickle");
+        let id = world.spawn_monster(kind("pallbearer"), at);
+        world.floor.monsters[id].health = 999;
+        world.player.health = 999;
+        while !events.iter().any(|e| matches!(e, Event::Bleeding { .. })) {
+            events.extend(world.apply(Command::Move(Direction::E)));
+        }
+        let health = world.floor().monster(id).unwrap().health;
+        world.apply(Command::Wait);
+        assert!(
+            world.floor().monster(id).unwrap().health < health,
+            "it bleeds"
+        );
+        world.despawn_all();
+
+        // The staff drives it back; the hook hauls it in; the censer kindles.
+        let id = world.spawn_monster(kind("parishioner"), at);
+        world.weapon_quirk(id, crate::item::Quirk::Shoves, at, false, &mut events);
+        assert_eq!(world.floor().monster(id).unwrap().pos, Point::new(3, 1));
+        world.weapon_quirk(id, crate::item::Quirk::Hooks, at, false, &mut events);
+        assert_eq!(world.floor().monster(id).unwrap().pos, at);
+        world.weapon_quirk(id, crate::item::Quirk::Kindles, at, false, &mut events);
+        assert!(!world.floor().is_burning(at), "only its best blow");
+        world.weapon_quirk(id, crate::item::Quirk::Kindles, at, true, &mut events);
+        assert!(world.floor().is_burning(at));
+        world.despawn_all();
+
+        // The candlestick burns brighter with your candle.
+        wield(&mut world, "iron_candlestick");
+        let lit = world.player_damage();
+        world.apply(Command::ToggleCandle);
+        assert_eq!(world.player_damage().1 + 1, lit.1);
+    }
+
+    #[test]
+    fn the_cleaver_butchers_what_it_kills() {
+        let mut world = world_from("##########\n#@.......#\n##########");
+        wield(&mut world, "cleaver");
+        let id = world.spawn_monster(kind("parishioner"), Point::new(2, 1));
+        world.floor.monsters[id].health = 1;
+        while world.floor().monster(id).is_some() {
+            world.apply(Command::Move(Direction::E));
+        }
+        let corpse = *world.floor().corpses.first().expect("a body");
+        assert!(corpse.butchered);
+        assert_eq!(world.corpse_tallow(&corpse), 60 * 3 / 2);
     }
 
     #[test]

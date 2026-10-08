@@ -204,6 +204,7 @@ No attributes. No skill trees. No classes. Your build is what you do.
 
 - **Hit chance** = attacker accuracy − defender defense, clamped to 5–95%. Look shows the exact numbers.
 - **The dark** (M12): striking at something on a tile no light reaches costs you 20 accuracy (10 with Night Eyes). A creature standing in the dark gets +10 accuracy and +1 damage at both ends. Look shows the adjusted numbers and says "In the dark". Each blow struck or taken there adds 2 dread.
+- **Armour by faction** (M15): the Swarm takes half from bludgeons (blunt is wasted on flies and rats), the Remnant half from blades (paper and brass only nick), and the Dreaming half from every weapon, thrown or fired too, while they stand in the dark (light holds them). Half rounds up. The Taken are only flesh. Look shows your damage after armour and says why; the log says so the first time per kind. No one weapon is right for every floor: carry two.
 - **Speed:** 10 is one action per turn. Energy-based: faster creatures act more often.
 - **Health:** the acolyte starts with 24 and regains 1 every 12 turns. The candle clock keeps resting honest.
 - **Telegraphs:** a raised heavy blow marks its target tile in pulsing red and always waits for your next action.
@@ -294,7 +295,7 @@ All 16 v1 rites exist as of M7.
 
 | Category | Examples |
 |---|---|
-| Melee | Sickle, cleaver, censer-on-chain, iron candlestick, boathook, verger's staff |
+| Melee | Sickle, cleaver, censer-on-chain, iron candlestick, boathook, verger's staff. Each has one **quirk** (M15, `quirk` in `items.ron`, shown in the pack): iron candlestick **Candlelit** +1 damage while your candle burns; sickle **Bleeds** (a hit opens a wound, 1 a turn for 4 of its actions); cleaver **Butchers** (what it kills renders half again as much); verger's staff **Shoves** (a hit drives it a step back, into fire or water if that's what's there); censer **Kindles** (its best roll sets the ground under the creature alight); boathook **Hooks** (a hit at the end of the pole hauls it in; beside you it's held an action). Bosses can't be shoved or hooked. |
 | Ranged | Sling (stones also probe anomalies, see §8), crossbow |
 | Throwables | Throwing knives, holy water (also leaves the ground holy for 20 turns), fire flask (bursts into flame in a cross where it breaks, never on your own tile), lamp oil (spills oil around where it breaks), handbell (rings where it lands, can be picked up again); later smoke pot, chalk (draws a ward line) |
 | Vestments | Cassock, gambeson, sexton's leathers, choir mail (heavy) |
@@ -606,11 +607,15 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 
 | M14 ✅ | Dread bites | Stay frayed and see a Nightmare announced, arrive and hunt you, then calm down and watch it come apart; let a phantom reach you and feel it; meet the Manifestation and have it put your candle out and double itself | 2–3 h |
 
+| M15 ✅ | Weapons | See Look halve your damage against the wrong faction; open a wound with a sickle, set a floor alight with a censer, hook something in with a boathook, shove it with a staff, render a cleaver kill for more | 2 h |
+
 **As built (M12), sim over 500 seeds** (the bot now walks dark below 150 tallow, lights up to fight, hunts and renders while under 350): 108 wins, the candle ran dry 4 times, 1.3 Manifestations per run, 0 softlocks. The bot sees every creature on the floor, so it hunts better than a person can; treat its numbers as an upper bound.
 
 **As built (M13), sim over 500 seeds:** 113 wins, the candle ran dry 8 times, 1.31 Manifestations per run, 6 deaths on the ascent (12 before), 0 softlocks. The bot casts no rites, so recharge and slots don't show in its numbers.
 
 **As built (M14), sim over 500 seeds** (the bot now also keeps its candle lit past 60 dread, as a player would to stop the dread climbing): 35 wins, the candle ran dry 61 times, 0.92 Manifestations per run, 0 softlocks. Killed by: Manifestation 122, lantern-eater 108, lidless thing 34, Sexton 34. The bot has no way to spend dread (it casts no rites), so it stays frayed far longer than a player would; at first, before it learned to light up, it won 1 run in 500. The Manifestation first snuffed every action and doubled twice; that killed in two of every three meetings (185 deaths), so it now snuffs once per 12 actions and sends one copy.
+
+**As built (M15), sim over 500 seeds:** 51 wins, 0 softlocks. Killed by: Manifestation 136, lantern-eater 71, lidless thing 45. The bot never changes weapons, so it fights the whole run with the starting candlestick: Candlelit at +2 took it to 97 wins, which made the first weapon too good to put down, so it is +1.
 
 Total: roughly 40–55 hours of build + playtest time.
 

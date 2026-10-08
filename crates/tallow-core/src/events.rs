@@ -127,6 +127,26 @@ pub enum Event {
         kind: KindId,
         damage: Option<u32>,
     },
+    /// Your blow did half: its kind shrugs off this sort of weapon (said once a kind).
+    Resisted {
+        kind: KindId,
+    },
+    /// Your sickle opened a wound that bleeds.
+    Bleeding {
+        kind: KindId,
+    },
+    /// Your censer's best blow set the ground under it alight.
+    Kindled {
+        kind: KindId,
+    },
+    /// Your hook hauled it a step closer.
+    Hooked {
+        kind: KindId,
+    },
+    /// Your staff drove it a step back.
+    Shoved {
+        kind: KindId,
+    },
     /// A blow that feeds your dread.
     FedOnFear {
         kind: KindId,

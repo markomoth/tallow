@@ -403,8 +403,9 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             format!("{} · {mind}", capitalize(health)),
             text(),
         ));
+        let (lo, hi) = info.your_damage;
         lines.push(Line::styled(
-            format!("You hit it   {}%", info.your_hit_chance),
+            format!("You hit it   {}% · {lo}–{hi}", info.your_hit_chance),
             text(),
         ));
         let (lo, hi) = info.its_damage;
@@ -412,6 +413,16 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             format!("It hits you  {}% · {lo}–{hi}", info.its_hit_chance),
             text(),
         ));
+        if info.resists {
+            lines.push(Line::styled(
+                match def.faction {
+                    tallow_core::Faction::Swarm => "Half damage: blunt is wasted.",
+                    tallow_core::Faction::Remnant => "Half damage: blades only nick.",
+                    _ => "Half damage until light holds it.",
+                },
+                Style::new().fg(palette::DREAD),
+            ));
+        }
         if info.in_the_dark {
             lines.push(Line::styled(
                 "In the dark: you strike worse, it strikes harder.",

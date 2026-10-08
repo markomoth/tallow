@@ -45,6 +45,29 @@ pub fn item_phrase(world: &World, kind: ItemKindId, count: u32) -> String {
     }
 }
 
+/// What sets a weapon apart.
+pub fn quirk_text(quirk: tallow_core::Quirk) -> String {
+    use tallow_core::Quirk;
+    match quirk {
+        Quirk::Bleeds { turns } => {
+            format!("Bleeds: a hit opens a wound, 1 a turn for {turns} of its actions.")
+        }
+        Quirk::Kindles => {
+            "Kindles: its best blow sets the ground under the creature alight. Mind your feet."
+                .into()
+        }
+        Quirk::Hooks => "Hooks: a hit hauls the creature a step toward you.".into(),
+        Quirk::Butchers => "Butchers: what it kills renders half again as much tallow.".into(),
+        Quirk::Candlelit { damage } => {
+            format!("Candlelit: +{damage} damage while your candle burns.")
+        }
+        Quirk::Shoves => {
+            "Shoves: a hit drives the creature a step back, into whatever is there (fire, water)."
+                .into()
+        }
+    }
+}
+
 /// Short stat lines for the pack screen and Look.
 pub fn item_stats(world: &World, kind: ItemKindId) -> Vec<String> {
     let def = world.content().item(kind);
@@ -54,10 +77,19 @@ pub fn item_stats(world: &World, kind: ItemKindId) -> Vec<String> {
             family,
             damage: (lo, hi),
             accuracy,
+            quirk,
         } => {
             lines.push(format!(
                 "Damage {lo}–{hi} · accuracy {accuracy:+} · {family:?}"
             ));
+            if let Some(quirk) = quirk {
+                lines.push(quirk_text(*quirk));
+            }
+            lines.push(match family {
+                Family::Blade => "The Remnant (paper, brass) take half from blades.".into(),
+                Family::Bludgeon => "Swarms take half from blunt things.".into(),
+                Family::Reach => "Nothing shrugs off a hook or a pole.".into(),
+            });
         }
         ItemClass::Ranged {
             damage: (lo, hi),

@@ -17,6 +17,34 @@ pub const DARK_ACCURACY: i32 = 20;
 pub const DARK_FURY_ACCURACY: i32 = 10;
 pub const DARK_FURY_DAMAGE: u32 = 1;
 
+/// What a blow is struck with, for armour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Weapon {
+    /// A melee weapon of this family, or bare hands.
+    Melee(Option<crate::item::Family>),
+    /// Thrown or fired.
+    Missile,
+}
+
+/// Whether a creature of `faction` shrugs off half of a blow: the swarm
+/// doesn't care for blunt things, the Remnant are paper and brass that
+/// blades only nick, and the Dreaming are barely there until light holds them.
+pub fn resists(faction: crate::content::Faction, weapon: Weapon, in_the_dark: bool) -> bool {
+    use crate::content::Faction;
+    use crate::item::Family;
+    match faction {
+        Faction::Swarm => weapon == Weapon::Melee(Some(Family::Bludgeon)),
+        Faction::Remnant => weapon == Weapon::Melee(Some(Family::Blade)),
+        Faction::Dreaming => in_the_dark,
+        Faction::Taken => false,
+    }
+}
+
+/// A blow against armour: half, rounded up.
+pub const fn halve(damage: u32) -> u32 {
+    damage - damage / 2
+}
+
 /// Percent chance to land a blow.
 pub fn hit_chance(accuracy: i32, defense: i32) -> u32 {
     (accuracy - defense).clamp(5, 95) as u32

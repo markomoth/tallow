@@ -33,6 +33,16 @@ impl Point {
         if dx > dy { dx } else { dy }
     }
 
+    /// The one step from here that heads most directly toward `other`
+    /// (`Direction::N` if they're the same point).
+    pub fn direction_to(self, other: Point) -> Direction {
+        let delta = ((other.x - self.x).signum(), (other.y - self.y).signum());
+        Direction::ALL
+            .into_iter()
+            .find(|d| d.delta() == delta)
+            .unwrap_or(Direction::N)
+    }
+
     pub const fn distance_squared(self, other: Point) -> i32 {
         let dx = self.x - other.x;
         let dy = self.y - other.y;

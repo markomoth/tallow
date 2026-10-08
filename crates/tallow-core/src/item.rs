@@ -27,6 +27,23 @@ pub enum Family {
     Reach,
 }
 
+/// What sets one weapon apart from the rest of its family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+pub enum Quirk {
+    /// A hit opens a wound that bleeds 1 a turn for this many of its actions.
+    Bleeds { turns: u32 },
+    /// Its best blow sets the ground under the creature alight.
+    Kindles,
+    /// A hit hauls the creature a step toward you.
+    Hooks,
+    /// What it kills renders for half again as much tallow.
+    Butchers,
+    /// Hits harder by this much while your candle burns.
+    Candlelit { damage: u32 },
+    /// A hit drives the creature a step back, into whatever is behind it.
+    Shoves,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum TinctureEffect {
     Mending,
@@ -40,6 +57,8 @@ pub enum ItemClass {
         family: Family,
         damage: (u32, u32),
         accuracy: i32,
+        #[serde(default)]
+        quirk: Option<Quirk>,
     },
     Ranged {
         damage: (u32, u32),
