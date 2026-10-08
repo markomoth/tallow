@@ -5,15 +5,24 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "tallow"
 path = "src/main.rs"
+required-features = ["terminal"]
+
+[features]
+default = ["terminal"]
+# The terminal binary. The web build (`tallow-web`) turns this off.
+terminal = ["ratatui/crossterm", "dep:directories", "dep:anyhow"]
 
 [dependencies]
 tallow-core.workspace = true
 ratatui.workspace = true
-anyhow.workspace = true
-directories.workspace = true
+anyhow = { workspace = true, optional = true }
+directories = { workspace = true, optional = true }
 serde.workspace = true
 ron.workspace = true
 

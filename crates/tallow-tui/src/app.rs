@@ -1,10 +1,9 @@
 //! Top-level app state: the world, the log, and which screen is up.
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use tallow_core::inventory::THROW_RANGE;
 use tallow_core::{Command, Direction, Event, ItemId, MonsterId, Point, RiteId, RiteTarget, World};
 
-use crate::input::{Action, map_key};
+use crate::input::{Action, KeyCode, KeyEvent, map_key};
 use crate::journal::Journal;
 use crate::log::{MessageLog, Tone, narrate, underfoot};
 use crate::save::Save;
@@ -744,7 +743,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::crossterm::event::KeyModifiers;
+    use crate::input::KeyModifiers;
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)

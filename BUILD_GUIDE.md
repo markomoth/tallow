@@ -505,6 +505,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 - A save is the seed plus every command given (`save.ron`, RON). The core is deterministic, so loading replays the commands, log and all. This replaced the planned `postcard` world snapshot: nothing to keep in sync as the world grows. Bump `save::VERSION` whenever a change would make old saves replay differently.
 - Quitting (`q`, Ctrl-C) mid-run saves; launching without `--seed` resumes and deletes the save. Dead or won runs leave no save. Dev flags never read or write saves or the journal.
 - Files live in the platform data directory (`directories`), or `$TALLOW_HOME` if set.
+- **In the browser** the save and the journal live in localStorage. A tab can close at any moment, so the run is written after every key instead of on quit, and cleared when the run ends; reloading resumes exactly where you were, so it undoes nothing. `q` goes back to the start menu with the run kept.
 - **Journal** (`M`; `J` runs south): runs, deaths, wins, deepest floor; every creature met (marked if studied), every rite ever learned, every Leaving held, and 9 pages of the town's history unlocked by reaching each biome, killing each mini-boss and bringing the candle home. Lore only.
 
 ---
@@ -517,6 +518,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 |---|---|
 | Language | Rust, stable, edition 2024 |
 | Terminal UI | `ratatui` + `crossterm` |
+| Browser | the same `ratatui` screens drawn by `ratzilla` (WebGL2), bundled by `trunk` |
 | RNG | `rand` + `rand_pcg` (seeded, separate streams) |
 | Data / saves | `serde` + `ron` (content), `postcard` (saves) |
 | Entities | `slotmap` (generational IDs), plain structs. **No ECS.** |
@@ -566,7 +568,8 @@ tallow/
 │   │       ├── app.rs         # screens + state machine
 │   │       ├── render/        # map, hud, log, menus, lighting
 │   │       └── input.rs
-│   └── tallow-sim/            # headless bot: plays N seeds, reports softlocks + stats
+│   ├── tallow-sim/            # headless bot: plays N seeds, reports softlocks + stats
+│   └── tallow-web/            # the browser build: same app and screens, WebGL canvas, localStorage
 └── tests/
 ```
 

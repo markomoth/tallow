@@ -42,6 +42,10 @@ Every decision in Tallow comes back to one question: **light the candle, or don'
 
 ## ▶️ Play
 
+### 🕯️ In your browser
+
+Play it on **[itch.io](https://markomoth.itch.io/tallow-a-dark-fantasy-roguelike)**. It's the same game, played with the keyboard. Your run and your journal are kept in that browser.
+
 ### 📦 Download
 
 Grab the latest build for Linux, Windows or macOS from **[Releases](https://github.com/markomoth/tallow/releases/latest)**, unpack it, and run `tallow` in a terminal that's at least **100×30**. The release page explains the one-time "unverified app" warning on macOS and Windows.
@@ -96,4 +100,5 @@ The design document and the milestone log live in [`BUILD_GUIDE.md`](BUILD_GUIDE
 ```sh
 cargo test --workspace                     # all the tests
 cargo run --release -p tallow-sim -- 500   # watch a bot play 500 runs
+cd crates/tallow-web && trunk serve        # the browser version, at localhost:8080
 ```

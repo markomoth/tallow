@@ -525,9 +525,9 @@ mod tests {
     fn an_opened_item_shows_stats_and_actions() {
         let mut app = App::new(7);
         app.handle(Action::Pack);
-        app.handle_key(ratatui::crossterm::event::KeyEvent::new(
-            ratatui::crossterm::event::KeyCode::Char('a'),
-            ratatui::crossterm::event::KeyModifiers::NONE,
+        app.handle_key(crate::input::KeyEvent::new(
+            crate::input::KeyCode::Char('a'),
+            crate::input::KeyModifiers::NONE,
         ));
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(screen.contains("Damage 2–5 · accuracy +5 · Bludgeon"));
@@ -544,9 +544,9 @@ mod tests {
         app.handle(Action::PickUp);
         app.handle(Action::Throw);
         let letter = (b'a' + app.world().player().inventory.len() as u8 - 1) as char;
-        app.handle_key(ratatui::crossterm::event::KeyEvent::new(
-            ratatui::crossterm::event::KeyCode::Char(letter),
-            ratatui::crossterm::event::KeyModifiers::NONE,
+        app.handle_key(crate::input::KeyEvent::new(
+            crate::input::KeyCode::Char(letter),
+            crate::input::KeyModifiers::NONE,
         ));
         assert!(!app.aim_path().is_empty());
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
@@ -646,9 +646,9 @@ mod tests {
         app.handle(Action::Rites);
         let top = |screen: &str| screen.lines().position(|l| l.contains(" Rites ")).unwrap();
         let first = render(MIN_WIDTH, MIN_HEIGHT, &app);
-        app.handle_key(ratatui::crossterm::event::KeyEvent::new(
-            ratatui::crossterm::event::KeyCode::Down,
-            ratatui::crossterm::event::KeyModifiers::NONE,
+        app.handle_key(crate::input::KeyEvent::new(
+            crate::input::KeyCode::Down,
+            crate::input::KeyModifiers::NONE,
         ));
         let second = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(second.contains("trade places"), "the second rite is shown");

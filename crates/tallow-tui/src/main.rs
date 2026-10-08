@@ -1,21 +1,15 @@
 //! Tallow: a dark-fantasy roguelike for the terminal.
 
-mod app;
-mod input;
-mod journal;
-mod log;
-mod names;
-mod render;
-mod save;
-
 use std::hash::{BuildHasher, RandomState};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
-
-use crate::app::App;
+use tallow_tui::input::{KeyCode, KeyEvent, KeyModifiers};
+use tallow_tui::save::Save;
+use tallow_tui::{App, journal, render};
 
 /// Redraw at least this often so candlelight can flicker.
 const FRAME: Duration = Duration::from_millis(80);
@@ -62,7 +56,7 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         || options.dev_near_stairs
         || options.dev_ascent.is_some();
     // Dev runs and replays of a chosen seed don't touch your save or journal.
-    let home = if dev { None } else { save::home() };
+    let home = if dev { None } else { home() };
     let save_path = home.as_ref().map(|h| h.join("save.ron"));
     let journal_path = home.as_ref().map(|h| h.join("journal.ron"));
     let mut journal = journal_path
@@ -70,7 +64,7 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         .map(journal::Journal::load)
         .unwrap_or_default();
     let resumed = match (&save_path, options.seed) {
-        (Some(path), None) => save::Save::take(path),
+        (Some(path), None) => Save::take(path),
         _ => None,
     };
     let mut app = match &resumed {
@@ -138,6 +132,7 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         if event::poll(frame)?
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
+            && let Some(key) = from_crossterm(key)
         {
             app.handle_key(key);
         }
@@ -196,6 +191,40 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
         }
     }
     Ok(options)
+}
+
+/// Where saves and the journal live: `$TALLOW_HOME` if set, else the
+/// platform's data directory for Tallow.
+fn home() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("TALLOW_HOME") {
+        return Some(PathBuf::from(dir));
+    }
+    directories::ProjectDirs::from("", "", "tallow").map(|d| d.data_dir().to_path_buf())
+}
+
+/// The keys Tallow listens to, out of crossterm's; the rest are dropped.
+fn from_crossterm(key: event::KeyEvent) -> Option<KeyEvent> {
+    use event::KeyCode as K;
+    let code = match key.code {
+        K::Char(c) => KeyCode::Char(c),
+        K::Up => KeyCode::Up,
+        K::Down => KeyCode::Down,
+        K::Left => KeyCode::Left,
+        K::Right => KeyCode::Right,
+        K::Home => KeyCode::Home,
+        K::End => KeyCode::End,
+        K::PageUp => KeyCode::PageUp,
+        K::PageDown => KeyCode::PageDown,
+        K::Tab => KeyCode::Tab,
+        K::Esc => KeyCode::Esc,
+        K::Enter => KeyCode::Enter,
+        _ => return None,
+    };
+    let modifiers = KeyModifiers {
+        shift: key.modifiers.contains(event::KeyModifiers::SHIFT),
+        control: key.modifiers.contains(event::KeyModifiers::CONTROL),
+    };
+    Some(KeyEvent::new(code, modifiers))
 }
 
 /// A fresh seed from the OS-seeded hasher keys; no extra dependency needed.

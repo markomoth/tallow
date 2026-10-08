@@ -1,8 +1,64 @@
-//! Key bindings: turns terminal key presses into actions. What an action
-//! means depends on the screen (see `app.rs`).
+//! Key bindings: turns key presses into actions. What an action means
+//! depends on the screen (see `app.rs`).
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tallow_core::Direction;
+
+/// A key press. The terminal binary turns crossterm's events into these and
+/// the web build turns the browser's, so the app never sees either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyEvent {
+    pub code: KeyCode,
+    pub modifiers: KeyModifiers,
+}
+
+impl KeyEvent {
+    pub const fn new(code: KeyCode, modifiers: KeyModifiers) -> Self {
+        Self { code, modifiers }
+    }
+}
+
+/// The keys Tallow listens to; anything else never reaches the app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyCode {
+    Char(char),
+    Up,
+    Down,
+    Left,
+    Right,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Tab,
+    Esc,
+    Enter,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct KeyModifiers {
+    pub shift: bool,
+    pub control: bool,
+}
+
+impl KeyModifiers {
+    pub const NONE: Self = Self {
+        shift: false,
+        control: false,
+    };
+    pub const SHIFT: Self = Self {
+        shift: true,
+        control: false,
+    };
+    pub const CONTROL: Self = Self {
+        shift: false,
+        control: true,
+    };
+
+    /// Whether every modifier held in `other` is held here too.
+    pub fn contains(self, other: Self) -> bool {
+        (self.shift || !other.shift) && (self.control || !other.control)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {

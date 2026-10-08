@@ -1,0 +1,41 @@
+# Builds the browser version (crates/tallow-web) and pushes it to itch.io as
+# the project's HTML5 upload. Runs with each version tag, like the release, or
+# by hand from the Actions tab.
+#
+# Needs the repo secret BUTLER_API_KEY (itch.io → Settings → API keys).
+name: Web
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # itch.io user/project:channel
+  ITCH_TARGET: markomoth/tallow-a-dark-fantasy-roguelike:html5
+
+jobs:
+  itch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add the target
+        run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install trunk
+        run: |
+          curl -sSfL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin
+      - name: Build
+        working-directory: crates/tallow-web
+        run: trunk build --release --locked --public-url ./
+      - name: Install butler
+        run: |
+          curl -sSfL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler && chmod +x butler/butler
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: butler/butler push crates/tallow-web/dist "$ITCH_TARGET" --userversion "${GITHUB_REF_NAME}"

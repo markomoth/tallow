@@ -22,12 +22,15 @@ cargo run -- --seed 261 --dev-depth 3 --dev-level 6 --dev-near-stairs   # stand 
 cargo run -- --seed 5 --dev-ascent 1      # start on ascent floor 1 (5 = the church) with the Vigil Candle
 cargo run -- --seed 54 --dev-dread 75     # start frayed: a Nightmare is announced after 50 turns
 SHOW_SCREEN=1 cargo test -p tallow-tui -- --nocapture   # print rendered test screens
+cd crates/tallow-web && trunk serve        # the browser build at localhost:8080 (needs `trunk` and the wasm32-unknown-unknown target)
+cargo clippy -p tallow-web --target wasm32-unknown-unknown   # lint the browser build
 ```
 
 ## Layout
 
 - `crates/tallow-core` — pure game logic. `World::apply(Command) -> Vec<Event>`.
-- `crates/tallow-tui` — the `tallow` binary: ratatui rendering, key bindings, message log, saves (`save.rs`, a seed and the commands given) and the journal (`journal.rs`).
+- `crates/tallow-tui` — a library (app, screens, log, key bindings, saves in `save.rs`, the journal in `journal.rs`) and the `tallow` terminal binary (`main.rs`, the only place crossterm is used; behind the default `terminal` feature).
+- `crates/tallow-web` — the browser build: the same library drawn on a WebGL canvas by Ratzilla, saves in localStorage (`src/web.rs`), and its host page (`index.html`, designed under `.impeccable/`; see `PRODUCT.md`). Built with `trunk`; `.github/workflows/web.yml` pushes it to itch.io with butler on each version tag (repo secret `BUTLER_API_KEY`).
 - `crates/tallow-sim` — the headless bot (`tallow-sim`).
 - `assets/` — RON content embedded with `include_str!` (`monsters.ron`, `items.ron`, `skills.ron`, `rites.ron`, `leavings.ron`). Loaded and cross-checked by `content.rs`.
 
@@ -41,7 +44,7 @@ Frontend: `app.rs` (modes: title, play, look, pack, target, draft, sheet, corpse
 - The UI sends `Command`s and reads `Event`s. Log text is written in `tallow-tui/src/log.rs` (`narrate`), never in core.
 - Content (monsters, items, rites, boons) goes in data files, not Rust, unless it adds a new mechanic.
 - No ECS. Plain structs; `slotmap` IDs once entities exist.
-- Keep `ratatui` imports through `ratatui::crossterm` so there is one crossterm version.
+- Keep `ratatui` imports through `ratatui::crossterm` so there is one crossterm version, and only in `tallow-tui/src/main.rs`. The app takes `input::KeyEvent`, which both frontends produce; anything crossterm-only in the library breaks the browser build.
 - Respect the anti-gotcha rules in `BUILD_GUIDE.md` §1. They are hard constraints, not style.
 - No D&D or franchise vocabulary in game text (no mana, potions, scrolls, fireballs, d20).
 

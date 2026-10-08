@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Tallow</title>
+    <meta
+      name="description"
+      content="Something under the church has taken the candle. A dark-academia roguelike, played with the keyboard, in your browser."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23090808'/%3E%3Cpath d='M12 2.5c1.9 4 5.4 7.3 5.4 11.9 0 3.6-2.4 6.4-5.4 6.4s-5.4-2.8-5.4-6.4c0-4.6 3.5-7.9 5.4-11.9z' fill='%23ff9c40'/%3E%3Cpath d='M12 11c.9 1.7 2.2 3 2.2 4.8 0 1.4-1 2.5-2.2 2.5s-2.2-1.1-2.2-2.5c0-1.8 1.3-3.1 2.2-4.8z' fill='%23fff1cf'/%3E%3C/svg%3E"
+    />
+    <link data-trunk rel="rust" data-bin="tallow-web" data-wasm-opt="z" />
+    <link data-trunk rel="copy-dir" href="fonts" />
+    <link rel="preload" href="fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/IMFellEnglishSC-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face {
+        font-family: "JetBrains Mono";
+        src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2");
+        font-weight: 400;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "JetBrains Mono";
+        src: url("fonts/JetBrainsMono-Bold.woff2") format("woff2");
+        font-weight: 700;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "IM Fell English";
+        src: url("fonts/IMFellEnglish-Regular.woff2") format("woff2");
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "IM Fell English";
+        src: url("fonts/IMFellEnglish-Italic.woff2") format("woff2");
+        font-style: italic;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "IM Fell English SC";
+        src: url("fonts/IMFellEnglishSC-Regular.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      /* The game's own palette (crates/tallow-tui/src/render/palette.rs). */
+      :root {
+        --void: #090808;
+        --bone: #ece0c6;
+        --ash: #968472;
+        --rule: rgb(150 132 114 / 0.2);
+        --amber: #ffd280;
+        --flame: #ff9c40;
+        --veil: rgb(9 8 8 / 0.9);
+        --fell: "IM Fell English", "Iowan Old Style", Palatino, Georgia, serif;
+        --fell-sc: "IM Fell English SC", var(--fell);
+        --mono: "JetBrains Mono", Menlo, Consolas, monospace;
+        /* Set by the script to the drawn screen's width, so the words align with it. */
+        --screen-w: min(100%, 1200px);
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @property --reach {
+        syntax: "<length>";
+        inherits: false;
+        initial-value: -20vmax;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        height: 100%;
+        background: var(--void);
+        color: var(--bone);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100%;
+        height: 100dvh;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        font-family: var(--fell);
+        font-size: 17px;
+        line-height: 1.4;
+      }
+
+      ::selection {
+        background: rgb(255 210 128 / 0.28);
+        color: var(--bone);
+      }
+
+      :focus-visible {
+        outline: 1px solid var(--amber);
+        outline-offset: 4px;
+      }
+
+      a {
+        color: var(--bone);
+        text-decoration-line: underline;
+        text-decoration-color: rgb(255 210 128 / 0.45);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.22em;
+        transition: text-decoration-color 160ms ease-out, color 160ms ease-out;
+      }
+      a:hover {
+        color: var(--amber);
+        text-decoration-color: var(--amber);
+      }
+
+      kbd {
+        font-family: var(--mono);
+        font-size: 0.92em;
+        color: var(--amber);
+        letter-spacing: 0;
+      }
+
+      /* ── The words above ─────────────────────────────── */
+
+      .masthead,
+      .rubric {
+        width: var(--screen-w);
+        margin-inline: auto;
+        padding-inline: 4px;
+      }
+
+      .masthead {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 2rem;
+        padding-top: clamp(14px, 2.6vh, 28px);
+        padding-bottom: clamp(10px, 1.8vh, 18px);
+      }
+
+      .wordmark {
+        margin: 0;
+        font-family: var(--fell-sc);
+        font-weight: 400;
+        font-size: 30px;
+        line-height: 1;
+        letter-spacing: 0.32em;
+        margin-right: -0.32em;
+        color: var(--amber);
+        white-space: nowrap;
+      }
+
+      .tagline {
+        margin: 0;
+        max-width: 76ch;
+        text-align: right;
+        color: var(--ash);
+        font-size: 16px;
+        line-height: 1.35;
+        text-wrap: balance;
+      }
+      .tagline em {
+        display: block;
+        color: var(--bone);
+      }
+
+      /* ── The screen ──────────────────────────────────── */
+
+      .nave {
+        display: grid;
+        grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+        min-height: 0;
+        overflow: hidden;
+        padding-inline: 16px;
+      }
+
+      #tallow,
+      .veil {
+        grid-area: 1 / 1;
+      }
+
+      #tallow {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+      }
+      #tallow canvas {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        display: block;
+        transform: translate(-50%, -50%);
+        transform-origin: center;
+      }
+
+      .veil {
+        position: relative;
+        z-index: 1;
+        isolation: isolate;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 14px;
+        margin: 0;
+        padding: 24px;
+        border: 0;
+        font: inherit;
+        color: var(--bone);
+        background: none;
+        cursor: default;
+      }
+      /* The dark over the screen: deepest behind the words, opened by the light. */
+      .veil::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background:
+          radial-gradient(ellipse 30em 12em at 50% 50%, rgb(9 8 8 / 0.96) 35%, transparent 100%),
+          var(--veil);
+        --reach: -20vmax;
+        -webkit-mask-image: radial-gradient(
+          circle at 50% calc(50% - 56px),
+          transparent var(--reach),
+          #000 calc(var(--reach) + 18vmax)
+        );
+        mask-image: radial-gradient(
+          circle at 50% calc(50% - 56px),
+          transparent var(--reach),
+          #000 calc(var(--reach) + 18vmax)
+        );
+      }
+      .veil[data-mode="touch"]::before,
+      .veil[data-mode="failed"]::before {
+        background: rgb(9 8 8 / 0.94);
+      }
+      .veil[data-mode="ready"],
+      .veil[data-mode="away"] {
+        cursor: pointer;
+      }
+      .veil:focus-visible {
+        outline-offset: -6px;
+      }
+
+      .candle {
+        width: 30px;
+        height: 60px;
+        overflow: visible;
+      }
+      .candle .flame {
+        transform-origin: 12px 19px;
+        transform: scale(0);
+        opacity: 0;
+        transition: transform 260ms var(--ease-out), opacity 120ms ease-out;
+      }
+      .candle .ember {
+        transition: opacity 200ms ease-out;
+      }
+      .veil.lighting .ember {
+        opacity: 0;
+      }
+      .veil[data-mode="away"] .flame,
+      .veil.lighting .flame {
+        transform: scale(1);
+        opacity: 1;
+      }
+      .veil[data-mode="away"] .flame-body,
+      .veil.lighting .flame-body {
+        animation: flicker 2.4s ease-in-out infinite;
+        transform-origin: 12px 19px;
+      }
+      @keyframes flicker {
+        0%, 100% { transform: scale(1, 1) skewX(0deg); }
+        30% { transform: scale(0.96, 1.05) skewX(-2deg); }
+        55% { transform: scale(1.03, 0.97) skewX(1.5deg); }
+        80% { transform: scale(0.98, 1.03) skewX(-1deg); }
+      }
+
+      .veil-call {
+        font-style: italic;
+        font-size: 26px;
+        line-height: 1.15;
+        color: var(--bone);
+        text-align: center;
+        text-wrap: balance;
+      }
+      .veil-note {
+        max-width: 44ch;
+        font-size: 16px;
+        color: var(--ash);
+        text-align: center;
+        text-wrap: balance;
+      }
+
+      /* One message per state; the script sets data-mode. */
+      .veil [data-for] {
+        display: none;
+      }
+      .veil[data-mode="loading"] [data-for~="loading"],
+      .veil[data-mode="ready"] [data-for~="ready"],
+      .veil[data-mode="away"] [data-for~="away"],
+      .veil[data-mode="failed"] [data-for~="failed"],
+      .veil[data-mode="touch"] [data-for~="touch"] {
+        display: block;
+      }
+      .veil[data-mode="loading"] .veil-call {
+        color: var(--ash);
+      }
+
+      /* The click lights the candle; the candle lights the church. */
+      .veil.lighting::before {
+        transition: --reach 1500ms cubic-bezier(0.4, 0, 0.3, 1) 420ms;
+        --reach: 140vmax;
+      }
+      .veil.lighting > .veil-call,
+      .veil.lighting > .veil-note {
+        opacity: 0;
+        transition: opacity 220ms ease-out 180ms;
+      }
+      .veil.lighting > .candle {
+        opacity: 0;
+        transition: opacity 500ms ease-out 1100ms;
+      }
+      .veil.lit {
+        display: none;
+      }
+
+      /* ── The words below ─────────────────────────────── */
+
+      .rubric {
+        padding-top: clamp(10px, 1.8vh, 18px);
+        padding-bottom: clamp(14px, 2.6vh, 26px);
+        display: grid;
+        gap: 6px;
+      }
+
+      .keys {
+        margin: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 1.6em;
+        row-gap: 4px;
+        font-size: 16px;
+        color: var(--bone);
+      }
+      .keys > span {
+        white-space: nowrap;
+      }
+      .keys kbd + kbd::before {
+        content: " ";
+      }
+
+      .all-keys-button {
+        margin-left: auto;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        font-style: italic;
+        color: var(--bone);
+        text-decoration: underline;
+        text-decoration-color: rgb(255 210 128 / 0.45);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.22em;
+        cursor: pointer;
+        transition: color 160ms ease-out, text-decoration-color 160ms ease-out;
+      }
+      .all-keys-button:hover {
+        color: var(--amber);
+        text-decoration-color: var(--amber);
+      }
+
+      .colophon {
+        margin: 0;
+        padding-top: 8px;
+        border-top: 1px solid var(--rule);
+        display: flex;
+        flex-wrap: wrap;
+        column-gap: 1.6em;
+        row-gap: 2px;
+        font-size: 15px;
+        color: var(--ash);
+      }
+      .colophon .links {
+        margin-left: auto;
+        display: flex;
+        gap: 1.6em;
+      }
+
+      body:has(.veil[data-mode="touch"]) .keys {
+        display: none;
+      }
+
+      /* ── All keys ────────────────────────────────────── */
+
+      #all-keys {
+        width: min(640px, calc(100vw - 32px));
+        max-height: calc(100dvh - 32px);
+        overflow: auto;
+        margin: auto;
+        padding: 28px 32px 24px;
+        border: 0;
+        background: var(--void);
+        color: var(--bone);
+        box-shadow: 0 24px 80px rgb(0 0 0 / 0.7);
+        scrollbar-color: var(--ash) var(--void);
+        scrollbar-width: thin;
+      }
+      #all-keys::backdrop {
+        background: rgb(9 8 8 / 0.55);
+      }
+      #all-keys h2 {
+        margin: 0 0 16px;
+        font-family: var(--fell-sc);
+        font-weight: 400;
+        font-size: 22px;
+        letter-spacing: 0.14em;
+        color: var(--amber);
+      }
+      #all-keys table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 16px;
+      }
+      #all-keys th {
+        width: 34%;
+        padding: 5px 16px 5px 0;
+        text-align: left;
+        font-weight: 400;
+        vertical-align: baseline;
+        white-space: nowrap;
+      }
+      #all-keys td {
+        padding: 5px 0;
+        color: var(--bone);
+        vertical-align: baseline;
+      }
+      #all-keys tr + tr > * {
+        border-top: 1px solid rgb(150 132 114 / 0.1);
+      }
+      #all-keys .or {
+        font-style: italic;
+        color: var(--ash);
+        font-size: 0.9em;
+      }
+      #all-keys .close {
+        display: block;
+        margin: 18px 0 0 auto;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        font-style: italic;
+        color: var(--ash);
+        cursor: pointer;
+      }
+      #all-keys .close:hover {
+        color: var(--amber);
+      }
+
+      /* ── Narrow and touch screens ────────────────────── */
+
+      @media (max-width: 720px) {
+        body {
+          font-size: 16px;
+        }
+        .masthead {
+          display: grid;
+          gap: 8px;
+          padding-inline: 16px;
+        }
+        .tagline {
+          text-align: left;
+        }
+        .rubric {
+          padding-inline: 16px;
+        }
+        .colophon .links {
+          margin-left: 0;
+        }
+        .all-keys-button {
+          margin-left: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .veil.lighting {
+          transition: opacity 200ms linear;
+          opacity: 0;
+        }
+        .veil.lighting::before {
+          transition: none;
+          --reach: -20vmax;
+        }
+        .veil .flame-body {
+          animation: none !important;
+        }
+        .candle .flame {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="masthead">
+      <h1 class="wordmark">Tallow</h1>
+      <p class="tagline">
+        <em>Something under the church has taken the candle.</em>
+        A roguelike for the keyboard, about an hour a run.
+      </p>
+    </header>
+
+    <main class="nave">
+      <div id="tallow" data-font="JetBrains Mono" role="application" aria-label="Tallow, the game screen"></div>
+
+      <button class="veil" id="veil" type="button" data-mode="loading" aria-describedby="veil-note">
+        <svg class="candle" viewBox="0 0 24 48" aria-hidden="true">
+          <defs>
+            <linearGradient id="flame-fill" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0" stop-color="#ff9c40" />
+              <stop offset="0.55" stop-color="#ffd280" />
+              <stop offset="1" stop-color="#fff1cf" />
+            </linearGradient>
+          </defs>
+          <g class="flame">
+            <path
+              class="flame-body"
+              d="M12 3.5c1.6 3.4 4.6 6.2 4.6 10.1 0 3-2 5.4-4.6 5.4s-4.6-2.4-4.6-5.4c0-3.9 3-6.7 4.6-10.1z"
+              fill="url(#flame-fill)"
+            />
+            <path d="M12 11.5c.8 1.5 1.9 2.6 1.9 4.1 0 1.2-.9 2.1-1.9 2.1s-1.9-.9-1.9-2.1c0-1.5 1.1-2.6 1.9-4.1z" fill="#fff6e2" />
+          </g>
+          <path d="M12 18.6v3.2" stroke="#3a2f27" stroke-width="1.2" stroke-linecap="round" />
+          <circle class="ember" cx="12" cy="18.6" r="0.9" fill="#ff9c40" opacity="0.75" />
+          <path d="M7.5 22.4c1.4-.6 2.9-.9 4.5-.9s3.1.3 4.5.9V46h-9z" fill="#ece0c6" />
+          <path d="M7.5 22.4c1.4-.6 2.9-.9 4.5-.9s3.1.3 4.5.9v1.6c-1.4-.5-2.9-.7-4.5-.7s-3.1.2-4.5.7z" fill="#c8b998" />
+          <path d="M8.9 23.4v6.2c0 .8.4 1.3.9 1.3s.9-.5.9-1.3v-6.6z" fill="#f6edd9" />
+          <path d="M14.6 23.3v3.4c0 .6.3 1 .7 1s.7-.4.7-1V23.6z" fill="#f6edd9" />
+          <path d="M3 46.5h18" stroke="#968472" stroke-width="1" stroke-linecap="round" opacity="0.6" />
+        </svg>
+        <span class="veil-call" data-for="loading">The church is being opened&hellip;</span>
+        <span class="veil-call" data-for="ready">Click to light the candle</span>
+        <span class="veil-call" data-for="away">Click to return</span>
+        <span class="veil-call" data-for="failed">The game could not start here</span>
+        <span class="veil-call" data-for="touch">Tallow is played with a keyboard</span>
+        <span class="veil-note" id="veil-note">
+          <span data-for="ready">or press any key. Your run is saved as you play.</span>
+          <span data-for="away">The game is waiting where you left it.</span>
+          <span data-for="failed">This browser has no WebGL2, which the screen needs. The terminal version runs anywhere.</span>
+          <span data-for="touch">Open this page on a computer, or download the terminal version.</span>
+        </span>
+      </button>
+    </main>
+
+    <footer class="rubric">
+      <p class="keys">
+        <span><kbd>arrows</kbd> <kbd>hjkl</kbd> move</span>
+        <span><kbd>Shift</kbd> runs</span>
+        <span><kbd>o</kbd> explores</span>
+        <span><kbd>c</kbd> snuffs or lights the candle</span>
+        <span><kbd>x</kbd> looks</span>
+        <span><kbd>?</kbd> help</span>
+        <button class="all-keys-button" type="button" popovertarget="all-keys">All keys</button>
+      </p>
+      <p class="colophon">
+        <span>Your run and journal are kept in this browser. Clearing its site data clears them.</span>
+        <span class="links">
+          <a href="https://github.com/markomoth/tallow/releases">Play in your terminal</a>
+          <a href="https://github.com/markomoth/tallow">Source</a>
+        </span>
+      </p>
+    </footer>
+
+    <div id="all-keys" popover aria-labelledby="all-keys-title">
+      <h2 id="all-keys-title">All keys</h2>
+      <table>
+        <tbody>
+          <tr><th><kbd>arrows</kbd> <span class="or">or</span> <kbd>hjkl</kbd></th><td>Move. Walk into things to fight, open, ring, light.</td></tr>
+          <tr><th><kbd>yubn</kbd></th><td>Move diagonally</td></tr>
+          <tr><th><kbd>Shift</kbd> + direction</th><td>Run</td></tr>
+          <tr><th><kbd>o</kbd></th><td>Explore until something new is in view</td></tr>
+          <tr><th><kbd>.</kbd> <span class="or">and</span> <kbd>R</kbd></th><td>Wait a turn; rest until healed</td></tr>
+          <tr><th><kbd>c</kbd> <span class="or">and</span> <kbd>C</kbd></th><td>Snuff or light your candle; shut the doors beside you</td></tr>
+          <tr><th><kbd>g</kbd> <span class="or">and</span> <kbd>i</kbd></th><td>Pick up; open your pack</td></tr>
+          <tr><th><kbd>t</kbd> <span class="or">and</span> <kbd>f</kbd></th><td>Throw; fire a sling or crossbow</td></tr>
+          <tr><th><kbd>s</kbd></th><td>Study or render the body underfoot</td></tr>
+          <tr><th><kbd>z</kbd></th><td>Rites: arrows to read one, a letter or Enter to cast</td></tr>
+          <tr><th><kbd>S</kbd> + direction</th><td>Shove a creature back</td></tr>
+          <tr><th><kbd>G</kbd></th><td>Guard: wait braced and answer every miss</td></tr>
+          <tr><th><kbd>&gt;</kbd> <span class="or">and</span> <kbd>&lt;</kbd></th><td>Down the stairs; up, once you carry the Vigil Candle</td></tr>
+          <tr><th><kbd>F</kbd></th><td>Flare the Vigil Candle, on the way back up</td></tr>
+          <tr><th><kbd>x</kbd></th><td>Look at a creature; Tab moves between them</td></tr>
+          <tr><th><kbd>@</kbd> <kbd>M</kbd> <kbd>?</kbd></th><td>Your character, the journal, help</td></tr>
+          <tr><th><kbd>q</kbd></th><td>Back to the start menu; the run is kept</td></tr>
+        </tbody>
+      </table>
+      <button class="close" type="button" popovertarget="all-keys" popovertargetaction="hide">Close</button>
+    </div>
+
+    <noscript>
+      <p style="text-align: center; color: var(--ash)">Tallow needs JavaScript and WebAssembly to run in the browser.</p>
+    </noscript>
+
+    <script>
+      (() => {
+        const screen = document.getElementById("tallow");
+        const veil = document.getElementById("veil");
+        const touchOnly = matchMedia("(hover: none) and (pointer: coarse)").matches;
+        let lit = false;
+
+        const mode = (m) => (veil.dataset.mode = m);
+        if (touchOnly) mode("touch");
+
+        // The drawn screen is exactly 100×30 cells at the font size picked on
+        // load. If the window shrinks after that, scale it down to fit, and
+        // keep the words above and below aligned with its edges.
+        const fit = () => {
+          const canvas = screen.querySelector("canvas");
+          if (!canvas) return;
+          const w = canvas.offsetWidth;
+          const h = canvas.offsetHeight;
+          const scale = Math.min(1, screen.clientWidth / w, screen.clientHeight / h);
+          canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
+          document.documentElement.style.setProperty("--screen-w", `${Math.round(w * scale)}px`);
+        };
+        addEventListener("resize", fit);
+
+        // The game sets data-state on the screen: ready, or failed.
+        new MutationObserver(() => {
+          const state = screen.dataset.state;
+          if (state === "ready") {
+            fit();
+            if (!touchOnly && !lit) mode("ready");
+          } else if (state === "failed" && !touchOnly) {
+            mode("failed");
+          }
+        }).observe(screen, { attributes: true, attributeFilter: ["data-state"] });
+
+        const light = () => {
+          const m = veil.dataset.mode;
+          if (m !== "ready" && m !== "away") return;
+          lit = true;
+          veil.classList.remove("lit");
+          // Restart the transition from dark.
+          void veil.offsetWidth;
+          veil.classList.add("lighting");
+          const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+          setTimeout(() => {
+            if (!veil.classList.contains("lighting")) return;
+            veil.classList.add("lit");
+            veil.classList.remove("lighting");
+          }, reduced ? 220 : 1950);
+          focus();
+        };
+        veil.addEventListener("click", light);
+
+        // While the veil is up, a key lights the candle instead of reaching the game.
+        addEventListener(
+          "keydown",
+          (e) => {
+            if (veil.classList.contains("lit") || veil.classList.contains("lighting")) return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const m = veil.dataset.mode;
+            if (m === "ready" || m === "away") {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              light();
+            }
+          },
+          { capture: true }
+        );
+
+        // In an itch.io frame, keys stop arriving once focus leaves it: say so.
+        addEventListener("blur", () => {
+          if (!lit) return;
+          mode("away");
+          veil.classList.remove("lit", "lighting");
+        });
+        addEventListener("focus", () => {
+          if (lit && veil.dataset.mode === "away" && !veil.classList.contains("lit")) light();
+        });
+      })();
+    </script>
+  </body>
+</html>

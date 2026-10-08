@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-08T17:00:00Z",
+  "title": "Design System: Tallow",
+  "extensions": {
+    "colorMeta": {
+      "void": {
+        "role": "neutral",
+        "displayName": "Church Void",
+        "canonical": "oklch(13.6% 0.002 17.4)",
+        "tonalRamp": [
+          "#0c0b0b",
+          "#252424",
+          "#413f3f",
+          "#5f5d5d",
+          "#7e7d7d",
+          "#9f9e9e",
+          "#c5c3c3",
+          "#f0eeee"
+        ],
+        "source": "palette.rs VOID"
+      },
+      "bone": {
+        "role": "neutral",
+        "displayName": "Bone",
+        "canonical": "oklch(90.9% 0.037 86.2)",
+        "tonalRamp": [
+          "#120a00",
+          "#2c230e",
+          "#483f29",
+          "#675c46",
+          "#877c64",
+          "#a99d85",
+          "#cfc3aa",
+          "#faedd3"
+        ],
+        "source": "palette.rs STAIRS_DOWN_FG"
+      },
+      "ash": {
+        "role": "neutral",
+        "displayName": "Ash",
+        "canonical": "oklch(62.5% 0.034 67.1)",
+        "tonalRamp": [
+          "#140800",
+          "#2f2111",
+          "#4c3c2c",
+          "#6b5a49",
+          "#8b7a68",
+          "#ad9b88",
+          "#d4c0ad",
+          "#ffebd7"
+        ],
+        "source": "palette.rs WALL_FG"
+      },
+      "amber": {
+        "role": "primary",
+        "displayName": "Rubric Amber",
+        "canonical": "oklch(88.6% 0.112 81.5)",
+        "tonalRamp": [
+          "#200000",
+          "#3e1900",
+          "#5d3600",
+          "#7d5500",
+          "#9f751b",
+          "#c29744",
+          "#e9bd6b",
+          "#ffe795"
+        ],
+        "source": "palette.rs PLAYER"
+      },
+      "flame": {
+        "role": "tertiary",
+        "displayName": "Candle Flame",
+        "canonical": "oklch(78.0% 0.156 59.6)",
+        "tonalRamp": [
+          "#310000",
+          "#530000",
+          "#761c00",
+          "#9a3f00",
+          "#be6100",
+          "#e3831d",
+          "#ffa94f",
+          "#ffdb9b"
+        ],
+        "source": "palette.rs BRAZIER_FG"
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgb(150 132 114 / 0.2)"
+      },
+      "veil": {
+        "role": "neutral",
+        "displayName": "Veil Dark",
+        "canonical": "rgb(9 8 8 / 0.9)"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Wordmark",
+        "purpose": "The wordmark only, in amber."
+      },
+      "headline": {
+        "displayName": "Veil Call",
+        "purpose": "The veil's call, in italic."
+      },
+      "title": {
+        "displayName": "Popover Title",
+        "purpose": "The All-keys popover title, in amber."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base page text; 16px below 720px."
+      },
+      "body-small": {
+        "displayName": "Rubric",
+        "purpose": "Tagline, key line, veil note, key table."
+      },
+      "label": {
+        "displayName": "Colophon",
+        "purpose": "The colophon small print, in ash."
+      },
+      "key": {
+        "displayName": "Literal Key",
+        "purpose": "Literal keys only, amber, inline in Fell text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "popover-lift",
+        "value": "0 24px 80px rgb(0 0 0 / 0.7)",
+        "purpose": "The All-keys popover only; diffuse, never offset sideways."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The flame growing from the wick (260ms)."
+      },
+      {
+        "name": "light-spread",
+        "value": "1500ms cubic-bezier(0.4, 0, 0.3, 1) 420ms",
+        "purpose": "The veil's radial mask opening outward from the flame."
+      },
+      {
+        "name": "flicker",
+        "value": "2.4s ease-in-out infinite",
+        "purpose": "The lit flame's scale and skew flicker; off under reduced motion."
+      },
+      {
+        "name": "hover",
+        "value": "160ms ease-out",
+        "purpose": "Text actions turning amber."
+      },
+      {
+        "name": "reduced-veil",
+        "value": "200ms linear",
+        "purpose": "The veil's plain fade under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "720px"
+      },
+      {
+        "name": "touch",
+        "value": "(hover: none) and (pointer: coarse)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Text Action",
+      "kind": "button",
+      "refersTo": "text-action",
+      "description": "The page's only button style: italic bone text, amber underline, amber on hover.",
+      "html": "<button class=\"ds-text-action\" type=\"button\">All keys</button>",
+      "css": ":root{--void:#090808;--bone:#ece0c6;--ash:#968472;--amber:#ffd280;--flame:#ff9c40;--rule:rgb(150 132 114 / 0.2);--fell:\"IM Fell English\",\"Iowan Old Style\",Palatino,Georgia,serif;--fell-sc:\"IM Fell English SC\",var(--fell);--mono:\"JetBrains Mono\",Menlo,Consolas,monospace;}.ds-text-action{padding:0;border:0;background:none;font-family:var(--fell);font-size:16px;font-style:italic;color:var(--bone);text-decoration:underline;text-decoration-color:rgb(255 210 128 / 0.45);text-decoration-thickness:1px;text-underline-offset:0.22em;cursor:pointer;transition:color 160ms ease-out,text-decoration-color 160ms ease-out;}.ds-text-action:hover{color:var(--amber);text-decoration-color:var(--amber);}.ds-text-action:focus-visible{outline:1px solid var(--amber);outline-offset:4px;}"
+    },
+    {
+      "name": "Link",
+      "kind": "nav",
+      "refersTo": "text-action",
+      "description": "Roman links that leave the page, in the colophon.",
+      "html": "<p class=\"ds-colophon\"><span>Your run and journal are kept in this browser.</span><span class=\"ds-links\"><a href=\"#\">Play in your terminal</a><a href=\"#\">Source</a></span></p>",
+      "css": ":root{--void:#090808;--bone:#ece0c6;--ash:#968472;--amber:#ffd280;--flame:#ff9c40;--rule:rgb(150 132 114 / 0.2);--fell:\"IM Fell English\",\"Iowan Old Style\",Palatino,Georgia,serif;--fell-sc:\"IM Fell English SC\",var(--fell);--mono:\"JetBrains Mono\",Menlo,Consolas,monospace;}.ds-colophon{margin:0;padding-top:8px;border-top:1px solid var(--rule);display:flex;flex-wrap:wrap;column-gap:1.6em;font-family:var(--fell);font-size:15px;color:var(--ash);background:var(--void);}.ds-links{margin-left:auto;display:flex;gap:1.6em;}.ds-colophon a{color:var(--bone);text-decoration-line:underline;text-decoration-color:rgb(255 210 128 / 0.45);text-decoration-thickness:1px;text-underline-offset:0.22em;transition:color 160ms ease-out,text-decoration-color 160ms ease-out;}.ds-colophon a:hover{color:var(--amber);text-decoration-color:var(--amber);}.ds-colophon a:focus-visible{outline:1px solid var(--amber);outline-offset:4px;}"
+    },
+    {
+      "name": "Key Line",
+      "kind": "chip",
+      "refersTo": "key",
+      "description": "Literal keys in amber mono, inline with their meaning in Fell; phrases never wrap apart.",
+      "html": "<p class=\"ds-keys\"><span><kbd>arrows</kbd> <kbd>hjkl</kbd> move</span><span><kbd>Shift</kbd> runs</span><span><kbd>o</kbd> explores</span><span><kbd>?</kbd> help</span></p>",
+      "css": ":root{--void:#090808;--bone:#ece0c6;--ash:#968472;--amber:#ffd280;--flame:#ff9c40;--rule:rgb(150 132 114 / 0.2);--fell:\"IM Fell English\",\"Iowan Old Style\",Palatino,Georgia,serif;--fell-sc:\"IM Fell English SC\",var(--fell);--mono:\"JetBrains Mono\",Menlo,Consolas,monospace;}.ds-keys{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:1.6em;row-gap:4px;font-family:var(--fell);font-size:16px;color:var(--bone);background:var(--void);}.ds-keys>span{white-space:nowrap;}.ds-keys kbd{font-family:var(--mono);font-size:0.92em;color:var(--amber);letter-spacing:0;}"
+    },
+    {
+      "name": "All-keys Popover",
+      "kind": "card",
+      "refersTo": "all-keys-panel",
+      "description": "The one panel: void on void, borderless, lifted by one diffuse shadow.",
+      "html": "<div class=\"ds-popover\"><h2>All keys</h2><table><tr><th><kbd>arrows</kbd> <span class=\"ds-or\">or</span> <kbd>hjkl</kbd></th><td>Move. Walk into things to fight, open, ring, light.</td></tr><tr><th><kbd>o</kbd></th><td>Explore until something new is in view</td></tr></table><button class=\"ds-close\" type=\"button\">Close</button></div>",
+      "css": ":root{--void:#090808;--bone:#ece0c6;--ash:#968472;--amber:#ffd280;--flame:#ff9c40;--rule:rgb(150 132 114 / 0.2);--fell:\"IM Fell English\",\"Iowan Old Style\",Palatino,Georgia,serif;--fell-sc:\"IM Fell English SC\",var(--fell);--mono:\"JetBrains Mono\",Menlo,Consolas,monospace;}.ds-popover{width:min(640px,100%);padding:28px 32px 24px;background:var(--void);color:var(--bone);box-shadow:0 24px 80px rgb(0 0 0 / 0.7);font-family:var(--fell);}.ds-popover h2{margin:0 0 16px;font-family:var(--fell-sc);font-weight:400;font-size:22px;letter-spacing:0.14em;color:var(--amber);}.ds-popover table{width:100%;border-collapse:collapse;font-size:16px;}.ds-popover th{width:34%;padding:5px 16px 5px 0;text-align:left;font-weight:400;white-space:nowrap;vertical-align:baseline;}.ds-popover td{padding:5px 0;vertical-align:baseline;}.ds-popover tr+tr>*{border-top:1px solid rgb(150 132 114 / 0.1);}.ds-popover kbd{font-family:var(--mono);font-size:0.92em;color:var(--amber);}.ds-or{font-style:italic;color:var(--ash);font-size:0.9em;}.ds-close{display:block;margin:18px 0 0 auto;padding:0;border:0;background:none;font:inherit;font-style:italic;color:var(--ash);cursor:pointer;}.ds-close:hover{color:var(--amber);}.ds-close:focus-visible{outline:1px solid var(--amber);outline-offset:4px;}"
+    },
+    {
+      "name": "Masthead",
+      "kind": "custom",
+      "refersTo": "display",
+      "description": "Wordmark in tracked amber small caps; tagline right-aligned, first line bone italic, then ash.",
+      "html": "<header class=\"ds-masthead\"><h1>Tallow</h1><p><em>Something under the church has taken the candle.</em>A roguelike for the keyboard, about an hour a run.</p></header>",
+      "css": ":root{--void:#090808;--bone:#ece0c6;--ash:#968472;--amber:#ffd280;--flame:#ff9c40;--rule:rgb(150 132 114 / 0.2);--fell:\"IM Fell English\",\"Iowan Old Style\",Palatino,Georgia,serif;--fell-sc:\"IM Fell English SC\",var(--fell);--mono:\"JetBrains Mono\",Menlo,Consolas,monospace;}.ds-masthead{display:flex;align-items:baseline;justify-content:space-between;gap:2rem;padding:20px 4px;background:var(--void);}.ds-masthead h1{margin:0 -0.32em 0 0;font-family:var(--fell-sc);font-weight:400;font-size:30px;line-height:1;letter-spacing:0.32em;color:var(--amber);white-space:nowrap;}.ds-masthead p{margin:0;max-width:76ch;text-align:right;font-family:var(--fell);font-size:16px;line-height:1.35;color:var(--ash);}.ds-masthead em{display:block;color:var(--bone);}"
+    },
+    {
+      "name": "Veil",
+      "kind": "custom",
+      "refersTo": "veil-call",
+      "description": "The dimming over the game screen with the unlit candle and one call; hover lights the flame here as a preview.",
+      "html": "<button class=\"ds-veil\" type=\"button\"><svg class=\"ds-candle\" viewBox=\"0 0 24 48\" aria-hidden=\"true\"><defs><linearGradient id=\"ds-flame-fill\" x1=\"0\" y1=\"1\" x2=\"0\" y2=\"0\"><stop offset=\"0\" stop-color=\"#ff9c40\"/><stop offset=\"0.55\" stop-color=\"#ffd280\"/><stop offset=\"1\" stop-color=\"#fff1cf\"/></linearGradient></defs><g class=\"ds-flame\"><path d=\"M12 3.5c1.6 3.4 4.6 6.2 4.6 10.1 0 3-2 5.4-4.6 5.4s-4.6-2.4-4.6-5.4c0-3.9 3-6.7 4.6-10.1z\" fill=\"url(#ds-flame-fill)\"/><path d=\"M12 11.5c.8 1.5 1.9 2.6 1.9 4.1 0 1.2-.9 2.1-1.9 2.1s-1.9-.9-1.9-2.1c0-1.5 1.1-2.6 1.9-4.1z\" fill=\"#fff6e2\"/></g><path d=\"M12 18.6v3.2\" stroke=\"#3a2f27\" stroke-width=\"1.2\" stroke-linecap=\"round\"/><circle class=\"ds-ember\" cx=\"12\" cy=\"18.6\" r=\"0.9\" fill=\"#ff9c40\" opacity=\"0.75\"/><path d=\"M7.5 22.4c1.4-.6 2.9-.9 4.5-.9s3.1.3 4.5.9V46h-9z\" fill=\"#ece0c6\"/><path d=\"M7.5 22.4c1.4-.6 2.9-.9 4.5-.9s3.1.3 4.5.9v1.6c-1.4-.5-2.9-.7-4.5-.7s-3.1.2-4.5.7z\" fill=\"#c8b998\"/><path d=\"M3 46.5h18\" stroke=\"#968472\" stroke-width=\"1\" stroke-linecap=\"round\" opacity=\"0.6\"/></svg><span class=\"ds-call\">Click to light the candle</span><span class=\"ds-note\">or press any key. Your run is saved as you play.</span></button>",
+      "css": ":root{--void:#090808;--bone:#ece0c6;--ash:#968472;--amber:#ffd280;--flame:#ff9c40;--rule:rgb(150 132 114 / 0.2);--fell:\"IM Fell English\",\"Iowan Old Style\",Palatino,Georgia,serif;--fell-sc:\"IM Fell English SC\",var(--fell);--mono:\"JetBrains Mono\",Menlo,Consolas,monospace;}.ds-veil{display:grid;justify-items:center;gap:14px;width:100%;padding:48px 24px;border:0;background:radial-gradient(ellipse 30em 12em at 50% 50%,rgb(9 8 8 / 0.96) 35%,transparent 100%),rgb(9 8 8 / 0.9);color:var(--bone);font-family:var(--fell);cursor:pointer;}.ds-veil:focus-visible{outline:1px solid var(--amber);outline-offset:-6px;}.ds-candle{width:30px;height:60px;overflow:visible;}.ds-flame{transform-origin:12px 19px;transform:scale(0);opacity:0;transition:transform 260ms cubic-bezier(0.16,1,0.3,1),opacity 120ms ease-out;}.ds-ember{transition:opacity 200ms ease-out;}.ds-veil:hover .ds-flame{transform:scale(1);opacity:1;}.ds-veil:hover .ds-ember{opacity:0;}.ds-call{font-style:italic;font-size:26px;line-height:1.15;text-align:center;}.ds-note{max-width:44ch;font-size:16px;color:var(--ash);text-align:center;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Order of Service",
+    "overview": "The page is the game's own dark. The 100×30 game screen is a canvas drawn by the game and is not part of this system; the page is built to sit flush on that canvas's void, so the screen has no frame, no bezel and no card around it. Everything the page adds is a few lines of words set above and below the screen like the rubrics of a printed order of service: what to do in amber, what it means in bone, the small print in ash.\n\nThe world is sober, warm and nearly empty. One seventeenth-century face (IM Fell English, Bishop Fell's types, church and college in one) carries every word; the game's monospace appears only where a literal key is named. Density is low on purpose: the screen takes most of the height, and the words above and below are aligned to its measured edges. Light is the only spectacle. A dimming veil covers the screen until the first click or key, a small drawn candle stands at its centre, and lighting it opens the dark outward from the flame.\n\nThe product rejects the category default for a game embed: no hero, no feature cards, no big Play button, no CRT costume (scanlines, glow, curvature), no emoji.",
+    "keyCharacteristics": [
+      "Void ground continuous with the game screen; no frame around the canvas.",
+      "One serif voice (IM Fell English, roman, italic and small caps) for all words; monospace for literal keys only.",
+      "Amber marks what to do; bone carries meaning; ash carries the small print.",
+      "Hairline rules in ash, never boxes or bordered panels.",
+      "Square everywhere; zero radius.",
+      "Motion is light itself: a flame that flickers and a dark that opens."
+    ],
+    "rules": [
+      {
+        "name": "The Rubric Rule",
+        "body": "Amber means \"this is what you do\". It goes on keys, the name, focus and hover, and never on body prose or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Flame Rule",
+        "body": "Flame orange appears only on the candle. If something else on the page is that colour, it is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flush Void Rule",
+        "body": "The page ground is exactly the game's void (`void`). No off-black, no gradient, no texture behind the screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The Literal Key Rule",
+        "body": "Monospace appears only for a key the player presses. Words like \"direction\", \"or\" and \"and\" between keys stay in Fell (joiners in ash italic at 0.9em).",
+        "section": "typography"
+      },
+      {
+        "name": "The Italic Is The Voice Rule",
+        "body": "Italic carries the voice that speaks to the player: the veil's call, the tagline's first line, and text actions. It is not used for emphasis inside prose.",
+        "section": "typography"
+      },
+      {
+        "name": "The Dark Is The Depth Rule",
+        "body": "Hierarchy over the screen is made by dimming and revealing the void, not by panels and shadows. A second shadow on the page needs a reason as strong as a modal.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hairline Not Box Rule",
+        "body": "Separate with a 1px ash hairline (20% or less), never with a bordered or filled box. The popover is the one panel, and it is void on void.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do set the page ground to exactly `void` and let the game screen sit on it with no frame.",
+      "Do align the words above and below the screen to the screen's measured width.",
+      "Do set every literal key in JetBrains Mono amber, and everything else in IM Fell English.",
+      "Do make actions text: bone with a 45% amber underline, amber on hover over 160ms.",
+      "Do separate with a 1px ash hairline at 20% or less.",
+      "Do honour reduced motion: no flicker, no expanding light, a 200ms fade instead.",
+      "Do self-host every font and keep its OFL licence beside it."
+    ],
+    "donts": [
+      "Don't box the game screen, or put the page inside cards, panels or bordered sections.",
+      "Don't add a hero, feature cards or a filled Play button; the veil's call is the only invitation.",
+      "Don't use flame orange anywhere but the candle and the favicon.",
+      "Don't use amber on body prose or decoration; it means \"press this\".",
+      "Don't add scanlines, glow, screen curvature or other CRT effects.",
+      "Don't use emoji or icon glyphs; the candle is the only drawn image.",
+      "Don't round corners."
+    ]
+  }
+}

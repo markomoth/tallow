@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/tallow-core", "crates/tallow-tui", "crates/tallow-sim"]
+members = ["crates/tallow-core", "crates/tallow-tui", "crates/tallow-sim", "crates/tallow-web"]
 default-members = ["crates/tallow-tui"]
 
 [workspace.package]
@@ -10,7 +10,8 @@ rust-version = "1.90"
 
 [workspace.dependencies]
 tallow-core = { path = "crates/tallow-core" }
-ratatui = "0.30"
+# Without crossterm: the terminal binary turns it on (feature `terminal`), the web build can't use it.
+ratatui = { version = "0.30", default-features = false, features = ["all-widgets", "layout-cache", "macros", "std", "underline-color"] }
 rand = { version = "0.10", default-features = false, features = ["alloc"] }
 rand_pcg = { version = "0.10", default-features = false }
 serde = { version = "1", features = ["derive"] }

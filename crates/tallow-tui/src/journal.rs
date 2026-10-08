@@ -84,15 +84,22 @@ impl Journal {
     /// The journal on disk, or a fresh one if there is none (or it can't be read).
     pub fn load(path: &Path) -> Journal {
         std::fs::read_to_string(path)
-            .ok()
-            .and_then(|text| ron::from_str(&text).ok())
+            .map(|text| Journal::from_ron(&text))
             .unwrap_or_default()
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
-        let text = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
-            .map_err(std::io::Error::other)?;
-        std::fs::write(path, text)
+        std::fs::write(path, self.to_ron())
+    }
+
+    /// The journal written in `text`, or a fresh one if it can't be read.
+    pub fn from_ron(text: &str) -> Journal {
+        ron::from_str(text).unwrap_or_default()
+    }
+
+    pub fn to_ron(&self) -> String {
+        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
+            .expect("a journal is plain data")
     }
 
     /// Writes down what this run has shown you so far.

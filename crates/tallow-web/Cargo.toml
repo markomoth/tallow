@@ -1,0 +1,27 @@
+[package]
+name = "tallow-web"
+description = "Tallow in the browser: the same game, drawn on a WebGL canvas by Ratzilla."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# Only the browser build needs anything; on the host this is an empty binary,
+# so `cargo test --workspace` and clippy still work.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tallow-tui = { path = "../tallow-tui", default-features = false }
+ratzilla = "0.3"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Element",
+    "FontFaceSet",
+    "KeyboardEvent",
+    "Performance",
+    "Storage",
+    "Window",
+] }
+console_error_panic_hook = "0.1"
+
+[lints]
+workspace = true
