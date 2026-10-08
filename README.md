@@ -37,7 +37,3 @@ cargo run --release -- --simple    # plain terminal colors on your own backgroun
 | `?` | Help |
 | `.` / `5` | Wait |
 | `q` | Save and quit (the next launch picks up where you left off) |
-
-## Status
-
-All milestones of the build guide are in: twelve floors down, Beelzebub, the ascent and the altar. See [`BUILD_GUIDE.md`](BUILD_GUIDE.md) for the design.
