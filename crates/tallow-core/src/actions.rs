@@ -42,6 +42,10 @@ pub enum Command {
     MakeRoom(Option<crate::rites::RiteId>),
     /// Flare the Vigil Candle: drive the Following back, once per floor.
     Flare,
+    /// Wait braced: harder to hit, and every miss is answered.
+    Guard,
+    /// Push what's beside you a step back.
+    Shove(Direction),
     /// Shut the open doors beside you.
     CloseDoor,
     /// Walk toward unknown ground until something new is in view.

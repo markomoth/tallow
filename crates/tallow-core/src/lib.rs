@@ -30,6 +30,7 @@ pub mod rites;
 pub mod rng;
 pub mod skills;
 pub mod spawn;
+pub mod tactics;
 pub mod throne;
 pub mod time;
 pub mod world;

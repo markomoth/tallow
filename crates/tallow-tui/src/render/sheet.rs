@@ -362,6 +362,10 @@ pub fn draw_help(frame: &mut Frame, area: Rect) {
         key("t f", "throw · fire your sling or crossbow"),
         key("s z", "study or render the body underfoot · cast a rite"),
         key("c C", "snuff or light your candle · shut doors beside you"),
+        key(
+            "S G",
+            "shove a creature back (then a direction) · guard: wait braced, answer misses",
+        ),
         key("> <", "go down · go up (only with the Vigil Candle)"),
         key(
             "F",

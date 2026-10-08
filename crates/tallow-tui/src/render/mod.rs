@@ -71,6 +71,7 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
         | Mode::Pack { .. }
         | Mode::Draft
         | Mode::Forget
+        | Mode::Shove
         | Mode::Sheet
         | Mode::Corpse
         | Mode::Rites
@@ -96,7 +97,7 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
         Mode::Rites => sheet::draw_rites(frame, map_area, app.world()),
         Mode::Corpse => sheet::draw_corpse(frame, map_area, app.world()),
         Mode::Leaving(id) => pack::draw_leaving(frame, map_area, app.world(), id),
-        Mode::Title(_) | Mode::Play | Mode::Look { .. } | Mode::Target { .. } => {}
+        Mode::Title(_) | Mode::Play | Mode::Shove | Mode::Look { .. } | Mode::Target { .. } => {}
     }
 }
 

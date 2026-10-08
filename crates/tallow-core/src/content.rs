@@ -106,6 +106,16 @@ pub enum Trait {
     Snuffs { range: i32, cooldown: u32 },
     /// Sends false copies of itself at you, up to `max` at a time.
     Doubles { cooldown: u32, max: u32 },
+    /// Scatters from candlelight; in the dark it has its nerve back.
+    FearsLight,
+    /// Badly hurt, it runs off to mend, and comes back.
+    Mends,
+    /// Strikes from range and keeps its distance.
+    Shoots { damage: (u32, u32), range: i32 },
+    /// From two tiles off in a straight line it marks where it will land, then leaps.
+    Lunges { bonus: u32 },
+    /// Its hit holds you: you can't step away for a few turns.
+    Grabs { turns: u32 },
 }
 
 #[derive(Debug, Clone, Deserialize)]

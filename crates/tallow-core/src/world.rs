@@ -65,6 +65,10 @@ pub struct Player {
     pub dark_sight_until: Option<u64>,
     /// Carrying the Vigil Candle: endless light, and the way up.
     pub vigil: bool,
+    /// Guarding until your next action.
+    pub guarding: bool,
+    /// Held by a creature's grip until this turn.
+    pub held: Option<(MonsterId, u64)>,
     pub(crate) energy: i32,
 }
 
@@ -118,7 +122,12 @@ pub struct MonsterInfo {
     pub in_the_dark: bool,
     /// Tricks you have seen this kind of creature use this run.
     pub known_traits: Vec<Trait>,
+    /// A raised blow or a crouch to leap: the tile it will come down on.
     pub winding_up: Option<Point>,
+    /// Crouched to leap, rather than a raised blow.
+    pub lunging: bool,
+    /// Other swarm creatures beside you that make this one surer.
+    pub flankers: u32,
     /// Not really there. Only Look can tell.
     pub phantom: bool,
     /// Actions left under your Compel.
@@ -234,6 +243,8 @@ impl World {
                 leavings: Vec::new(),
                 dark_sight_until: None,
                 vigil: false,
+                guarding: false,
+                held: None,
                 energy: ACTION_COST,
             },
             floor,
@@ -606,7 +617,9 @@ impl World {
                 .copied()
                 .filter(|t| self.witnessed.contains(&(m.kind, *t)))
                 .collect(),
-            winding_up: m.winding_up,
+            winding_up: m.winding_up.or(m.lunging),
+            lunging: m.lunging.is_some(),
+            flankers: self.flankers(m),
             phantom: m.phantom,
             compelled: m.compelled,
             unseeing: m.unseeing,
@@ -622,6 +635,7 @@ impl World {
             .monsters()
             .filter_map(|(id, m)| m.winding_up.map(|t| self.blow_area(id, t)))
             .flatten()
+            .chain(self.floor.monsters().filter_map(|(_, m)| m.lunging))
     }
 
     /// Resolves one player command and returns what happened.
@@ -630,6 +644,8 @@ impl World {
             return Vec::new();
         }
         self.fire_ok = self.fire_warned.take();
+        // A guard lasts until your next action.
+        self.player.guarding = false;
         let mut events = self.resolve(command);
         self.fire_ok = None;
         let burden = self.burden();
@@ -669,6 +685,8 @@ impl World {
             Command::Cast { rite, target } => self.cast(rite, target),
             Command::Ascend => self.ascend(),
             Command::Flare => self.flare(),
+            Command::Guard => self.guard(),
+            Command::Shove(dir) => self.shove(dir),
         }
     }
 
@@ -700,6 +718,11 @@ impl World {
         } else if let Some((id, bonus)) = self.reach_target(dir) {
             self.player_attack(id, bonus, &mut events);
         } else {
+            if let Some(holder) = self.held_by() {
+                return vec![Event::HeldFast {
+                    kind: self.floor.monsters[holder].kind,
+                }];
+            }
             if let Some(events) = self.use_tile(target) {
                 return events;
             }
@@ -989,12 +1012,18 @@ impl World {
         accuracy += m.grown as i32 * GROWN_ACCURACY;
         lo += m.grown * GROWN_DAMAGE;
         hi += m.grown * GROWN_DAMAGE;
+        let mut fury = 0;
         if self.in_the_dark(m.pos) {
             accuracy += combat::DARK_FURY_ACCURACY;
-            lo += combat::DARK_FURY_DAMAGE;
-            hi += combat::DARK_FURY_DAMAGE;
+            fury += combat::DARK_FURY_DAMAGE;
+            if def.faction == crate::content::Faction::Taken {
+                fury += crate::tactics::TAKEN_DARK_DAMAGE;
+            }
+        } else if self.shy(m) {
+            accuracy -= crate::tactics::TAKEN_SHY_ACCURACY;
         }
-        (accuracy, (lo, hi))
+        accuracy += self.flankers(m) as i32 * crate::tactics::FLANK_ACCURACY;
+        (accuracy, (lo + fury, hi + fury))
     }
 
     /// Being attacked makes an unaware monster turn on you.
@@ -1126,7 +1155,7 @@ impl World {
         events.extend(self.update_view());
         events.extend(self.note_sightings());
         for monster in self.floor.monsters.values_mut() {
-            monster.blow_ready = monster.winding_up.is_some();
+            monster.blow_ready = monster.winding_up.is_some() || monster.lunging.is_some();
         }
         self.player.energy -= cost;
         while self.player.energy < ACTION_COST && self.death.is_none() {
@@ -1143,10 +1172,11 @@ impl World {
         }
         let ids: Vec<MonsterId> = self.floor.monsters.keys().collect();
         for id in ids {
-            let Some(monster) = self.floor.monsters.get_mut(id) else {
+            let Some(monster) = self.floor.monsters.get(id) else {
                 continue;
             };
-            monster.energy += self.content.monster(monster.kind).speed as i32;
+            let speed = self.monster_speed(monster);
+            self.floor.monsters[id].energy += speed;
             while self.death.is_none()
                 && self
                     .floor
@@ -1633,13 +1663,16 @@ mod tests {
             dark.your_hit_chance,
             lit.your_hit_chance - combat::DARK_ACCURACY as u32
         );
+        // The Taken hold back in your light and forget themselves in the dark.
         assert_eq!(
             dark.its_hit_chance,
-            lit.its_hit_chance + combat::DARK_FURY_ACCURACY as u32
+            lit.its_hit_chance
+                + combat::DARK_FURY_ACCURACY as u32
+                + crate::tactics::TAKEN_SHY_ACCURACY as u32
         );
         assert_eq!(
             dark.its_damage.1,
-            lit.its_damage.1 + combat::DARK_FURY_DAMAGE
+            lit.its_damage.1 + combat::DARK_FURY_DAMAGE + crate::tactics::TAKEN_DARK_DAMAGE
         );
         let before = world.player().dread.value();
         world.apply(Command::Move(Direction::E));

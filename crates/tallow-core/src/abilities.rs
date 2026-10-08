@@ -228,6 +228,7 @@ impl World {
                     events.push(Event::Blinded { kind });
                     self.witness(kind, t);
                 }
+                Trait::Grabs { turns } => self.grabbed(id, turns, events),
                 Trait::Feeds { dread } => {
                     self.shift_dread(dread as i32 * 100, events);
                     events.push(Event::FedOnFear { kind, dread });

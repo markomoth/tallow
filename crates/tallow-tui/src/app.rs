@@ -52,6 +52,8 @@ pub enum Mode {
     Draft,
     /// A rite was learned with no room for it: forget one, or let it go.
     Forget,
+    /// Shove: which way?
+    Shove,
     /// The character sheet.
     Sheet,
     /// Standing on a body: study it or render it?
@@ -323,6 +325,14 @@ impl App {
                 }
             }
             Mode::Target { aim, cursor } => self.handle_target(action, aim, cursor),
+            Mode::Shove => match action {
+                Action::Move(dir) | Action::Run(dir) => {
+                    self.mode = Mode::Play;
+                    self.play(Command::Shove(dir));
+                }
+                Action::Cancel | Action::Quit => self.mode = Mode::Play,
+                _ => {}
+            },
             Mode::Title(_)
             | Mode::Pack { .. }
             | Mode::Draft
@@ -420,6 +430,15 @@ impl App {
                     return;
                 }
                 Command::Study
+            }
+            Action::Guard => Command::Guard,
+            Action::Shove => {
+                self.mode = Mode::Shove;
+                self.log.push(
+                    "Shove which way? (a direction; Esc to cancel)",
+                    Tone::Normal,
+                );
+                return;
             }
             Action::Flare => {
                 if !self.world.can_flare() && !self.world.player().vigil {

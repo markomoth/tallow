@@ -220,6 +220,59 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
         ),
         Event::Hooked { kind } => (format!("You haul the {} in.", name(kind)), Normal),
         Event::Shoved { kind } => (format!("The {} is driven back.", name(kind)), Normal),
+        Event::Scatters { kind } => (
+            format!("The {} squeals and scatters from your light.", name(kind)),
+            Normal,
+        ),
+        Event::Retreats { kind } => (
+            format!("The {} falls back, hurt. It will mend, and come again.", name(kind)),
+            Normal,
+        ),
+        Event::Volley { kind, damage } => (
+            match damage {
+                Some(d) => format!("The {} strikes at you from across the room ({d}).", name(kind)),
+                None => format!("The {} strikes at you from afar, and misses.", name(kind)),
+            },
+            if damage.is_some() { Danger } else { Normal },
+        ),
+        Event::Crouches { kind, .. } => (
+            format!("The {} crouches, eyes on you. It's about to leap: step off the marked tile!", name(kind)),
+            Danger,
+        ),
+        Event::Leaps { kind, damage } => (
+            match damage {
+                Some(d) => format!("The {} leaps on you ({d})!", name(kind)),
+                None => format!("The {} leaps, and you turn it aside.", name(kind)),
+            },
+            if damage.is_some() { Danger } else { Normal },
+        ),
+        Event::LeapsShort { kind } => (
+            format!("The {} leaps at where you were.", name(kind)),
+            Good,
+        ),
+        Event::Guarding => ("You brace yourself and wait for it.".into(), Normal),
+        Event::NothingToShove => ("There's nothing there to shove.".into(), Normal),
+        Event::TooBigToShove { kind } => (
+            format!("You might as well shove a wall. The {} doesn't move.", name(kind)),
+            Normal,
+        ),
+        Event::ShoveBlocked { kind } => (
+            format!("There's nowhere to shove the {}: something is behind it.", name(kind)),
+            Normal,
+        ),
+        Event::YouShove { kind } => (format!("You shove the {} back.", name(kind)), Normal),
+        Event::ShovedThrough { kind } => (
+            format!("The rotten boards give under the {}, and it falls through!", name(kind)),
+            Good,
+        ),
+        Event::Grabbed { kind } => (
+            format!("The {} has hold of you. You can't step away (shove it off, or kill it).", name(kind)),
+            Danger,
+        ),
+        Event::HeldFast { kind } => (
+            format!("The {} holds you fast. Strike it, or shove it off (S).", name(kind)),
+            Danger,
+        ),
         Event::FedOnFear { kind, dread } => (
             format!("The {}'s touch is cold. Your fear grows (+{dread} dread).", name(kind)),
             Dread,

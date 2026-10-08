@@ -183,6 +183,7 @@ impl Widget for Hud<'_> {
             | Mode::Pack { .. }
             | Mode::Draft
             | Mode::Forget
+            | Mode::Shove
             | Mode::Sheet
             | Mode::Corpse
             | Mode::Rites
@@ -382,14 +383,6 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             ),
             Span::styled(capitalize(&def.name), text().add_modifier(Modifier::BOLD)),
         ]));
-        lines.push(Line::styled(def.description.clone(), dim()));
-        lines.push(Line::styled(faction_line(def.faction), dim()));
-        if def.boss {
-            lines.push(Line::styled(
-                "One of the great ones below. It resists Binding.",
-                Style::new().fg(palette::DANGER),
-            ));
-        }
         let mind = match info.mind {
             _ if info.compelled > 0 => "bound to your will".to_string(),
             _ if info.terrified > 0 => "fleeing your dread".to_string(),
@@ -429,9 +422,19 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
                 Style::new().fg(palette::DREAD),
             ));
         }
+        if info.flankers > 0 {
+            lines.push(Line::styled(
+                format!("Flanking you with its kin: +{} to hit.", info.flankers * 10),
+                Style::new().fg(palette::DANGER),
+            ));
+        }
         if info.winding_up.is_some() {
             lines.push(Line::styled(
-                "Its blow is raised. Get off the red tile!",
+                if info.lunging {
+                    "It crouches to leap. Get off the red tile!"
+                } else {
+                    "Its blow is raised. Get off the red tile!"
+                },
                 Style::new()
                     .fg(palette::DANGER)
                     .add_modifier(Modifier::BOLD),
@@ -455,6 +458,16 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
         for t in &info.known_traits {
             lines.push(Line::styled(format!("Seen: {}", trait_line(t)), dim()));
         }
+        // The numbers and warnings first: on a small screen the prose is
+        // what gets cut.
+        if def.boss {
+            lines.push(Line::styled(
+                "One of the great ones below. It resists Binding.",
+                Style::new().fg(palette::DANGER),
+            ));
+        }
+        lines.push(Line::styled(def.description.clone(), dim()));
+        lines.push(Line::styled(faction_line(def.faction), dim()));
         if world.has_studied(info.kind) {
             lines.push(Line::styled("You have studied its kind.", dim()));
         }
@@ -655,7 +668,13 @@ fn faction_line(faction: tallow_core::Faction) -> String {
         [one] => format!("Attacks {one} on sight."),
         [rest @ .., last] => format!("Attacks {} and {last} on sight.", rest.join(", ")),
     };
-    format!("{} · {fights}", capitalize(name(faction)))
+    let way = match faction {
+        Faction::Swarm => "Flanks you; quicker in the dark.",
+        Faction::Taken => "Holds back in light; fiercer in the dark.",
+        Faction::Remnant => "Keeps to its post.",
+        Faction::Dreaming => "Slowed by light; half-there in the dark.",
+    };
+    format!("{} · {fights} {way}", capitalize(name(faction)))
 }
 
 fn trait_line(t: &Trait) -> String {
@@ -694,6 +713,18 @@ fn trait_line(t: &Trait) -> String {
         Trait::Gnaws => "chews through shut doors, slowly.".into(),
         Trait::Undying => "cannot be killed.".into(),
         Trait::Nightmare => "made of your fear: it comes apart when you're calm.".into(),
+        Trait::FearsLight => "scatters from candlelight; bold again in the dark.".into(),
+        Trait::Mends => "badly hurt, it runs off to mend, and comes back.".into(),
+        Trait::Shoots {
+            damage: (lo, hi),
+            range,
+        } => format!("strikes from up to {range} tiles ({lo}–{hi}) and keeps its distance."),
+        Trait::Lunges { bonus } => format!(
+            "from two tiles off in a line it marks your tile, then leaps (+{bonus}). Step aside."
+        ),
+        Trait::Grabs { turns } => {
+            format!("its hit holds you for {turns} turns: you can't step away (shove it off).")
+        }
         Trait::Feeds { dread } => format!("each blow it lands adds {dread} dread."),
         Trait::Snuffs { range, cooldown } => format!(
             "puts out your candle when it comes within {range} tiles; not again for {cooldown} of its actions."

@@ -147,6 +147,56 @@ pub enum Event {
     Shoved {
         kind: KindId,
     },
+    /// Candlelight scatters it.
+    Scatters {
+        kind: KindId,
+    },
+    /// Badly hurt, it runs to mend.
+    Retreats {
+        kind: KindId,
+    },
+    /// It struck at you from range.
+    Volley {
+        kind: KindId,
+        damage: Option<u32>,
+    },
+    /// It crouches to leap at the marked tile.
+    Crouches {
+        kind: KindId,
+        target: Point,
+    },
+    Leaps {
+        kind: KindId,
+        damage: Option<u32>,
+    },
+    /// It leapt where you no longer were.
+    LeapsShort {
+        kind: KindId,
+    },
+    /// You brace yourself.
+    Guarding,
+    NothingToShove,
+    TooBigToShove {
+        kind: KindId,
+    },
+    ShoveBlocked {
+        kind: KindId,
+    },
+    YouShove {
+        kind: KindId,
+    },
+    /// Shoved onto rotten boards, it went through them.
+    ShovedThrough {
+        kind: KindId,
+    },
+    /// It has hold of you.
+    Grabbed {
+        kind: KindId,
+    },
+    /// You can't step away while it holds you.
+    HeldFast {
+        kind: KindId,
+    },
     /// A blow that feeds your dread.
     FedOnFear {
         kind: KindId,

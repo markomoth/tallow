@@ -205,6 +205,12 @@ No attributes. No skill trees. No classes. Your build is what you do.
 - **Hit chance** = attacker accuracy − defender defense, clamped to 5–95%. Look shows the exact numbers.
 - **The dark** (M12): striking at something on a tile no light reaches costs you 20 accuracy (10 with Night Eyes). A creature standing in the dark gets +10 accuracy and +1 damage at both ends. Look shows the adjusted numbers and says "In the dark". Each blow struck or taken there adds 2 dread.
 - **Armour by faction** (M15): the Swarm takes half from bludgeons (blunt is wasted on flies and rats), the Remnant half from blades (paper and brass only nick), and the Dreaming half from every weapon, thrown or fired too, while they stand in the dark (light holds them). Half rounds up. The Taken are only flesh. Look shows your damage after armour and says why; the log says so the first time per kind. No one weapon is right for every floor: carry two.
+- **Factions fight their own way** (M16), and light and dark change them. Look's faction line says how; your numbers in Look include all of it.
+  - **Swarm:** flanks. Each other swarm creature beside you makes one +10 to hit (at most +20): fight them in a corridor. In the dark they quicken (+3 speed).
+  - **Taken:** they remember being people. In light they hold back (−10 to hit); in the dark they forget themselves (+1 more damage on top of the dark's).
+  - **Remnant:** guards. They won't follow you more than 6 tiles from where they were put; past that they go back and wait. Bosses don't keep posts.
+  - **Dreaming:** light holds them: −2 speed on a lit tile (and half damage taken only in the dark, M15).
+- **Your own moves** (M16): `S` then a direction **shoves** a creature a step back (a turn; not bosses), into fire or water if that's behind it, and through rotten boards to the floor below. It breaks a grip. `G` **guards**: wait a turn braced, +25 defense until your next action, and every miss against you is answered with a blow.
 - **Speed:** 10 is one action per turn. Energy-based: faster creatures act more often.
 - **Health:** the acolyte starts with 24 and regains 1 every 12 turns. The candle clock keeps resting honest.
 - **Telegraphs:** a raised heavy blow marks its target tile in pulsing red and always waits for your next action.
@@ -410,6 +416,11 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | Rewrites | Provost | Every 8 actions: locks every door within 8 for 15 turns (you can't open them either, but they burn), or sets a shelf alight. |
 | Chorus | Drowned Choir | Three bodies, one shared life (45). They crowd you in the open; fight them in a doorway. |
 | Swims | Deacon, Choir | Enters deep water. |
+| Leaps (M16) | Gnawer | Two tiles off in a straight line, it marks your tile (red) and leaps next action (+1). Step off. |
+| Scatters (M16) | Gnawer, maggot spawn | Flees from candlelight within 4; bold again in the dark. |
+| Grabs (M16) | Parishioner, risen husk | A hit holds you 2 turns: you can't step away (you can strike, cast, or shove it off). |
+| Volleys (M16) | Bound folio | Strikes from up to 5 tiles (1–3), once every 3 actions; keeps its distance. |
+| Mends (M16) | Proctor, fly herald | Below a third of its health it runs; out of sight or 6+ away it mends 1 an action; back at two thirds it returns. |
 
 ---
 
@@ -460,6 +471,8 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `c` | Snuff / relight candle |
 | `C` | Shut the open doors beside you |
 | `F` | Flare the Vigil Candle (the ascent, once a floor) |
+| `S` + direction | Shove a creature a step back |
+| `G` | Guard: wait braced, answer every miss |
 | `R` | Rest until healed |
 | `o` | Auto-explore (stops when anything new is in view; skips fire, deep water, rotten boards, seep rooms) |
 | `@` | Character sheet: skills, techniques, boons |
@@ -609,6 +622,8 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 
 | M15 ✅ | Weapons | See Look halve your damage against the wrong faction; open a wound with a sickle, set a floor alight with a censer, hook something in with a boathook, shove it with a staff, render a cleaver kill for more | 2 h |
 
+| M16 ✅ | Monsters | Get flanked by flies and fight them from a doorway; dodge a gnawer's marked leap; be grabbed by a parishioner and shove it off; chase a folio that shoots and backs off; watch a Proctor run to mend and come back; guard and riposte | 3 h |
+
 **As built (M12), sim over 500 seeds** (the bot now walks dark below 150 tallow, lights up to fight, hunts and renders while under 350): 108 wins, the candle ran dry 4 times, 1.3 Manifestations per run, 0 softlocks. The bot sees every creature on the floor, so it hunts better than a person can; treat its numbers as an upper bound.
 
 **As built (M13), sim over 500 seeds:** 113 wins, the candle ran dry 8 times, 1.31 Manifestations per run, 6 deaths on the ascent (12 before), 0 softlocks. The bot casts no rites, so recharge and slots don't show in its numbers.
@@ -616,6 +631,8 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 **As built (M14), sim over 500 seeds** (the bot now also keeps its candle lit past 60 dread, as a player would to stop the dread climbing): 35 wins, the candle ran dry 61 times, 0.92 Manifestations per run, 0 softlocks. Killed by: Manifestation 122, lantern-eater 108, lidless thing 34, Sexton 34. The bot has no way to spend dread (it casts no rites), so it stays frayed far longer than a player would; at first, before it learned to light up, it won 1 run in 500. The Manifestation first snuffed every action and doubled twice; that killed in two of every three meetings (185 deaths), so it now snuffs once per 12 actions and sends one copy.
 
 **As built (M15), sim over 500 seeds:** 51 wins, 0 softlocks. Killed by: Manifestation 136, lantern-eater 71, lidless thing 45. The bot never changes weapons, so it fights the whole run with the starting candlestick: Candlelit at +2 took it to 97 wins, which made the first weapon too good to put down, so it is +1.
+
+**As built (M16), sim over 500 seeds:** 76 wins, 0 softlocks. Killed by: Manifestation 123, bound folio 30, lidless thing 28, Provost 26. Lantern-eater deaths fell from 71 to 20: slowed in your light, they no longer catch you. The first folio shot every action at speed 15 and killed 78 bots; it now volleys once per 3 actions. The Provost first kept its post too, stood off and relocked the doors forever (two softlocks): bosses don't keep posts.
 
 Total: roughly 40–55 hours of build + playtest time.
 

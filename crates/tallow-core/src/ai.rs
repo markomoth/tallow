@@ -184,6 +184,14 @@ impl World {
             }
             return;
         }
+        // A marked leap waits for your turn too, then comes down.
+        if m.lunging.is_some() && !m.blow_ready {
+            return;
+        }
+        if let Some(target) = m.lunging {
+            self.land_lunge(id, target, events);
+            return;
+        }
         let monster = &mut self.floor.monsters[id];
         monster.cooldown = monster.cooldown.saturating_sub(1);
 
@@ -284,6 +292,9 @@ impl World {
             }
         }
 
+        if self.tactics(id, sees, events) {
+            return;
+        }
         if matches!(self.floor.monsters[id].mind, Mind::Hunting { .. })
             && self.use_ability(id, sees, events)
         {
@@ -316,6 +327,12 @@ impl World {
                         }
                     } else {
                         self.monster_attack(id, events);
+                    }
+                } else if self.past_leash(&m) {
+                    // The Remnant keep their posts: past the leash they go
+                    // back and wait.
+                    if m.pos != m.post {
+                        self.step_toward(id, m.post);
                     }
                 } else if m.pos == last_seen && !sees {
                     // Lost the trail.
@@ -418,11 +435,11 @@ impl World {
         }
     }
 
-    fn monster_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
+    pub(crate) fn monster_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
         let (kind, at) = (self.floor.monsters[id].kind, self.floor.monsters[id].pos);
         let def = self.content.monster(kind);
         let (accuracy, damage) = self.monster_strength(&self.floor.monsters[id]);
-        let chance = combat::hit_chance(accuracy, self.player_defense());
+        let chance = combat::hit_chance(accuracy, self.guarded_defense());
         let damage = combat::roll_attack(&mut self.combat_rng, chance, damage);
         if self.in_the_dark(at) {
             self.shift_dread(crate::dread::DARK_BLOW, events);
@@ -433,12 +450,15 @@ impl World {
             damage,
         });
         self.fight_noise();
-        if damage.is_none()
-            && self.wielded_family() == Some(Family::Blade)
-            && let Some(Technique::Riposte { chance }) =
-                self.melee_technique(|t| matches!(t, Technique::Riposte { .. }))
-            && self.combat_rng.random_range(0..100) < chance
-        {
+        // Guarding answers every miss; a blade-hand answers some.
+        let riposte = || match self.melee_technique(|t| matches!(t, Technique::Riposte { .. })) {
+            Some(Technique::Riposte { chance }) if self.wielded_family() == Some(Family::Blade) => {
+                chance
+            }
+            _ => 0,
+        };
+        let chance = if self.player.guarding { 100 } else { riposte() };
+        if damage.is_none() && chance > 0 && self.combat_rng.random_range(0..100) < chance {
             events.push(Event::Riposte { kind });
             self.player_attack(id, 0, events);
             return;
@@ -487,7 +507,7 @@ impl World {
 
     /// Steps one tile closer to `target`, choosing randomly between equally good
     /// steps so packs spread around you. Returns whether it moved.
-    fn step_toward(&mut self, id: MonsterId, target: Point) -> bool {
+    pub(crate) fn step_toward(&mut self, id: MonsterId, target: Point) -> bool {
         let dist = path::distances(self.map(), target);
         self.step_by(id, |here, there| {
             let (Some(here), Some(there)) = (dist.at(here), dist.at(there)) else {
@@ -498,7 +518,7 @@ impl World {
     }
 
     /// Steps one tile farther from the player. Returns whether it moved.
-    fn step_away(&mut self, id: MonsterId) -> bool {
+    pub(crate) fn step_away(&mut self, id: MonsterId) -> bool {
         let dist = path::distances(self.map(), self.player.pos);
         self.step_by(id, |here, there| {
             let (Some(here), Some(there)) = (dist.at(here), dist.at(there)) else {

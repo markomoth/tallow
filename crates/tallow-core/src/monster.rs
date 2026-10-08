@@ -70,6 +70,10 @@ pub struct Monster {
     pub(crate) snuff_cooldown: u32,
     /// Actions left bleeding, 1 health each.
     pub bleeding: u32,
+    /// Where it was put: the Remnant keep to it.
+    pub post: Point,
+    /// Crouched to leap at this tile next action.
+    pub lunging: Option<Point>,
 }
 
 impl Monster {
@@ -102,6 +106,8 @@ impl Monster {
             grown: 0,
             snuff_cooldown: 0,
             bleeding: 0,
+            post: pos,
+            lunging: None,
         }
     }
 }
