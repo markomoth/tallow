@@ -68,6 +68,11 @@ pub struct Player {
     pub(crate) energy: i32,
 }
 
+/// What each step of growing adds to a creature (the Manifestation, mostly).
+pub const GROWN_HEALTH: u32 = 6;
+pub const GROWN_ACCURACY: i32 = 5;
+pub const GROWN_DAMAGE: u32 = 1;
+
 /// Counts that decide which boons can be offered.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RunStats {
@@ -171,6 +176,12 @@ pub struct World {
     pub(crate) following_at: Option<u64>,
     /// The Vigil Candle has flared on this ascent floor.
     pub(crate) flared: bool,
+    /// Turns spent frayed or worse since you were last below it.
+    pub(crate) frayed_turns: u32,
+    /// A nightmare is on its way and arrives on this turn.
+    pub(crate) nightmare_at: Option<u64>,
+    /// Manifestations so far this run: each one comes back stronger.
+    pub(crate) manifestations: u32,
     pub(crate) victory: Option<crate::throne::Victory>,
     pub(crate) defeated: HashSet<KindId>,
     pub(crate) leavings_taken: Vec<crate::leavings::LeavingId>,
@@ -248,6 +259,9 @@ impl World {
             ascent: 0,
             following_at: None,
             flared: false,
+            frayed_turns: 0,
+            nightmare_at: None,
+            manifestations: 0,
             victory: None,
             defeated: HashSet::new(),
             leavings_taken: Vec::new(),
@@ -566,11 +580,8 @@ impl World {
                 self.player_accuracy() - self.dark_penalty(m.pos),
                 def.defense,
             ),
-            its_hit_chance: combat::hit_chance(
-                self.monster_strength(m.kind, m.pos).0,
-                self.player_defense(),
-            ),
-            its_damage: self.monster_strength(m.kind, m.pos).1,
+            its_hit_chance: combat::hit_chance(self.monster_strength(m).0, self.player_defense()),
+            its_damage: self.monster_strength(m).1,
             in_the_dark: self.in_the_dark(m.pos),
             known_traits: def
                 .traits
@@ -866,18 +877,20 @@ impl World {
         }
     }
 
-    /// A creature's accuracy and damage, standing on `p`: the dark makes it worse.
-    pub fn monster_strength(&self, kind: KindId, p: Point) -> (i32, (u32, u32)) {
-        let def = self.content.monster(kind);
-        if self.in_the_dark(p) {
-            let (lo, hi) = def.damage;
-            (
-                def.accuracy + combat::DARK_FURY_ACCURACY,
-                (lo + combat::DARK_FURY_DAMAGE, hi + combat::DARK_FURY_DAMAGE),
-            )
-        } else {
-            (def.accuracy, def.damage)
+    /// A creature's accuracy and damage where it stands: the dark makes it
+    /// worse, and so does growing.
+    pub fn monster_strength(&self, m: &crate::monster::Monster) -> (i32, (u32, u32)) {
+        let def = self.content.monster(m.kind);
+        let (mut accuracy, (mut lo, mut hi)) = (def.accuracy, def.damage);
+        accuracy += m.grown as i32 * GROWN_ACCURACY;
+        lo += m.grown * GROWN_DAMAGE;
+        hi += m.grown * GROWN_DAMAGE;
+        if self.in_the_dark(m.pos) {
+            accuracy += combat::DARK_FURY_ACCURACY;
+            lo += combat::DARK_FURY_DAMAGE;
+            hi += combat::DARK_FURY_DAMAGE;
         }
+        (accuracy, (lo, hi))
     }
 
     /// Being attacked makes an unaware monster turn on you.

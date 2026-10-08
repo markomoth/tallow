@@ -30,6 +30,15 @@ const MAX_DRAWN: u32 = 3;
 const DRAWN_DISTANCE: u32 = 15;
 /// Steps from the player where phantoms and Manifestations appear.
 const LURK_DISTANCE: (u32, u32) = (6, 14);
+/// Every this many turns frayed or worse, a nightmare comes for you...
+pub const NIGHTMARE_TURNS: u32 = 50;
+/// ...announced this many turns ahead...
+pub const NIGHTMARE_WARNING: u64 = 5;
+/// ...and no more than this many at once.
+const MAX_NIGHTMARES: usize = 2;
+/// A phantom that reaches you hurts this much, or else adds this much dread.
+const PHANTOM_BITE: (u32, u32) = (1, 2);
+const PHANTOM_DREAD: i32 = 500;
 
 impl World {
     /// A lit candle is seen from far off. Burn it long enough on one floor and
@@ -150,12 +159,117 @@ impl World {
         if band == DreadBand::Manifest && !self.manifestation_present() {
             self.spawn_manifestation(events);
         }
+        self.tick_nightmares(band, events);
     }
 
     pub(crate) fn manifestation_present(&self) -> bool {
         self.floor
             .monsters()
-            .any(|(_, m)| m.kind == self.manifestation)
+            .any(|(_, m)| m.kind == self.manifestation && !m.phantom)
+    }
+
+    /// Nightmares on this floor.
+    pub fn nightmares(&self) -> Vec<crate::monster::MonsterId> {
+        self.floor
+            .monsters()
+            .filter(|(_, m)| {
+                !m.phantom
+                    && self
+                        .content
+                        .monster(m.kind)
+                        .has(|t| *t == crate::content::Trait::Nightmare)
+            })
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    /// Frayed, real things come for you; calm, they come apart.
+    fn tick_nightmares(&mut self, band: DreadBand, events: &mut Vec<Event>) {
+        if band == DreadBand::Calm {
+            for id in self.nightmares() {
+                let m = self.floor.monsters.remove(id).expect("listed above");
+                events.push(Event::NightmareFades { kind: m.kind });
+            }
+        }
+        if band < DreadBand::Frayed || self.stage() == crate::throne::Stage::Church {
+            self.frayed_turns = 0;
+            if self.nightmare_at.take().is_some() {
+                events.push(Event::NightmareTurnedAway);
+            }
+            return;
+        }
+        // While your Manifestation walks, it is enough.
+        if self.manifestation_present() {
+            return;
+        }
+        if self.nightmare_at.is_some_and(|at| self.turn() >= at) {
+            self.nightmare_at = None;
+            self.spawn_nightmare(events);
+        }
+        self.frayed_turns += 1;
+        if self.frayed_turns.is_multiple_of(NIGHTMARE_TURNS)
+            && self.nightmare_at.is_none()
+            && self.nightmares().len() < MAX_NIGHTMARES
+        {
+            self.nightmare_at = Some(self.turn() + NIGHTMARE_WARNING);
+            events.push(Event::NightmareComing);
+        }
+    }
+
+    /// The nightmare for this depth, out of sight and already hunting you.
+    fn spawn_nightmare(&mut self, events: &mut Vec<Event>) {
+        let depth = self.depth();
+        let content = self.content;
+        let mut kinds: Vec<_> = content
+            .kinds()
+            .filter(|(_, d)| d.has(|t| *t == crate::content::Trait::Nightmare))
+            .collect();
+        kinds.sort_by_key(|&(k, _)| k);
+        let here: Vec<_> = kinds
+            .iter()
+            .filter(|(_, d)| d.depth.0 <= depth && depth <= d.depth.1)
+            .map(|&(k, _)| k)
+            .collect();
+        let Some(&kind) = here.first().or_else(|| kinds.last().map(|(k, _)| k)) else {
+            return;
+        };
+        let Some(at) = self.lurking_spot() else {
+            return;
+        };
+        let mut monster = Monster::new(kind, content.monster(kind), at);
+        monster.mind = Mind::Hunting {
+            last_seen: self.player.pos,
+        };
+        self.floor.monsters.insert(monster);
+        events.push(Event::NightmareArrives { kind });
+    }
+
+    /// A phantom reached you: it comes apart, but fear still bites.
+    pub(crate) fn phantom_bite(&mut self, kind: crate::content::KindId, events: &mut Vec<Event>) {
+        let damage = if self.ai_rng.random_bool(0.5) {
+            let roll = crate::combat::roll_damage(&mut self.ai_rng, PHANTOM_BITE);
+            // Fear never takes your last breath.
+            Some(roll.min(self.player.health.saturating_sub(1))).filter(|&d| d > 0)
+        } else {
+            None
+        };
+        events.push(Event::PhantomBit { kind, damage });
+        match damage {
+            Some(damage) => {
+                self.hurt_player(damage, crate::events::Cause::Attack(kind), events);
+            }
+            None => self.shift_dread(PHANTOM_DREAD, events),
+        }
+    }
+
+    /// A false copy of `kind` beside `at`, hunting you.
+    pub(crate) fn spawn_phantom_at(&mut self, kind: crate::content::KindId, at: Point) {
+        let mut phantom = Monster::new(kind, self.content.monster(kind), at);
+        phantom.phantom = true;
+        phantom.mind = Mind::Hunting {
+            last_seen: self.player.pos,
+        };
+        self.floor.monsters.insert(phantom);
     }
 
     pub(crate) fn clear_phantoms(&mut self, events: &mut Vec<Event>) {
@@ -186,15 +300,9 @@ impl World {
         let Some(&kind) = kinds.choose(&mut self.ai_rng) else {
             return;
         };
-        let Some(at) = self.lurking_spot() else {
-            return;
-        };
-        let mut phantom = Monster::new(kind, self.content.monster(kind), at);
-        phantom.phantom = true;
-        phantom.mind = Mind::Hunting {
-            last_seen: self.player.pos,
-        };
-        self.floor.monsters.insert(phantom);
+        if let Some(at) = self.lurking_spot() {
+            self.spawn_phantom_at(kind, at);
+        }
     }
 
     fn spawn_manifestation(&mut self, events: &mut Vec<Event>) {
@@ -206,8 +314,14 @@ impl World {
         monster.mind = Mind::Hunting {
             last_seen: self.player.pos,
         };
+        // Each time it comes back, it has learned more of you.
+        let grown = self.manifestations;
+        monster.grown = grown;
+        monster.health += grown * crate::world::GROWN_HEALTH;
+        monster.max_health = monster.health;
+        self.manifestations += 1;
         self.floor.monsters.insert(monster);
-        events.push(Event::Manifested);
+        events.push(Event::Manifested { grown });
     }
 
     /// A free tile out of sight, a short walk from the player. Falls back to
@@ -248,7 +362,7 @@ impl World {
 
 #[cfg(test)]
 mod tests {
-    use super::LIGHT_DRAW_TURNS;
+    use super::{LIGHT_DRAW_TURNS, NIGHTMARE_TURNS, NIGHTMARE_WARNING};
     use crate::actions::Command;
     use crate::candle::{self, CandleState};
     use crate::content::{Content, KindId, Trait};
@@ -448,7 +562,7 @@ mod tests {
                 break;
             }
         }
-        assert!(events.contains(&Event::Manifested));
+        assert!(events.contains(&Event::Manifested { grown: 0 }));
         assert_eq!(world.player().dread.band(), DreadBand::Manifest);
 
         // It's held at the top while it lives.
@@ -490,19 +604,25 @@ mod tests {
     }
 
     #[test]
-    fn phantoms_haunt_the_frayed_but_never_hurt_and_look_sees_through_them() {
+    fn phantoms_haunt_the_frayed_bite_but_never_kill_and_look_sees_through_them() {
         let mut world = hall();
         // Phantoms take the shape of something already seen.
         world.spawn_monster(kind("parishioner"), Point::new(3, 2));
         world.apply(Command::Wait);
         world.despawn_all();
 
-        world.player.dread.set(85);
-        let health = world.player().health;
+        world.player.health = 2;
         let mut saw_phantom = false;
+        let mut bites = 0;
         for _ in 0..400 {
             world.player.dread.set(85);
-            world.apply(Command::Wait);
+            let events = world.apply(Command::Wait);
+            // Only the phantoms: real nightmares are tested on their own.
+            world.floor.monsters.retain(|_, m| m.phantom);
+            bites += events
+                .iter()
+                .filter(|e| matches!(e, Event::PhantomBit { .. }))
+                .count();
             for id in world.floor().visible_monsters(world.player().pos) {
                 let info = world.inspect(id).unwrap();
                 assert!(info.phantom, "only phantoms here");
@@ -513,7 +633,8 @@ mod tests {
             saw_phantom,
             "a phantom should appear within 400 frayed turns"
         );
-        assert!(world.player().health >= health, "phantoms never hurt");
+        assert!(bites > 0, "phantoms that reach you bite");
+        assert!(world.death().is_none(), "fear never takes your last breath");
 
         world.player.dread.set(20);
         world.apply(Command::Wait);
@@ -521,6 +642,95 @@ mod tests {
             world.floor().monsters().all(|(_, m)| !m.phantom),
             "calm clears them"
         );
+    }
+
+    #[test]
+    fn nightmares_come_for_the_frayed_and_come_apart_when_calm() {
+        let mut world = hall();
+        world.player.health = 999;
+        world.player.max_health = 999;
+        let mut events = Vec::new();
+        for _ in 0..NIGHTMARE_TURNS + NIGHTMARE_WARNING as u32 + 1 {
+            world.player.dread.set(75);
+            events.extend(world.apply(Command::Wait));
+        }
+        let coming = events
+            .iter()
+            .position(|e| *e == Event::NightmareComing)
+            .expect("announced");
+        let arrived = events
+            .iter()
+            .position(|e| matches!(e, Event::NightmareArrives { .. }))
+            .expect("arrived");
+        assert!(coming < arrived, "always announced first");
+        assert_eq!(world.nightmares().len(), 1);
+        let id = world.nightmares()[0];
+        assert_eq!(world.floor().monster(id).unwrap().kind, kind("mare"));
+
+        world.player.dread.set(30);
+        let events = world.apply(Command::Wait);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::NightmareFades { .. }))
+        );
+        assert!(world.nightmares().is_empty());
+    }
+
+    #[test]
+    fn calming_down_turns_a_nightmare_away() {
+        let mut world = hall();
+        let mut events = Vec::new();
+        for _ in 0..NIGHTMARE_TURNS {
+            world.player.dread.set(75);
+            events.extend(world.apply(Command::Wait));
+        }
+        assert!(events.contains(&Event::NightmareComing));
+        world.player.dread.set(60);
+        assert!(
+            world
+                .apply(Command::Wait)
+                .contains(&Event::NightmareTurnedAway)
+        );
+        for _ in 0..NIGHTMARE_WARNING + 2 {
+            world.player.dread.set(60);
+            world.apply(Command::Wait);
+        }
+        assert!(world.nightmares().is_empty());
+    }
+
+    #[test]
+    fn the_manifestation_snuffs_doubles_and_grows() {
+        let mut world = hall();
+        world.player.health = 999;
+        world.player.max_health = 999;
+        world.manifestations = 2;
+        world.player.dread.set(100);
+        let events = world.apply(Command::Wait);
+        assert!(events.contains(&Event::Manifested { grown: 2 }));
+        let (id, m) = world
+            .floor()
+            .monsters()
+            .find(|(_, m)| m.kind == world.manifestation)
+            .unwrap();
+        assert_eq!(m.max_health, 18 + 2 * crate::world::GROWN_HEALTH);
+        world.floor.monsters[id].pos = Point::new(4, 1);
+        world.apply(Command::ToggleCandle);
+        world.apply(Command::ToggleCandle);
+        assert!(world.player().candle.is_lit());
+        let mut events = Vec::new();
+        for _ in 0..12 {
+            events.extend(world.apply(Command::Wait));
+        }
+        assert!(events.contains(&Event::CandleSnuffedBy {
+            kind: world.manifestation
+        }));
+        assert!(events.contains(&Event::Doubled {
+            kind: world.manifestation
+        }));
+        let info = world.inspect(id).unwrap();
+        let (lo, _) = Content::bundled().monster(world.manifestation).damage;
+        assert!(info.its_damage.0 >= lo + 2, "grown hits harder");
     }
 
     #[test]

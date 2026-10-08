@@ -35,6 +35,7 @@ struct Options {
     dev_rites: bool,
     dev_kit: bool,
     dev_level: Option<u32>,
+    dev_dread: Option<u32>,
     dev_near_stairs: bool,
     dev_ascent: Option<u8>,
     /// Plain terminal colors, the terminal's own background, no animation.
@@ -57,6 +58,7 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
         || options.dev_rites
         || options.dev_kit
         || options.dev_level.is_some()
+        || options.dev_dread.is_some()
         || options.dev_near_stairs
         || options.dev_ascent.is_some();
     // Dev runs and replays of a chosen seed don't touch your save or journal.
@@ -100,6 +102,9 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
     }
     if let Some(level) = options.dev_level {
         app.world_mut().dev_level_to(level);
+    }
+    if let Some(dread) = options.dev_dread {
+        app.world_mut().dev_set_dread(dread);
     }
     if options.dev_kit {
         for (id, n) in [
@@ -181,6 +186,10 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             "--dev-level" => {
                 let value = args.next().context(USAGE)?;
                 options.dev_level = Some(value.parse().context("bad level")?);
+            }
+            "--dev-dread" => {
+                let value = args.next().context(USAGE)?;
+                options.dev_dread = Some(value.parse().context("bad dread")?);
             }
             "-h" | "--help" => bail!(USAGE),
             other => bail!("unknown argument {other:?}\n{USAGE}"),

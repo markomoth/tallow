@@ -45,6 +45,25 @@ impl World {
             }
         }
 
+        // Snuffing costs no action either: it comes close, and your light dies.
+        let snuff = &mut self.floor.monsters[id].snuff_cooldown;
+        *snuff = snuff.saturating_sub(1);
+        if let Some((range, cooldown)) = def.traits.iter().find_map(|t| match *t {
+            Trait::Snuffs { range, cooldown } => Some((range, cooldown)),
+            _ => None,
+        }) && m.snuff_cooldown == 0
+            && self.player.candle.is_lit()
+            && !self.player.vigil
+            && self.floor.in_sight(m.pos)
+            && m.pos.chebyshev(self.player.pos) <= range
+        {
+            self.player.candle.snuff();
+            self.floor.monsters[id].snuff_cooldown = cooldown;
+            events.push(Event::CandleSnuffedBy { kind });
+            self.witness(kind, Trait::Snuffs { range, cooldown });
+            self.wake_leavings(crate::leavings::Wake::EnteringDarkness, events);
+        }
+
         if m.chanting {
             let monster = &mut self.floor.monsters[id];
             monster.chanting = false;
@@ -100,6 +119,23 @@ impl World {
                             events.push(Event::Summoned { kind, into });
                             self.witness(kind, t);
                         }
+                        return true;
+                    }
+                }
+                Trait::Doubles { cooldown, max } if sees && self.floor.is_visible(m.pos) => {
+                    let copies = self
+                        .floor
+                        .monsters()
+                        .filter(|(_, o)| o.kind == kind && o.phantom)
+                        .count();
+                    if copies >= max as usize {
+                        continue;
+                    }
+                    if let Some(at) = self.free_beside(m.pos) {
+                        self.spawn_phantom_at(kind, at);
+                        self.floor.monsters[id].ability_cooldown = cooldown;
+                        events.push(Event::Doubled { kind });
+                        self.witness(kind, t);
                         return true;
                     }
                 }
@@ -190,6 +226,11 @@ impl World {
                     self.player.blind_until =
                         Some(self.player.blind_until.map_or(until, |u| u.max(until)));
                     events.push(Event::Blinded { kind });
+                    self.witness(kind, t);
+                }
+                Trait::Feeds { dread } => {
+                    self.shift_dread(dread as i32 * 100, events);
+                    events.push(Event::FedOnFear { kind, dread });
                     self.witness(kind, t);
                 }
                 Trait::Drags => {

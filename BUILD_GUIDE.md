@@ -131,7 +131,7 @@ Two linked resources, both always on screen.
 |---|---|---|
 | Calm | 0–39 | Normal. Rites at 1.0× potency. |
 | Uneasy | 40–69 | Whispers in the log, false sounds. Rites at 1.25×. |
-| Frayed | 70–99 | Hallucinated creatures (harmless, detectable with Look). Rites at 1.5×. |
+| Frayed | 70–99 | Phantoms (detectable with Look) that bite when they reach you, and **Nightmares** (M14): real things that come for you. Rites at 1.5×. |
 | **Manifestation** | 100 | Your nightmare takes form as a strong hunter near you. Kill it or escape the floor. Dread resets to 50. Never an instant death. |
 
 **Dread is power (M12).** Rites are paid for in dread, so it is something you gather, hold and spend, and the more you hold the stronger your rites. Holding a lot is a gamble: whispers, then phantoms, then at 100 the Manifestation.
@@ -140,8 +140,9 @@ Two linked resources, both always on screen.
 **Lowers dread:** casting rites (the cost), **offering it to a lit brazier** (walk into one: 3 dread mends 1 health, only as much as your wounds need), Steadying tinctures, Transference, killing or escaping your Manifestation (dread settles at 50).
 
 - **Whispers** (Uneasy and up) are flavor only, in violet. They never hint at real threats.
-- **Phantoms** (Frayed) take the shape of creatures you've met. They hunt you, never attack, and come apart when they reach you or are struck. Look says plainly that they aren't there; they also shimmer very slightly.
-- **The Manifestation** (`M`, 18 health, a little faster than you) always knows where you are. While it lives, dread stays at 100.
+- **Phantoms** (Frayed) take the shape of creatures you've met. They hunt you and come apart when they reach you or are struck. **They bite** (M14): one that reaches you costs 1–2 health or +5 dread (even odds), but never your last health. Look says plainly that they aren't there and what they can do; they also shimmer very slightly.
+- **Nightmares** (M14): every 50 turns spent frayed or worse, a Nightmare is announced in the log, and 5 turns later it arrives out of sight, hunting you. At most 2 at once; none while your Manifestation walks, and none in the church. Calm down before it arrives (below 70) and it turns away; fall to calm (below 40) and any on the floor come apart. They are made of your fear: they always know where you are, open shut doors (a Seal holds them), feed your dread with every blow, and leave grave-wax when killed. By depth: the **mare** (`N`, floors 1–5, 10 health, fast, +5 dread a hit), the **lidless thing** (`L`, 5–8, 14 health, blinds), the **pale weight** (`W`, 9–12, 22 health, a marked heavy blow 9–12).
+- **The Manifestation** (`M`, 18 health, a little faster than you) always knows where you are. While it lives, dread stays at 100. **It is worse** (M14): coming within 2 it puts your candle out (then not for 12 of its actions, so you can relight), it sends a false copy of itself at you (one at a time; the copy bites like any phantom), and each time it comes back in a run it has grown: +6 health, +5 accuracy and +1 damage per earlier Manifestation.
 - **Rest** (`R`) waits until healed. It stops for anything that happens and won't start with company in view.
 
 The key tension: **travel in the dark, fight in the light.** The dark saves tallow and gathers the dread rites are bought with, but in it you strike worse and they strike harder. Light lets you fight, but it is seen from afar and draws things to you.
@@ -390,6 +391,7 @@ Target for v1: ~30 types. Each has one clear trick.
 | Rot Court | Fly Herald | Swarm | Summons swarms in darkness |
 | Rot Court | Courtier | Dreaming | Possesses corpses |
 | Rot Court | Mother of Maggots | Swarm | Turns corpses into spawn |
+| Any | Mare, lidless thing, pale weight | Dreaming | Nightmares: come for the frayed, come apart when you're calm (§4) |
 
 Every attack that hits for more than ~30% of your health must be telegraphed one turn ahead.
 
@@ -602,9 +604,13 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 
 | M13 ✅ | Limits | Cast a rite and be refused until it recharges; learn a third rite at level 1 and choose one to forget; study a body and be refused rendering it; be refused a third Leaving; push through the Following and flare it back | 2–3 h |
 
+| M14 ✅ | Dread bites | Stay frayed and see a Nightmare announced, arrive and hunt you, then calm down and watch it come apart; let a phantom reach you and feel it; meet the Manifestation and have it put your candle out and double itself | 2–3 h |
+
 **As built (M12), sim over 500 seeds** (the bot now walks dark below 150 tallow, lights up to fight, hunts and renders while under 350): 108 wins, the candle ran dry 4 times, 1.3 Manifestations per run, 0 softlocks. The bot sees every creature on the floor, so it hunts better than a person can; treat its numbers as an upper bound.
 
 **As built (M13), sim over 500 seeds:** 113 wins, the candle ran dry 8 times, 1.31 Manifestations per run, 6 deaths on the ascent (12 before), 0 softlocks. The bot casts no rites, so recharge and slots don't show in its numbers.
+
+**As built (M14), sim over 500 seeds** (the bot now also keeps its candle lit past 60 dread, as a player would to stop the dread climbing): 35 wins, the candle ran dry 61 times, 0.92 Manifestations per run, 0 softlocks. Killed by: Manifestation 122, lantern-eater 108, lidless thing 34, Sexton 34. The bot has no way to spend dread (it casts no rites), so it stays frayed far longer than a player would; at first, before it learned to light up, it won 1 run in 500. The Manifestation first snuffed every action and doubled twice; that killed in two of every three meetings (185 deaths), so it now snuffs once per 12 actions and sends one copy.
 
 Total: roughly 40–55 hours of build + playtest time.
 

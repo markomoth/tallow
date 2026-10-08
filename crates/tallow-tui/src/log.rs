@@ -164,9 +164,54 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             ),
             Dread,
         ),
-        Event::Manifested => (
-            "Your dread takes a shape. Something wearing your face is coming.".into(),
+        Event::Manifested { grown } => (
+            if grown == 0 {
+                "Your dread takes a shape. Something wearing your face is coming.".into()
+            } else {
+                "Your dread takes a shape again. It has learned more of you: it is stronger than last time.".into()
+            },
             Danger,
+        ),
+        Event::NightmareComing => (
+            "Your fear has been heard. Something is coming for you. Calm yourself (spend your dread) and it may not.".into(),
+            Danger,
+        ),
+        Event::NightmareArrives { kind } => (
+            format!("A {} has come for you. It knows where you are.", name(kind)),
+            Danger,
+        ),
+        Event::NightmareTurnedAway => (
+            "Your breathing slows. Whatever was coming turns away.".into(),
+            Good,
+        ),
+        Event::NightmareFades { kind } => (
+            format!("You are calm. The {} comes apart like smoke.", name(kind)),
+            Good,
+        ),
+        Event::PhantomBit { kind, damage } => (
+            match damage {
+                Some(damage) => format!(
+                    "The {} reaches you and comes apart, but its teeth were real enough ({damage}).",
+                    name(kind)
+                ),
+                None => format!(
+                    "The {} reaches you and comes apart. Your heart hammers (+5 dread).",
+                    name(kind)
+                ),
+            },
+            Dread,
+        ),
+        Event::FedOnFear { kind, dread } => (
+            format!("The {}'s touch is cold. Your fear grows (+{dread} dread).", name(kind)),
+            Dread,
+        ),
+        Event::CandleSnuffedBy { kind } => (
+            format!("The {} comes close, and your candle goes out.", name(kind)),
+            Danger,
+        ),
+        Event::Doubled { kind } => (
+            format!("There are two of the {} now. One of them isn't there.", name(kind)),
+            Dread,
         ),
         Event::ManifestationBanished => (
             "The thing with your face is gone. You can breathe.".into(),

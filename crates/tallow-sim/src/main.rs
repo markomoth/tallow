@@ -6,7 +6,7 @@
 
 use tallow_core::map::path;
 use tallow_core::{
-    Command, Direction, Event, ItemClass, MAX_DEPTH, Map, Phase, Point, Stage, Tile, World,
+    Cause, Command, Direction, Event, ItemClass, MAX_DEPTH, Map, Phase, Point, Stage, Tile, World,
 };
 
 /// A run that takes this many commands without ending is stuck.
@@ -28,6 +28,8 @@ struct Report {
     candles: u32,
     burned_out: u32,
     manifested: u32,
+    /// What ended the runs that died, by creature (or cause).
+    killers: std::collections::BTreeMap<String, u32>,
 }
 
 fn main() {
@@ -170,7 +172,7 @@ fn play(seed: u64, report: &mut Report) {
         for event in events {
             match event {
                 Event::CandleBurnedOut => report.burned_out += 1,
-                Event::Manifested => report.manifested += 1,
+                Event::Manifested { .. } => report.manifested += 1,
                 Event::BossDefeated { .. } => report.bosses += 1,
                 Event::LordFalls => report.lords += 1,
                 Event::VigilTaken => report.candles += 1,
@@ -192,10 +194,20 @@ fn play(seed: u64, report: &mut Report) {
     report.turns += world.turn();
     report.levels += world.player().level;
     match (world.death(), world.victory()) {
-        (Some(death), _) if death.ascent > 0 => {
-            report.deaths_on_ascent[usize::from(death.ascent)] += 1;
+        (Some(death), _) => {
+            if death.ascent > 0 {
+                report.deaths_on_ascent[usize::from(death.ascent)] += 1;
+            } else {
+                report.deaths_by_floor[usize::from(death.depth)] += 1;
+            }
+            let killer = match death.cause {
+                Cause::Attack(kind) | Cause::HeavyBlow(kind) | Cause::Chant(kind) => {
+                    world.content().monster(kind).id.clone()
+                }
+                other => format!("{other:?}").to_lowercase(),
+            };
+            *report.killers.entry(killer).or_default() += 1;
         }
-        (Some(death), _) => report.deaths_by_floor[usize::from(death.depth)] += 1,
         (None, Some(_)) => report.wins += 1,
         (None, None) => report.softlocks.push((
             seed,
@@ -238,6 +250,17 @@ fn print(r: &Report, structural: &[String]) {
     for (floor, &count) in r.deaths_on_ascent.iter().enumerate().skip(1) {
         println!("died on ascent {floor}: {count:>4}");
     }
+    let mut killers: Vec<_> = r.killers.iter().collect();
+    killers.sort_by_key(|&(name, &count)| (std::cmp::Reverse(count), name.clone()));
+    println!(
+        "killed by: {}",
+        killers
+            .iter()
+            .take(8)
+            .map(|(name, count)| format!("{name} {count}"))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    );
     println!("softlocks: {}", r.softlocks.len());
     for (seed, what) in r.softlocks.iter().take(10) {
         println!("  seed {seed}: {what}");
@@ -250,6 +273,8 @@ fn print(r: &Report, structural: &[String]) {
 
 /// Below this much tallow the bot walks in the dark when nothing is near.
 const SNUFF_BELOW: u32 = 150;
+/// It lights up past this much dread, before nightmares come for it.
+const FEAR_LIGHT: u32 = 60;
 /// It goes out of its way for bodies to render while it has less than this.
 const RENDER_BELOW: u32 = 350;
 /// Creatures within this many tiles, in line of sight, make it light up.
@@ -311,7 +336,10 @@ fn choose(world: &World) -> Command {
     let tallow = player.candle.tallow();
     let lit = player.candle.is_lit();
     if !player.vigil && tallow > 0 {
-        let want_lit = danger || hostile_beside.is_some() || tallow >= SNUFF_BELOW;
+        let want_lit = danger
+            || hostile_beside.is_some()
+            || tallow >= SNUFF_BELOW
+            || player.dread.value() >= FEAR_LIGHT;
         if want_lit != lit {
             return Command::ToggleCandle;
         }

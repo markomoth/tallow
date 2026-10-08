@@ -55,12 +55,7 @@ impl World {
             // Phantoms come for you and come apart before they touch you.
             if m.pos.chebyshev(player) <= 1 {
                 self.floor.monsters.remove(id);
-                if self.floor.is_visible(m.pos) {
-                    events.push(Event::PhantomFaded {
-                        kind,
-                        struck: false,
-                    });
-                }
+                self.phantom_bite(kind, events);
             } else {
                 self.step_toward(id, player);
             }
@@ -418,7 +413,7 @@ impl World {
     fn monster_attack(&mut self, id: MonsterId, events: &mut Vec<Event>) {
         let (kind, at) = (self.floor.monsters[id].kind, self.floor.monsters[id].pos);
         let def = self.content.monster(kind);
-        let (accuracy, damage) = self.monster_strength(kind, at);
+        let (accuracy, damage) = self.monster_strength(&self.floor.monsters[id]);
         let chance = combat::hit_chance(accuracy, self.player_defense());
         let damage = combat::roll_attack(&mut self.combat_rng, chance, damage);
         if self.in_the_dark(at) {
@@ -475,7 +470,7 @@ impl World {
             && (tile != Tile::DeepWater || heedless || def.has(|t| *t == Trait::Swims))
             && (tile != Tile::DoorClosed
                 || def.faction.opens_doors()
-                || def.has(|t| *t == Trait::Gnaws))
+                || def.has(|t| matches!(t, Trait::Gnaws | Trait::Nightmare)))
             && (heedless || !self.floor.is_burning(p))
             && (heedless || def.faction != Faction::Swarm || !near_fire())
             && !(def.has(|t| *t == Trait::ShunsLight) && self.floor.ambient_light(p).is_lit())

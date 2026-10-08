@@ -97,6 +97,15 @@ pub enum Trait {
     Gnaws,
     /// Can't be killed. Only slowed.
     Undying,
+    /// Made of your fear: comes when you're frayed, comes apart when you're calm.
+    Nightmare,
+    /// Each blow it lands adds this much dread.
+    Feeds { dread: u32 },
+    /// Puts out your candle when it's this close and can see you, then not
+    /// again for `cooldown` of its actions.
+    Snuffs { range: i32, cooldown: u32 },
+    /// Sends false copies of itself at you, up to `max` at a time.
+    Doubles { cooldown: u32, max: u32 },
 }
 
 #[derive(Debug, Clone, Deserialize)]

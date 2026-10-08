@@ -106,7 +106,40 @@ pub enum Event {
         struck: bool,
     },
     /// Dread took form near the player.
-    Manifested,
+    /// Your dread takes form. `grown`: how many times it has come before.
+    Manifested {
+        grown: u32,
+    },
+    /// Something made of your fear is on its way. It arrives in a few turns
+    /// unless you calm down.
+    NightmareComing,
+    NightmareArrives {
+        kind: KindId,
+    },
+    /// You calmed before it came.
+    NightmareTurnedAway,
+    /// You are calm: it comes apart.
+    NightmareFades {
+        kind: KindId,
+    },
+    /// A phantom reached you. Not real, but fear hurts: health, or more dread.
+    PhantomBit {
+        kind: KindId,
+        damage: Option<u32>,
+    },
+    /// A blow that feeds your dread.
+    FedOnFear {
+        kind: KindId,
+        dread: u32,
+    },
+    /// It came close and your candle went out.
+    CandleSnuffedBy {
+        kind: KindId,
+    },
+    /// It sent a false copy of itself.
+    Doubled {
+        kind: KindId,
+    },
     /// The Manifestation was killed. Dread eases.
     ManifestationBanished,
     /// The player left the floor with the Manifestation still on it. Dread eases.

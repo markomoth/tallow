@@ -64,6 +64,10 @@ pub struct Monster {
     pub(crate) gnawed: u32,
     /// Actions it loses outright, dazed.
     pub stunned: u32,
+    /// Stronger than its kind: +6 health, +5 accuracy and +1 damage a step.
+    pub grown: u32,
+    /// Actions until it can put out your candle again.
+    pub(crate) snuff_cooldown: u32,
 }
 
 impl Monster {
@@ -93,6 +97,8 @@ impl Monster {
             ability_cooldown: 0,
             gnawed: 0,
             stunned: 0,
+            grown: 0,
+            snuff_cooldown: 0,
         }
     }
 }

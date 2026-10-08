@@ -20,6 +20,7 @@ cargo run -p tallow-core --example route -- <seed> <depth> <x> <y> <stop>   # vi
 cargo run -- --seed 54 --dev-depth 4 --dev-rites --dev-kit   # testing aids: start deeper, know every rite, past the slot limit (with 60 dread to pay for them), flasks + handbell
 cargo run -- --seed 261 --dev-depth 3 --dev-level 6 --dev-near-stairs   # stand near a floor's boss, levelled up
 cargo run -- --seed 5 --dev-ascent 1      # start on ascent floor 1 (5 = the church) with the Vigil Candle
+cargo run -- --seed 54 --dev-dread 75     # start frayed: a Nightmare is announced after 50 turns
 SHOW_SCREEN=1 cargo test -p tallow-tui -- --nocapture   # print rendered test screens
 ```
 

@@ -370,7 +370,7 @@ fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
             Span::styled(capitalize(&def.name), text().add_modifier(Modifier::BOLD)),
         ]));
         lines.push(Line::styled(
-            "It casts no shadow in your light. It isn't really there.",
+            "It casts no shadow in your light. It isn't really there, but if it reaches you your fear will make it hurt (1–2, or +5 dread).",
             Style::new().fg(palette::DREAD),
         ));
     } else if let Some(info) = monster {
@@ -682,6 +682,14 @@ fn trait_line(t: &Trait) -> String {
         Trait::Unholy => "can't set foot on holy ground.".into(),
         Trait::Gnaws => "chews through shut doors, slowly.".into(),
         Trait::Undying => "cannot be killed.".into(),
+        Trait::Nightmare => "made of your fear: it comes apart when you're calm.".into(),
+        Trait::Feeds { dread } => format!("each blow it lands adds {dread} dread."),
+        Trait::Snuffs { range, cooldown } => format!(
+            "puts out your candle when it comes within {range} tiles; not again for {cooldown} of its actions."
+        ),
+        Trait::Doubles { max, .. } => {
+            format!("sends false copies of itself at you, up to {max} at a time.")
+        }
     }
 }
 
@@ -691,7 +699,7 @@ fn tile_line(tile: Tile) -> &'static str {
         Tile::Wall => "Old stone, sweating in the cold.",
         Tile::Door => "An open door. Wood: it burns. C closes doors beside you.",
         Tile::DoorClosed => {
-            "A shut door. Walk into it to open it. The Taken and the Remnant can open doors; nightmares and vermin can't."
+            "A shut door. Walk into it to open it. The Taken and the Remnant can open doors; the Dreaming and vermin can't (but Nightmares made of your fear can)."
         }
         Tile::DoorSealed => "A door held shut by your Seal. Only you can open it.",
         Tile::ColdBrazier => {
