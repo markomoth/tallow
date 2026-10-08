@@ -42,7 +42,13 @@ Every decision in Tallow comes back to one question: **light the candle, or don'
 
 ## ▶️ Play
 
-You'll need [Rust](https://rustup.rs) and a truecolor terminal that's at least **100×30**.
+### 📦 Download
+
+Grab the latest build for Linux, Windows or macOS from **[Releases](https://github.com/markomoth/tallow/releases/latest)**, unpack it, and run `tallow` in a terminal that's at least **100×30**. The release page explains the one-time "unverified app" warning on macOS and Windows.
+
+### 🦀 Or build it yourself
+
+You'll need [Rust](https://rustup.rs):
 
 ```sh
 cargo run --release

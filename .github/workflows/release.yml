@@ -1,0 +1,87 @@
+# Builds Tallow for Linux, Windows and macOS and attaches the binaries to a
+# GitHub Release. Runs when a version tag is pushed:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - name: linux-x86_64-static
+            target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - name: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - name: macos-arm64
+            target: aarch64-apple-darwin
+            os: macos-latest
+          - name: macos-x86_64
+            target: x86_64-apple-darwin
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked -p tallow-tui --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          dir="tallow-${GITHUB_REF_NAME}-${{ matrix.name }}"
+          mkdir "$dir"
+          cp README.md "$dir/"
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            cp "target/${{ matrix.target }}/release/tallow.exe" "$dir/"
+            7z a "$dir.zip" "$dir" > /dev/null
+          else
+            cp "target/${{ matrix.target }}/release/tallow" "$dir/"
+            tar czf "$dir.tar.gz" "$dir"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: tallow-*.*z*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: .github/release-notes.md
+          generate_release_notes: true
