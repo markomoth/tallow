@@ -56,7 +56,11 @@ fn pursuit(world: &World) -> Line<'static> {
     use tallow_core::Phase;
     if world.following_present() {
         return Line::styled(
-            "The Following is here",
+            if world.can_flare() {
+                "The Following is here · F flares"
+            } else {
+                "The Following is here"
+            },
             Style::new()
                 .fg(palette::DANGER)
                 .add_modifier(Modifier::BOLD),
@@ -178,6 +182,7 @@ impl Widget for Hud<'_> {
             | Mode::Journal(_)
             | Mode::Pack { .. }
             | Mode::Draft
+            | Mode::Forget
             | Mode::Sheet
             | Mode::Corpse
             | Mode::Rites

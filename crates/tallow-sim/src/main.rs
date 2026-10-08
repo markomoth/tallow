@@ -165,7 +165,8 @@ fn play(seed: u64, report: &mut Report) {
             command = Command::Wait;
         }
         let events = world.apply(command);
-        stalled = world.turn() == before && !matches!(command, Command::ChooseBoon(_));
+        stalled = world.turn() == before
+            && !matches!(command, Command::ChooseBoon(_) | Command::MakeRoom(_));
         for event in events {
             match event {
                 Event::CandleBurnedOut => report.burned_out += 1,
@@ -260,6 +261,9 @@ const DANGER_NEAR: i32 = 7;
 fn choose(world: &World) -> Command {
     if world.pending_draft().is_some() {
         return Command::ChooseBoon(0);
+    }
+    if world.pending_rite().is_some() {
+        return Command::MakeRoom(world.known_rites().first().copied());
     }
     let here = world.player().pos;
     let floor = world.floor();

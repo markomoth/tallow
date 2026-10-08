@@ -581,7 +581,7 @@
         glyph: 'X',
         color: (150, 110, 170),
         faction: Swarm,
-        description: "What is left of his swarm, following the candle up. It cannot be killed. Shut doors make it chew; holy ground and brazier light turn it aside.",
+        description: "What is left of his swarm, following the candle up. It cannot be killed. Shut doors make it chew; holy ground and brazier light turn it aside; Kneel holds it a moment. Walk into it to force your way past (it tears at you), or flare the candle (F) once a floor to drive it back.",
         health: 999,
         speed: 10,
         accuracy: 70,

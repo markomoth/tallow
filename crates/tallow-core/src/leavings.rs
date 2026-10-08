@@ -152,6 +152,8 @@ pub struct Leaving {
 const HEAVY_WEIGHT: u32 = 80;
 /// Turns between uses of a Leaving you wake by hand.
 pub const USE_COOLDOWN: u64 = 15;
+/// Leavings you can carry at once (a boon adds one).
+pub const LEAVING_SLOTS: usize = 2;
 
 impl Leaving {
     pub fn tier(&self) -> Tier {
@@ -327,6 +329,11 @@ impl World {
             .sum()
     }
 
+    /// How many Leavings you can carry at once.
+    pub fn leaving_slots(&self) -> usize {
+        LEAVING_SLOTS + usize::from(self.has_passive(crate::boons::Passive::Reliquary))
+    }
+
     /// Picks up any Leavings underfoot. The first one ever comes with a warning.
     pub(crate) fn take_leavings(&mut self, events: &mut Vec<Event>) {
         let here = self.player.pos;
@@ -339,6 +346,11 @@ impl World {
             .collect();
         self.floor.leavings.retain(|&(at, _)| at != here);
         for id in found {
+            if self.player.leavings.len() >= self.leaving_slots() {
+                self.floor.leavings.push((here, id));
+                events.push(Event::LeavingsFull { id });
+                continue;
+            }
             let first = !self.stats.took_leaving;
             self.stats.took_leaving = true;
             self.player.leavings.push(id);
@@ -797,6 +809,26 @@ mod tests {
         let id = world.place_leaving(world.player().pos, l);
         let events = world.apply(Command::PickUp);
         assert!(events.contains(&Event::LeavingTaken { id, first: true }));
+    }
+
+    #[test]
+    fn you_carry_two_leavings_at_most() {
+        let mut world = hall();
+        let mild = || leaving(Wake::OnUse, Marvel::Reveal, Price::Dread { amount: 4 });
+        carry(&mut world, mild());
+        carry(&mut world, mild());
+        let third = world.place_leaving(world.player().pos, mild());
+        let events = world.apply(Command::PickUp);
+        assert!(events.contains(&Event::LeavingsFull { id: third }));
+        assert_eq!(world.carried_leavings().len(), LEAVING_SLOTS);
+        world.player.boons.push(crate::boons::Boon::Passive(
+            crate::boons::Passive::Reliquary,
+        ));
+        world.apply(Command::PickUp);
+        assert!(
+            world.carried_leavings().contains(&third),
+            "a reliquary holds a third"
+        );
     }
 
     #[test]

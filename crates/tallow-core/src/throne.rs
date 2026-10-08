@@ -26,6 +26,14 @@ const THRONE_BODIES: usize = 5;
 /// Turns a shut door holds the Following; a sealed one holds longer.
 pub const GNAW_DOOR: u32 = 3;
 pub const GNAW_SEAL: u32 = 8;
+/// Forcing your way past the Following: it tears at you, and the fear stays.
+pub const PUSH_DAMAGE: (u32, u32) = (6, 9);
+pub const PUSH_DREAD: u32 = 15;
+/// Once per ascent floor the Vigil Candle flares: the Following within this
+/// reach is driven this many steps farther off and loses this many actions.
+pub const FLARE_REACH: i32 = 8;
+pub const FLARE_DRIVE: u32 = 6;
+pub const FLARE_STUN: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Phase {
@@ -161,6 +169,86 @@ impl World {
     pub fn following_present(&self) -> bool {
         let kind = self.content.kind_by_id("the_following");
         self.floor.monsters().any(|(_, m)| Some(m.kind) == kind)
+    }
+
+    /// The Vigil Candle can still flare on this floor.
+    pub fn can_flare(&self) -> bool {
+        self.player.vigil && !self.flared
+    }
+
+    /// Walking into the Following: the first time warns, the second pushes
+    /// you through to the far side of it at a price.
+    pub(crate) fn push_through(&mut self, id: MonsterId) -> Vec<Event> {
+        let at = self.floor.monsters[id].pos;
+        if self.fire_ok != Some(at) {
+            self.fire_warned = Some(at);
+            return vec![Event::PushThroughAhead { at }];
+        }
+        let kind = self.floor.monsters[id].kind;
+        self.floor.monsters[id].pos = self.player.pos;
+        self.player.pos = at;
+        let damage = crate::combat::roll_damage(&mut self.combat_rng, PUSH_DAMAGE);
+        let mut events = vec![
+            Event::PlayerMoved { to: at },
+            Event::PushedThrough { kind, damage },
+        ];
+        self.shift_dread(PUSH_DREAD as i32 * 100, &mut events);
+        self.hurt_player(damage, crate::events::Cause::Attack(kind), &mut events);
+        if self.death.is_none() {
+            self.pass_time(&mut events);
+        }
+        events
+    }
+
+    /// The Vigil Candle flares: the Following is driven back and stunned.
+    pub(crate) fn flare(&mut self) -> Vec<Event> {
+        if !self.player.vigil {
+            return Vec::new();
+        }
+        if self.flared {
+            return vec![Event::FlareSpent];
+        }
+        let here = self.player.pos;
+        let Some(id) = self
+            .floor
+            .monsters()
+            .find(|(_, m)| {
+                Some(m.kind) == self.content.kind_by_id("the_following")
+                    && m.pos.chebyshev(here) <= FLARE_REACH
+            })
+            .map(|(id, _)| id)
+        else {
+            return vec![Event::NothingToFlare];
+        };
+        self.flared = true;
+        let from = self.floor.monsters[id].pos;
+        let dist = crate::map::path::distances(self.map(), here);
+        let now = dist.at(from).unwrap_or(0);
+        let open = |p: Point| {
+            p != here
+                && self.map().is_walkable(p)
+                && (self.floor.monster_at(p).is_none() || p == from)
+        };
+        let spots: Vec<(u32, Point)> = self
+            .map()
+            .points()
+            .filter(|&p| open(p))
+            .filter_map(|p| dist.at(p).map(|d| (d, p)))
+            .collect();
+        // The nearest tile to it that is far enough back, else the farthest.
+        let to = spots
+            .iter()
+            .filter(|&&(d, _)| d >= now + FLARE_DRIVE)
+            .min_by_key(|&&(_, p)| (p.chebyshev(from), p.y, p.x))
+            .or_else(|| spots.iter().max_by_key(|&&(d, p)| (d, p.y, p.x)))
+            .map_or(from, |&(_, p)| p);
+        let m = &mut self.floor.monsters[id];
+        m.pos = to;
+        m.stunned = m.stunned.max(FLARE_STUN);
+        m.winding_up = None;
+        let mut events = vec![Event::Flared { kind: m.kind }];
+        self.pass_time(&mut events);
+        events
     }
 
     fn kind(&self, id: &str) -> KindId {
@@ -395,6 +483,7 @@ impl World {
             self.player.pos = self.floor.arrival();
             let delay = FOLLOWING_DELAY[usize::from(self.ascent - 1)];
             self.following_at = Some(self.turn() + delay);
+            self.flared = false;
             events.push(Event::Ascended { floor: self.ascent });
         }
         self.pass_time(&mut events);
@@ -456,7 +545,7 @@ impl World {
             turn: self.turn(),
             exorcised: self.stats.exorcised,
             dread: self.player.dread.value(),
-            rites: self.player.rites.len() as u32,
+            rites: self.stats.rites_learned,
             level: self.player.level,
         });
         vec![Event::Won]
@@ -663,6 +752,79 @@ mod tests {
         world.damage_monster(id, 500, crate::progress::Source::Rite, &mut events);
         assert!(world.floor().monster(id).is_some());
         assert!(events.iter().any(|e| matches!(e, Event::Undying { .. })));
+    }
+
+    /// A corridor with the Vigil Candle in hand and the Following beside you.
+    fn cornered() -> (World, MonsterId) {
+        let mut world = at_the_throne();
+        let (map, start) =
+            crate::map::prefab::parse("################\n#@.............#\n################")
+                .unwrap();
+        world.floor = crate::floor::Floor::new(map, start);
+        world.player.pos = start;
+        world.player.vigil = true;
+        world.player.health = 30;
+        world.player.max_health = 30;
+        let k = kind(&world, "the_following");
+        let id = world.spawn_monster(k, start + Direction::E);
+        (world, id)
+    }
+
+    #[test]
+    fn you_can_force_your_way_past_the_following() {
+        let (mut world, id) = cornered();
+        let from = world.player().pos;
+        let at = world.floor().monster(id).unwrap().pos;
+        let warned = world.apply(Command::Move(Direction::E));
+        assert_eq!(warned, vec![Event::PushThroughAhead { at }]);
+        assert_eq!(world.turn(), 0, "the warning is free");
+        let dread = world.player().dread.value();
+        let events = world.apply(Command::Move(Direction::E));
+        let damage = events
+            .iter()
+            .find_map(|e| match e {
+                Event::PushedThrough { damage, .. } => Some(*damage),
+                _ => None,
+            })
+            .expect("pushed through");
+        assert!((PUSH_DAMAGE.0..=PUSH_DAMAGE.1).contains(&damage));
+        assert_eq!(world.player().pos, at);
+        assert_eq!(world.floor().monster(id).unwrap().pos, from);
+        assert!(world.player().dread.value() >= dread + PUSH_DREAD);
+    }
+
+    #[test]
+    fn the_candle_flares_once_a_floor() {
+        let (mut world, id) = cornered();
+        let events = world.apply(Command::Flare);
+        assert!(events.contains(&Event::Flared {
+            kind: kind(&world, "the_following")
+        }));
+        let m = world.floor().monster(id).unwrap();
+        assert!(m.pos.x - world.player().pos.x >= FLARE_DRIVE as i32);
+        let away = m.pos;
+        for _ in 0..FLARE_STUN - 1 {
+            world.apply(Command::Wait);
+        }
+        assert_eq!(world.floor().monster(id).unwrap().pos, away, "reeling");
+        assert_eq!(world.apply(Command::Flare), vec![Event::FlareSpent]);
+    }
+
+    #[test]
+    fn kneel_holds_even_the_following() {
+        let (mut world, id) = cornered();
+        let kneel = world.content().rite_by_id("kneel").unwrap();
+        world.teach_rite(kneel);
+        world.player.dread.set(30);
+        let at = world.floor().monster(id).unwrap().pos;
+        // Step back: it can't follow for two of its actions.
+        world.floor.monsters[id].pos = at + Direction::E;
+        world.apply(Command::Cast {
+            rite: kneel,
+            target: at + Direction::E,
+        });
+        world.apply(Command::Wait);
+        assert_eq!(world.floor().monster(id).unwrap().pos, at + Direction::E);
     }
 
     #[test]

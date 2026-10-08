@@ -115,8 +115,10 @@ pub struct RiteDef {
     pub name: String,
     pub school: School,
     pub description: String,
-    /// Dread added when cast.
+    /// Dread spent when cast.
     pub cost: u32,
+    /// Turns before it can be cast again.
+    pub recharge: u32,
     pub range: i32,
     pub effect: RiteEffect,
 }
@@ -143,6 +145,8 @@ pub enum RiteFailure {
     NotDreaming,
     /// Rites are paid in dread, and you haven't enough.
     NotEnoughDread,
+    /// Cast too recently; it isn't ready yet.
+    Recharging,
 }
 
 /// A decoy light from False Flame.
@@ -172,12 +176,18 @@ pub struct Rites {
 
 /// Insight for learning a rite.
 pub const INSIGHT_RITE: u32 = 10;
+/// Rites you can hold at first...
+pub const RITE_SLOTS: usize = 2;
+/// ...and one more at each of these levels.
+pub const RITE_SLOT_LEVELS: [u32; 3] = [4, 7, 10];
 /// Insight for reading a text that has nothing new.
 pub const INSIGHT_OLD_TEXT: u32 = 6;
 /// Insight for freeing one of the Taken.
 pub const INSIGHT_EXORCISM: u32 = 10;
 /// Bosses resist Binding: its durations are divided by this.
 const BOSS_RESISTANCE: u32 = 3;
+/// Kneel holds even the Following this many actions.
+const UNDYING_KNEEL: u32 = 2;
 /// Banish sends a creature at least this many steps from you.
 const BANISH_DISTANCE: u32 = 25;
 
@@ -198,13 +208,65 @@ impl World {
         events
     }
 
+    /// How many rites you can hold at once.
+    pub fn rite_slots(&self) -> usize {
+        RITE_SLOTS
+            + RITE_SLOT_LEVELS
+                .iter()
+                .filter(|&&l| self.player.level >= l)
+                .count()
+    }
+
+    /// Learns a rite, or, with no room left, offers it: the acolyte must
+    /// forget one to make room or let it go.
     pub(crate) fn learn_rite(&mut self, rite: RiteId, events: &mut Vec<Event>) {
-        if self.knows(rite) {
+        if self.knows(rite) || self.offered_rites.contains(&rite) {
+            return;
+        }
+        if self.player.rites.len() >= self.rite_slots() {
+            self.offered_rites.push_back(rite);
+            events.push(Event::RiteOffered { rite });
             return;
         }
         self.player.rites.push(rite);
+        self.stats.rites_learned += 1;
         events.push(Event::RiteLearned { rite });
         self.gain_insight(INSIGHT_RITE, events);
+    }
+
+    /// A rite waiting for room, if you learned one with every slot full.
+    pub fn pending_rite(&self) -> Option<RiteId> {
+        self.offered_rites.front().copied()
+    }
+
+    /// Settles the waiting rite: forget `forget` to make room for it, or with
+    /// `None` let it go. Costs no time.
+    pub(crate) fn make_room(&mut self, forget: Option<RiteId>) -> Vec<Event> {
+        let Some(rite) = self.offered_rites.pop_front() else {
+            return Vec::new();
+        };
+        let mut events = Vec::new();
+        match forget.and_then(|old| self.player.rites.iter().position(|&r| r == old)) {
+            Some(index) => {
+                let old = self.player.rites.remove(index);
+                self.player.rite_ready.remove(&old);
+                events.push(Event::RiteForgotten { rite: old });
+                self.learn_rite(rite, &mut events);
+            }
+            None => {
+                events.push(Event::RiteLetGo { rite });
+                self.gain_insight(INSIGHT_OLD_TEXT, &mut events);
+            }
+        }
+        events
+    }
+
+    /// Turns until a rite can be cast again; 0 when it's ready.
+    pub fn rite_recharge(&self, rite: RiteId) -> u64 {
+        self.player
+            .rite_ready
+            .get(&rite)
+            .map_or(0, |&at| at.saturating_sub(self.turn()))
     }
 
     /// A random rite of `school` you don't know yet, if any remain.
@@ -266,6 +328,9 @@ impl World {
     ) -> Result<Option<MonsterId>, RiteFailure> {
         if !self.knows(rite) {
             return Err(RiteFailure::Unknown);
+        }
+        if self.rite_recharge(rite) > 0 {
+            return Err(RiteFailure::Recharging);
         }
         if self.player.dread.value() < self.rite_cost(rite) {
             return Err(RiteFailure::NotEnoughDread);
@@ -366,8 +431,14 @@ impl World {
                 let id = victim.expect("checked");
                 let boss = self.content.monster(self.floor.monsters[id].kind).boss;
                 let actions = self.potent(rite, actions) / if boss { BOSS_RESISTANCE } else { 1 };
+                // Even what cannot die can be held a moment.
+                let undying = self
+                    .content
+                    .monster(self.floor.monsters[id].kind)
+                    .has(|t| *t == Trait::Undying);
+                let least = if undying { UNDYING_KNEEL } else { 1 };
                 let m = &mut self.floor.monsters[id];
-                m.pinned = m.pinned.max(actions.max(1));
+                m.pinned = m.pinned.max(actions.max(least));
                 events.push(Event::Knelt { kind: m.kind });
                 self.wake(id);
             }
@@ -527,6 +598,8 @@ impl World {
             }
         }
         self.maybe_bind_lord(victim, def.school, def.effect, &mut events);
+        let ready = self.turn() + u64::from(def.recharge);
+        self.player.rite_ready.insert(rite, ready);
         // Rites are paid for in dread: the fear you have gathered, spent.
         self.shift_dread(-(cost as i32) * 100, &mut events);
         self.train(def.school.skill(), cost.max(4), &mut events);
@@ -689,6 +762,69 @@ mod tests {
     }
 
     #[test]
+    fn a_cast_rite_needs_time_to_come_back() {
+        let mut world = hall();
+        let shroud = learn(&mut world, "shroud");
+        let here = world.player().pos;
+        world.apply(Command::Cast {
+            rite: shroud,
+            target: here,
+        });
+        let recharge = u64::from(Content::bundled().rite(shroud).recharge);
+        assert_eq!(world.rite_recharge(shroud), recharge - 1);
+        let turn = world.turn();
+        let events = world.apply(Command::Cast {
+            rite: shroud,
+            target: here,
+        });
+        assert_eq!(
+            events,
+            vec![Event::RiteFailed {
+                rite: shroud,
+                why: RiteFailure::Recharging
+            }]
+        );
+        assert_eq!(world.turn(), turn, "a refusal costs nothing");
+        wait(&mut world, recharge as u32);
+        assert_eq!(world.rite_recharge(shroud), 0);
+        world.apply(Command::Cast {
+            rite: shroud,
+            target: here,
+        });
+        assert!(world.rite_recharge(shroud) > 0, "cast again");
+    }
+
+    #[test]
+    fn a_full_mind_must_forget_to_learn() {
+        let mut world = hall();
+        assert_eq!(world.rite_slots(), RITE_SLOTS);
+        let (a, b, c) = (rite("shroud"), rite("kneel"), rite("hush"));
+        world.teach_rite(a);
+        world.teach_rite(b);
+        let events = world.teach_rite(c);
+        assert_eq!(events, vec![Event::RiteOffered { rite: c }]);
+        assert!(!world.knows(c));
+        assert_eq!(world.pending_rite(), Some(c));
+        // Forget one: the new one takes its place.
+        let events = world.apply(Command::MakeRoom(Some(a)));
+        assert!(events.contains(&Event::RiteForgotten { rite: a }));
+        assert!(events.contains(&Event::RiteLearned { rite: c }));
+        assert_eq!(world.known_rites(), &[b, c]);
+        assert_eq!(world.turn(), 0, "choosing costs no time");
+        // Or let it go.
+        world.teach_rite(a);
+        let events = world.apply(Command::MakeRoom(None));
+        assert!(events.contains(&Event::RiteLetGo { rite: a }));
+        assert_eq!(world.known_rites(), &[b, c]);
+        assert!(world.pending_rite().is_none());
+        // Levels bring room.
+        world.dev_level_to(RITE_SLOT_LEVELS[0]);
+        assert_eq!(world.rite_slots(), RITE_SLOTS + 1);
+        world.teach_rite(a);
+        assert!(world.knows(a));
+    }
+
+    #[test]
     fn dread_makes_rites_stronger() {
         let mut world = hall();
         let leech = learn(&mut world, "leech");
@@ -833,6 +969,7 @@ mod tests {
         assert_eq!(world.player().dread.value(), 60 - 25 + 5);
         assert!(world.floor().monster(id).unwrap().carries_dread);
         let at = world.floor().monster(id).unwrap().pos;
+        world.player.rite_ready.clear();
         if at.chebyshev(world.player().pos) <= 5 {
             assert!(matches!(
                 world.apply(Command::Cast {

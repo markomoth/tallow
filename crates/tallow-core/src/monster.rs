@@ -62,6 +62,8 @@ pub struct Monster {
     pub ability_cooldown: u32,
     /// Actions spent chewing through the door ahead.
     pub(crate) gnawed: u32,
+    /// Actions it loses outright, dazed.
+    pub stunned: u32,
 }
 
 impl Monster {
@@ -90,6 +92,7 @@ impl Monster {
             chanting: false,
             ability_cooldown: 0,
             gnawed: 0,
+            stunned: 0,
         }
     }
 }

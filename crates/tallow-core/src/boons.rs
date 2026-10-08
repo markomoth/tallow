@@ -38,6 +38,8 @@ pub enum Passive {
     QuickMending,
     /// Rites cost a quarter less dread.
     RiteThrift,
+    /// Carry a third Leaving.
+    Reliquary,
 }
 
 impl Passive {
@@ -104,6 +106,8 @@ pub struct DraftContext<'a> {
     pub casts: u32,
     pub studies: u32,
     pub knows_rites: bool,
+    /// Leavings carried now.
+    pub leavings: u32,
 }
 
 const FAMILIES: [Family; 3] = [Family::Blade, Family::Bludgeon, Family::Reach];
@@ -155,6 +159,9 @@ fn candidates(ctx: &DraftContext) -> Vec<(Boon, u32)> {
     }
     if ctx.knows_rites {
         passives.push((Passive::RiteThrift, 5));
+    }
+    if ctx.leavings >= 2 {
+        passives.push((Passive::Reliquary, 5));
     }
 
     let mut triggers: Vec<(Trigger, u32)> = vec![(Trigger::Kill, 5), (Trigger::Descend, 5)];
@@ -243,6 +250,7 @@ mod tests {
             casts: 0,
             studies: 0,
             knows_rites: false,
+            leavings: 0,
         }
     }
 

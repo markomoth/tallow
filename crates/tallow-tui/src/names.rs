@@ -205,7 +205,11 @@ pub fn rite_numbers(world: &World, rite: RiteId) -> String {
             format!("range {}", def.range)
         }
     };
-    format!("costs {} dread · {reach} · {what}", world.rite_cost(rite))
+    format!(
+        "costs {} dread · {reach} · {what} · recharges {} turns",
+        world.rite_cost(rite),
+        def.recharge
+    )
 }
 
 fn family_noun(family: Family) -> &'static str {
@@ -271,6 +275,7 @@ pub fn boon_text(boon: Boon) -> (String, String) {
                 Passive::RiteThrift => {
                     ("Familiar Words", "Rites cost a quarter less dread.".into())
                 }
+                Passive::Reliquary => ("Reliquary", "Carry a third Leaving.".into()),
             };
             (title.into(), text)
         }

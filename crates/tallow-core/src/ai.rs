@@ -37,11 +37,17 @@ const AGGRO_RANGE: i32 = 5;
 
 impl World {
     pub(crate) fn monster_act(&mut self, id: MonsterId, events: &mut Vec<Event>) {
+        self.monster_decide(id, events);
+        // A pin holds for whole actions: it wears off once the action is spent.
+        if let Some(m) = self.floor.monsters.get_mut(id) {
+            m.pinned = m.pinned.saturating_sub(1);
+        }
+    }
+
+    fn monster_decide(&mut self, id: MonsterId, events: &mut Vec<Event>) {
         let content = self.content;
         let m = self.floor.monsters[id].clone();
         let def = content.monster(m.kind);
-        let pinned = &mut self.floor.monsters[id].pinned;
-        *pinned = pinned.saturating_sub(1);
         let kind = m.kind;
         let player = self.player.pos;
 
@@ -63,6 +69,10 @@ impl World {
 
         // Rites wear off one action at a time.
         let monster = &mut self.floor.monsters[id];
+        if monster.stunned > 0 {
+            monster.stunned -= 1;
+            return;
+        }
         monster.unseeing = monster.unseeing.saturating_sub(1);
         monster.terrified = monster.terrified.saturating_sub(1);
         if std::mem::take(&mut monster.flinching) {

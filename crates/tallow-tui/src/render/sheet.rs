@@ -212,7 +212,13 @@ pub fn draw_rites(frame: &mut Frame, area: Rect, world: &World) {
         let def = world.content().rite(rite);
         let letter = (b'a' + i as u8) as char;
         let cost = world.rite_cost(rite);
-        let warn = if dread < cost {
+        let recharge = world.rite_recharge(rite);
+        let warn = if recharge > 0 {
+            Span::styled(
+                format!("  (ready in {recharge} turns)"),
+                Style::new().fg(palette::DANGER),
+            )
+        } else if dread < cost {
             Span::styled(
                 format!("  (needs {cost} dread; gather it in the dark)"),
                 Style::new().fg(palette::DANGER),
@@ -232,8 +238,61 @@ pub fn draw_rites(frame: &mut Frame, area: Rect, world: &World) {
         lines.push(Line::styled(format!("   {}", def.description), dim()));
     }
     lines.push(Line::default());
+    lines.push(Line::styled(
+        format!(
+            "You hold {} of {} rites you have room for. More room comes at levels 4, 7 and 10.",
+            world.known_rites().len(),
+            world.rite_slots()
+        ),
+        dim(),
+    ));
     lines.push(Line::styled("letter: cast · Esc: close", dim()));
     popup(frame, area, "Rites", lines, 72);
+}
+
+/// A rite learned with no room for it: forget one, or let it go.
+pub fn draw_forget(frame: &mut Frame, area: Rect, world: &World) {
+    let Some(offered) = world.pending_rite() else {
+        return;
+    };
+    let new = world.content().rite(offered);
+    let mut lines = vec![
+        Line::styled(
+            format!(
+                "The rite of {} ({}) is yours if you make room.",
+                new.name,
+                school_name(new.school)
+            ),
+            text().add_modifier(Modifier::BOLD),
+        ),
+        Line::styled(format!("   {}", rite_numbers(world, offered)), text()),
+        Line::styled(format!("   {}", new.description), dim()),
+        Line::default(),
+        Line::styled(
+            format!(
+                "Your mind holds {} rites. Forget one for it:",
+                world.rite_slots()
+            ),
+            text(),
+        ),
+    ];
+    for (i, &rite) in world.known_rites().iter().enumerate() {
+        let def = world.content().rite(rite);
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{}  ", (b'a' + i as u8) as char),
+                Style::new().fg(palette::ACCENT),
+            ),
+            Span::styled(def.name.clone(), text().add_modifier(Modifier::BOLD)),
+            Span::styled(format!("  {}", rite_numbers(world, rite)), dim()),
+        ]));
+    }
+    lines.push(Line::default());
+    lines.push(Line::styled(
+        "letter: forget that one · Esc: let the new rite go",
+        dim(),
+    ));
+    popup(frame, area, "No room", lines, 72);
 }
 
 /// Standing on a body: what studying or rendering it would take and give.
@@ -254,6 +313,14 @@ pub fn draw_corpse(frame: &mut Frame, area: Rect, world: &World) {
         "s  study it: it has nothing more to teach you".into()
     };
     let left = RENDER_TURNS.saturating_sub(corpse.rendered);
+    let render = if corpse.spoiled {
+        "r  render it: you opened it up to study it, and the fat is spoiled".to_string()
+    } else {
+        format!(
+            "r  render it ({left} turns): +{} tallow. The body is gone after.",
+            render_yield(def.faction, def.health)
+        )
+    };
     let lines = vec![
         Line::styled(
             format!("The body of {}.", crate::log::with_article(&def.name)),
@@ -261,16 +328,10 @@ pub fn draw_corpse(frame: &mut Frame, area: Rect, world: &World) {
         ),
         Line::default(),
         Line::styled(study, text()),
-        Line::styled(
-            format!(
-                "r  render it ({left} turns): +{} tallow. The body is gone after.",
-                render_yield(def.faction, def.health)
-            ),
-            text(),
-        ),
+        Line::styled(render, text()),
         Line::default(),
         Line::styled(
-            "Rendering smells: things nearby come to it. Left alone a body rots, and big ones hatch flies. Either task stops if anything appears; your work keeps.",
+            "Study or render, not both: studying opens the body up and spoils the fat. Rendering smells: things nearby come to it. Left alone a body rots, and big ones hatch flies. Either task stops if anything appears; your work keeps.",
             dim(),
         ),
         Line::styled("Esc: leave it", dim()),
@@ -302,6 +363,10 @@ pub fn draw_help(frame: &mut Frame, area: Rect) {
         key("s z", "study or render the body underfoot · cast a rite"),
         key("c C", "snuff or light your candle · shut doors beside you"),
         key("> <", "go down · go up (only with the Vigil Candle)"),
+        key(
+            "F",
+            "flare the Vigil Candle: drive the Following back (once a floor)",
+        ),
         key("x @ M", "look · your sheet · the journal"),
         key("q", "save and quit"),
         Line::default(),

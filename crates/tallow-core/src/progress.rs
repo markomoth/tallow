@@ -128,6 +128,11 @@ impl World {
             events.push(Event::LevelUp {
                 level: self.player.level,
             });
+            if crate::rites::RITE_SLOT_LEVELS.contains(&self.player.level) {
+                events.push(Event::RiteSlotGained {
+                    slots: self.rite_slots() as u32,
+                });
+            }
             let ranks = |skill: Skill| self.rank(skill);
             let ctx = DraftContext {
                 skills: &self.player.skills,
@@ -139,6 +144,7 @@ impl World {
                 casts: self.stats.casts,
                 studies: self.stats.studies,
                 knows_rites: !self.player.rites.is_empty(),
+                leavings: self.player.leavings.len() as u32,
             };
             let mut rng = self.boon_rng.clone();
             let draft = boons::draft(&mut rng, &ctx);

@@ -55,6 +55,8 @@ pub struct Player {
     pub rites: Vec<crate::rites::RiteId>,
     /// Rites lasting on the acolyte (Shroud, Borrowed Eyes).
     pub rite_state: crate::rites::Rites,
+    /// The turn each recently cast rite is ready again.
+    pub rite_ready: std::collections::BTreeMap<crate::rites::RiteId, u64>,
     /// Ink in your eyes until this turn: your light shrinks.
     pub blind_until: Option<u64>,
     /// Leavings carried, in the order taken.
@@ -77,6 +79,8 @@ pub struct RunStats {
     /// Taken freed by Exorcise.
     pub exorcised: u32,
     pub took_leaving: bool,
+    /// Rites learned this run, including any later forgotten.
+    pub rites_learned: u32,
 }
 
 /// How and when a run ended in death.
@@ -138,6 +142,8 @@ pub struct World {
     last_burden: Burden,
     /// Level-up drafts waiting for a choice, oldest first.
     pub(crate) drafts: VecDeque<Vec<Boon>>,
+    /// Rites learned with no room for them, waiting for you to make room.
+    pub(crate) offered_rites: VecDeque<crate::rites::RiteId>,
     pub(crate) boon_rng: GameRng,
     pub(crate) stats: RunStats,
     sighted: HashSet<KindId>,
@@ -148,9 +154,9 @@ pub struct World {
     pub(crate) death: Option<Death>,
     /// You were warned about fire, deep water or rotten boards at this tile;
     /// stepping in again goes ahead.
-    fire_warned: Option<Point>,
+    pub(crate) fire_warned: Option<Point>,
     /// The warning from the previous command, valid for this one only.
-    fire_ok: Option<Point>,
+    pub(crate) fire_ok: Option<Point>,
     /// Every Leaving of the run, wherever it is.
     pub(crate) leavings: Vec<crate::leavings::Leaving>,
     /// When a used Leaving can be used again.
@@ -163,6 +169,8 @@ pub struct World {
     pub(crate) ascent: u8,
     /// The turn the Following comes up onto this ascent floor.
     pub(crate) following_at: Option<u64>,
+    /// The Vigil Candle has flared on this ascent floor.
+    pub(crate) flared: bool,
     pub(crate) victory: Option<crate::throne::Victory>,
     pub(crate) defeated: HashSet<KindId>,
     pub(crate) leavings_taken: Vec<crate::leavings::LeavingId>,
@@ -205,6 +213,7 @@ impl World {
                 boons: Vec::new(),
                 rites: Vec::new(),
                 rite_state: crate::rites::Rites::default(),
+                rite_ready: std::collections::BTreeMap::new(),
                 blind_until: None,
                 leavings: Vec::new(),
                 dark_sight_until: None,
@@ -222,6 +231,7 @@ impl World {
             tinctures: inventory::roll_tinctures(&mut rng::stream(seed, Stream::Loot), content),
             last_burden: Burden::Light,
             drafts: VecDeque::new(),
+            offered_rites: VecDeque::new(),
             boon_rng: rng::stream(seed, Stream::Boons),
             stats: RunStats::default(),
             sighted: HashSet::new(),
@@ -237,6 +247,7 @@ impl World {
             lord: None,
             ascent: 0,
             following_at: None,
+            flared: false,
             victory: None,
             defeated: HashSet::new(),
             leavings_taken: Vec::new(),
@@ -285,6 +296,7 @@ impl World {
                     studied: 0,
                     rendered: 0,
                     ancient: true,
+                    spoiled: false,
                 });
             }
             let court = content.kind_by_id("beelzebub").expect("defined");
@@ -358,6 +370,7 @@ impl World {
                 studied: 0,
                 rendered: 0,
                 ancient: true,
+                spoiled: false,
             });
         }
         let spawns: Vec<(KindId, Point)> = spawns
@@ -618,6 +631,7 @@ impl World {
             Command::Throw { item, target } => self.throw(item, target),
             Command::Fire { target } => self.fire(target),
             Command::ChooseBoon(index) => self.choose_boon(index),
+            Command::MakeRoom(forget) => self.make_room(forget),
             Command::Study => self.study(),
             Command::CloseDoor => self.close_doors(),
             Command::Explore => self.explore(),
@@ -626,6 +640,7 @@ impl World {
             Command::Render => self.render(),
             Command::Cast { rite, target } => self.cast(rite, target),
             Command::Ascend => self.ascend(),
+            Command::Flare => self.flare(),
         }
     }
 
@@ -647,6 +662,11 @@ impl World {
                 kind: self.floor.monsters[id].kind,
             });
             events.push(Event::PlayerMoved { to: target });
+        } else if let Some(id) = self.floor.monster_at(target).filter(|&id| {
+            let m = &self.floor.monsters[id];
+            !m.phantom && self.content.monster(m.kind).has(|t| *t == Trait::Undying)
+        }) {
+            return self.push_through(id);
         } else if let Some(id) = self.floor.monster_at(target) {
             self.player_attack(id, 0, &mut events);
         } else if let Some((id, bonus)) = self.reach_target(dir) {

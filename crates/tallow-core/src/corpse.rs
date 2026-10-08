@@ -34,6 +34,8 @@ pub struct Corpse {
     pub rendered: u32,
     /// Old bones that were here before you: they don't rot.
     pub ancient: bool,
+    /// Opened up by study: the fat is spoiled and it won't render.
+    pub spoiled: bool,
 }
 
 /// How a body is doing.
@@ -126,8 +128,10 @@ impl World {
 
     fn finish_study(&mut self, kind: KindId, events: &mut Vec<Event>) {
         let here = self.player.pos;
+        // Opening a body up to learn from it spoils the fat: study or render.
         if let Some(c) = self.floor.corpses.iter_mut().find(|c| c.at == here) {
             c.studied = 0;
+            c.spoiled = true;
         }
         let first = self.studied.insert(kind);
         events.push(Event::Studied { kind, first });
@@ -149,6 +153,9 @@ impl World {
         let Some(corpse) = self.corpse_here().copied() else {
             return vec![Event::NoCorpse];
         };
+        if corpse.spoiled {
+            return vec![Event::BodySpoiled { kind: corpse.kind }];
+        }
         // Starting on a fresh body: the smell carries, and things come to it.
         let mut smell = Vec::new();
         if corpse.rendered == 0 && self.hostiles_in_view().is_empty() {
@@ -273,6 +280,7 @@ impl World {
                 studied: 0,
                 rendered: 0,
                 ancient: false,
+                spoiled: false,
             });
         }
     }
@@ -372,6 +380,14 @@ mod tests {
         assert!(world.turn() >= u64::from(study_turns(4)));
         let again = world.apply(Command::Study);
         assert_eq!(again, vec![Event::NothingToLearn { kind }]);
+        // Study or render, not both.
+        assert!(world.corpse_here().unwrap().spoiled);
+        let turn = world.turn();
+        assert_eq!(
+            world.apply(Command::Render),
+            vec![Event::BodySpoiled { kind }]
+        );
+        assert_eq!(world.turn(), turn);
     }
 
     #[test]

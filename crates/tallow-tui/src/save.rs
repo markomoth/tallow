@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tallow_core::Command;
 
 /// Bumped whenever a change would make old saves replay differently.
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Save {

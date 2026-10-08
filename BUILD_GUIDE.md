@@ -103,7 +103,7 @@ Three phases. Each phase has a force answer, a rite answer, and a room answer.
 - **Phase 3, the Lord** (60 health, slow): every blow is a heavy blow marked a turn ahead on a cross of five tiles (the target and the four beside it). Step diagonally out of it.
 - **The candle:** guarded until the Lord falls. Taken, it is endless light (radius 7, needs no tallow, water and lantern-eaters can't put it out) and opens the stair up.
 - **The ascent (the Unravelling):** 4 re-rolled floors (generated from the run seed and the ascent floor, built like floors 10, 7, 4 and 2, with half the creatures, tinted violet). You arrive on a stair down; the way on is a stair up. The way down is closed.
-- **The Following:** comes up the stair 30, 25, 22 and 18 turns after you arrive (HUD countdown, a warning 10 turns ahead). It cannot be killed (5–8 a hit, your speed). It can't open doors but chews through shut ones in 3 actions (sealed ones in 8), won't cross brazier light or holy ground, and ignores factions. Leaving the floor leaves it behind. Decided: the ascent shows a turn counter, not only log cues.
+- **The Following:** comes up the stair 30, 25, 22 and 18 turns after you arrive (HUD countdown, a warning 10 turns ahead). It cannot be killed (5–8 a hit, your speed). It can't open doors but chews through shut ones in 3 actions (sealed ones in 8), won't cross brazier light or holy ground, and ignores factions. Leaving the floor leaves it behind. **Never a dead end** (M13): walk into it and the first step warns; the second forces you through to its far side for 6–9 health and +15 dread. Once per ascent floor, `F` flares the Vigil Candle: a Following within 8 is driven 6 steps farther off and loses 5 actions. Kneel holds it 2 actions; Seal holds its doors as usual. Decided: the ascent shows a turn counter, not only log cues.
 - **The church:** a lit nave with pews and the altar at the far end. Walk into the altar with the candle to win. Epilogue lines follow the Taken you exorcised, your dread at the end, and whether you learned 8+ rites.
 
 ---
@@ -155,7 +155,7 @@ With your candle out (and the tile itself unlit), some things glow wherever you 
 
 ### Corpses are a decision
 
-Every corpse offers three choices (stand on it, press `s`):
+Every corpse offers three choices (stand on it, press `s`). **Study or render, not both** (M13): studying opens the body up and spoils the fat, so a studied body won't render. Knowledge costs light.
 - **Study** (10 + 2 × threat turns, at most 20): the first study of a kind reveals all its tricks in Look and gives 10 Insight. Some kinds teach a rite (`teaches` in `monsters.ron`: parishioner → Exorcise, pallbearer → Kneel, gnawer → Unsee, Proctor → Sanctify). A kind with nothing left to teach is refused at once, costing nothing. Later: journal entry.
 - **Render** (10 turns): tallow by faction. The Taken were people and render rich (6 × health, 20–140); the Remnant 3 × (10–80); swarms are mostly shell, 2 × (4–40). Starting on a fresh body, the smell carries 10 steps and whatever hears it comes (the log says so).
 - **Leave it:** at 70 turns it visibly swells (log + Look), at 100 it rots. Bodies of creatures with 8+ health hatch a fly swarm; smaller ones just go. Fire also removes it (M7).
@@ -215,7 +215,7 @@ No attributes. No skill trees. No classes. Your build is what you do.
 - **Insight** (the in-game word for XP) comes from: first sight of a creature kind (8), each new floor (12), kills (6 × the creature's threat; a Manifestation 20; kills by your thrall count), learning a tincture (5), first study of a kind (10), learning a rite (10), reading a text with nothing new (6), freeing one of the Taken (10).
 - Level `L` → `L+1` at `15 × L × (L+1)` total Insight (30, 90, 180, 300, …). A diving bot ends runs around level 5–6.
 - Each level: +3 health, then a **draft of 3 boons** pops up. Press 1, 2 or 3. Choosing takes no time.
-- Boons are either **passive** (Steady Hand: +5 accuracy; Slow Wick: the candle burns a quarter slower; Night Eyes: feel two tiles in the dark and strike half as badly there; Dark-Fed: the dark breeds dread half again as fast; Hearth-Kin: braziers mend twice as much per dread; Tallow Thief: found and rendered tallow +25%; Broad Back; …) or **trigger × reward** ("When you kill with bludgeons, gain 12 tallow"; "When you snuff your candle, gain 3 dread"). Dread rewards *give* dread (M12). Rare triggers pay more.
+- Boons are either **passive** (Steady Hand: +5 accuracy; Slow Wick: the candle burns a quarter slower; Night Eyes: feel two tiles in the dark and strike half as badly there; Dark-Fed: the dark breeds dread half again as fast; Hearth-Kin: braziers mend twice as much per dread; Tallow Thief: found and rendered tallow +25%; Reliquary: carry a third Leaving; Broad Back; …) or **trigger × reward** ("When you kill with bludgeons, gain 12 tallow"; "When you snuff your candle, gain 3 dread"). Dread rewards *give* dread (M12). Rare triggers pay more.
 - The draft is weighted toward skills you actually use, never repeats a unique boon, and never offers a dead pick: no blade boons before you've used a blade, no snuff boons before you've snuffed, and so on.
 - Rite boons: Familiar Words (rites cost a quarter less dread; offered once you know a rite), Answered Prayer ("when you cast a rite, …"; after your first cast), Scholar's Reward ("when you finish studying a body, …"; after your first study).
 - Later: "Thrown flasks shatter in a cross".
@@ -237,7 +237,9 @@ Target for v1: 16 rites (4 per school). No damage-only spells. Every rite change
 - `z` lists known rites with their current numbers; pick a letter, then a target if the rite needs one. Rites are defined in `assets/rites.ron`.
 - **Cost:** the dread listed, minus the school's Quiet Rites and the Familiar Words boon, **paid out of the dread you hold** (M12). Without enough, the cast is refused (free) and the list marks it. A failed cast (no target, out of range, wrong kind) costs nothing.
 - **Potency:** calm 1.0×, uneasy 1.25×, frayed or worse 1.5×, times the school's Deep Rites. Potency scales durations and amounts.
+- **Recharge** (M13): each rite needs time to come back after a cast (`recharge` in `rites.ron`: Exchange 20 turns, Beckon 25, Kneel and Unsee 30, Shroud, Leech, Exorcise and Seal 40, False Flame, Hush and Banish 50, Borrowed Eyes, Transference, Turncoat and Sanctify 60, Compel 80). Casting it sooner is refused (free); the list shows the turns left. This ends spending dread for its own sake.
 - **Learning:** texts (`?`) teach a random unknown rite of their school; studying bodies teaches their kind's rites. Floor 1 always has a text. Rites last the run only.
+- **Slots** (M13): you can hold 2 rites, and one more at levels 4, 7 and 10. Learning one with every slot full offers it: pick a known rite to forget for it (free), or let it go (6 Insight). A forgotten rite can be learned again later. Which rites you keep is the build.
 - **Bosses** resist Binding (durations ÷ 3) and can't be freed by Exorcise (it burns them instead). Your Manifestation ignores Compel, Unsee and Transference.
 
 | Rite | School | Dread | Range | Effect (1.0×) |
@@ -355,7 +357,8 @@ Inspired by the Zone in *Roadside Picnic*: things the nightmare leaves behind wh
 
 ### As built (M9)
 
-- **Seep rooms:** one small room on 40% of floors 2–10, and always on floor 11. Its floor shimmers; the first sight of it logs a warning; Look says to throw something through. It holds a Leaving in the middle and 3–6 invisible anomalies clustered around it. 3–5 stones lie just outside, on the side nearest the arrival stair.
+- **Carry two** (M13): you can hold 2 Leavings at once (the Reliquary boon, offered once you carry 2, adds a third). A Leaving you can't carry stays where it lies; drop one first.
+- **Seep rooms:** one small room on 20% of floors 2–10 (40% before M13), and always on floor 11. Its floor shimmers; the first sight of it logs a warning; Look says to throw something through. It holds a Leaving in the middle and 3–6 invisible anomalies clustered around it. 3–5 stones lie just outside, on the side nearest the arrival stair.
 - **Anomalies** (revealed `:` violet): a heat well burns 4–7; a snare does 2–3 and holds you 3 turns; a time pocket loses you 10 turns; a swap point throws you elsewhere on the floor. An anomaly's own damage never takes your last health. Anything thrown or fired through one stops there and reveals it (a swap point throws it somewhere else in the room). Creatures never step on anomalies. Walking into a revealed one needs a second step.
 - **Leavings** (`*`, colored by tier: green mild, amber strange, red deadly). Rules come from 6 triggers (on use, every N turns while carried, on kill, when hurt, when dread turns frayed, when your candle goes out) × 14 effects (swap with the nearest creature, stop time for everything in view, pull, push, see in the dark, duplicate a stack, mend, calm, kindle tallow, blink, fire all around, reveal the floor, holy ground, banish the nearest of the Dreaming) × 5 prices (health, dread, tallow, weight, or the attention of a faction). Generated names come from word lists in `assets/leavings.ron`.
 - **Telegraphs:** the tier and a tell are shown from the start; the first Leaving you take comes with a warning; the rule is learned when it first wakes. A price that would kill you warns first ("Drop it now"): an involuntary one takes it next turn unless dropped; one you use takes it on the next use. Effects with nothing to act on stay quiet and cost nothing.
@@ -434,7 +437,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 - **Simple mode** (`tallow --simple`): the 16 standard terminal colors on the terminal's own (possibly transparent) background, no flicker, pulse or shimmer, and a redraw only on input. The screen is drawn as usual, then each cell is mapped (`render/simple.rs`): dark and grey backgrounds become the terminal's own; backgrounds that carry meaning (a raised blow's red tiles, the aim line, holy ground) stay as plain dark colors; every foreground becomes its nearest standard color, dim ones dark grey.
 - **Animations:** short and skippable: projectile trails, fire spread, swarm movement.
 - **Start menu:** the game opens on the church at night (`render/title.rs`): ASCII facade, windows flickering amber, graveyard mist drifting, the title, and *Play now* (or *Continue* with the floor and turn when a save was picked up) *Journal* and *Quit*. ↑↓/`jk` choose, Enter confirms, `p` plays, `M` opens the journal (it closes back to the menu), `q`/Esc quits. At exactly 30 rows the key hint is dropped to fit. Dev flags skip it. Quitting from the menu before a single move writes no save.
-- **Underfoot:** stepping onto an item or a Leaving logs what it is: `Underfoot: a sickle. A churchyard sickle, light and quick… (g to pick up)`, one line per thing, only when you arrive (not while standing there).
+- **Underfoot:** stepping onto an item or a Leaving logs its name only: `Underfoot: a sickle (g to pick up).`, one line per thing, only when you arrive (not while standing there). What it is and does is read by choosing to look: in the pack, or with Look.
 
 ### Controls
 
@@ -453,6 +456,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `s` | Study / render corpse |
 | `c` | Snuff / relight candle |
 | `C` | Shut the open doors beside you |
+| `F` | Flare the Vigil Candle (the ascent, once a floor) |
 | `R` | Rest until healed |
 | `o` | Auto-explore (stops when anything new is in view; skips fire, deep water, rotten boards, seep rooms) |
 | `@` | Character sheet: skills, techniques, boons |
@@ -596,7 +600,11 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 |---|---|---|---|
 | M12 ✅ | Scarce tallow, dread as power | Run low on tallow and render a Taken for it; gather dread in the dark and spend it on a rite; offer dread to a brazier to heal; read glowing writing with your candle out; see the log warn that your light drew something | 3–4 h |
 
+| M13 ✅ | Limits | Cast a rite and be refused until it recharges; learn a third rite at level 1 and choose one to forget; study a body and be refused rendering it; be refused a third Leaving; push through the Following and flare it back | 2–3 h |
+
 **As built (M12), sim over 500 seeds** (the bot now walks dark below 150 tallow, lights up to fight, hunts and renders while under 350): 108 wins, the candle ran dry 4 times, 1.3 Manifestations per run, 0 softlocks. The bot sees every creature on the floor, so it hunts better than a person can; treat its numbers as an upper bound.
+
+**As built (M13), sim over 500 seeds:** 113 wins, the candle ran dry 8 times, 1.31 Manifestations per run, 6 deaths on the ascent (12 before), 0 softlocks. The bot casts no rites, so recharge and slots don't show in its numbers.
 
 Total: roughly 40–55 hours of build + playtest time.
 

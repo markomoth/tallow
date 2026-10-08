@@ -206,7 +206,7 @@ fn try_crypt<R: Rng + ?Sized>(rng: &mut R, depth: u8, with_stairs_down: bool) ->
 
     let seep_chance = match depth {
         11 => 1.0,
-        2..=10 => 0.4,
+        2..=10 => 0.2,
         _ => 0.0,
     };
     let seep = rng.random_bool(seep_chance).then(|| {

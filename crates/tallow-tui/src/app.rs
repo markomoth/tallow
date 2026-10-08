@@ -50,6 +50,8 @@ pub enum Mode {
     },
     /// A level-up draft is waiting. Pick 1, 2 or 3.
     Draft,
+    /// A rite was learned with no room for it: forget one, or let it go.
+    Forget,
     /// The character sheet.
     Sheet,
     /// Standing on a body: study it or render it?
@@ -238,6 +240,16 @@ impl App {
                     self.play(Command::ChooseBoon(c as usize - '1' as usize));
                 }
             }
+            Mode::Forget => match key.code {
+                KeyCode::Esc => self.play(Command::MakeRoom(None)),
+                KeyCode::Char(c) => {
+                    let index = (c as u32).wrapping_sub('a' as u32) as usize;
+                    if let Some(&old) = self.world.known_rites().get(index) {
+                        self.play(Command::MakeRoom(Some(old)));
+                    }
+                }
+                _ => {}
+            },
             Mode::Corpse => match key.code {
                 KeyCode::Char('s') => {
                     self.mode = Mode::Play;
@@ -314,6 +326,7 @@ impl App {
             Mode::Title(_)
             | Mode::Pack { .. }
             | Mode::Draft
+            | Mode::Forget
             | Mode::Corpse
             | Mode::Rites
             | Mode::Leaving(_) => {}
@@ -407,6 +420,16 @@ impl App {
                     return;
                 }
                 Command::Study
+            }
+            Action::Flare => {
+                if !self.world.can_flare() && !self.world.player().vigil {
+                    self.log.push(
+                        "Only the Vigil Candle can flare, and you don't carry it.",
+                        Tone::Normal,
+                    );
+                    return;
+                }
+                Command::Flare
             }
             Action::Rites => {
                 if self.world.known_rites().is_empty() {
@@ -593,7 +616,9 @@ impl App {
             self.mode = Mode::Won;
         } else if self.world.pending_draft().is_some() {
             self.mode = Mode::Draft;
-        } else if self.mode == Mode::Draft {
+        } else if self.world.pending_rite().is_some() {
+            self.mode = Mode::Forget;
+        } else if matches!(self.mode, Mode::Draft | Mode::Forget) {
             self.mode = Mode::Play;
         }
     }
@@ -850,8 +875,7 @@ mod tests {
         world.place_item(here + dir, sickle, 1);
         app.handle(Action::Move(dir));
         let last = &app.log().entries().last().unwrap().text;
-        assert!(last.starts_with("Underfoot: a sickle."), "{last}");
-        assert!(last.contains("A churchyard sickle"), "{last}");
+        assert_eq!(last, "Underfoot: a sickle (g to pick up).");
         app.handle(Action::Wait);
         let underfoot = app
             .log()

@@ -70,6 +70,7 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
         | Mode::Journal(_)
         | Mode::Pack { .. }
         | Mode::Draft
+        | Mode::Forget
         | Mode::Sheet
         | Mode::Corpse
         | Mode::Rites
@@ -90,6 +91,7 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
             pack::draw(frame, map_area, app.world(), purpose, selected)
         }
         Mode::Draft => sheet::draw_draft(frame, map_area, app.world()),
+        Mode::Forget => sheet::draw_forget(frame, map_area, app.world()),
         Mode::Sheet => sheet::draw_sheet(frame, map_area, app.world()),
         Mode::Rites => sheet::draw_rites(frame, map_area, app.world()),
         Mode::Corpse => sheet::draw_corpse(frame, map_area, app.world()),

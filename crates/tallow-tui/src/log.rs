@@ -394,7 +394,7 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
         ),
         Event::Studied { kind, first: true } => (
             format!(
-                "You finish your study of the {}. You know its ways now (Look shows them all).",
+                "You finish your study of the {}. You know its ways now (Look shows them all). The body is spoiled for rendering.",
                 name(kind)
             ),
             Good,
@@ -475,6 +475,9 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
                 RiteFailure::NotDreaming => "Only the Dreaming can be sent back into the dark.",
                 RiteFailure::NotEnoughDread => {
                     "You haven't the dread to pay for it. Rites are bought with fear: go into the dark."
+                }
+                RiteFailure::Recharging => {
+                    "The words are still hot in your mouth. That rite isn't ready again yet."
                 }
             }
             .into(),
@@ -812,6 +815,56 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             "An anomaly is there. Step that way again to walk into it.".into(),
             Danger,
         ),
+        Event::RiteOffered { rite } => (
+            format!(
+                "The rite of {} is there for the taking, but your mind holds all the rites it can. Forget one to make room, or let it go.",
+                content.rite(rite).name
+            ),
+            Dread,
+        ),
+        Event::RiteForgotten { rite } => (
+            format!("The rite of {} slips out of your memory.", content.rite(rite).name),
+            Normal,
+        ),
+        Event::RiteLetGo { rite } => (
+            format!("You let the rite of {} go. Something of it stays with you.", content.rite(rite).name),
+            Normal,
+        ),
+        Event::RiteSlotGained { slots } => (
+            format!("Your mind has room for another rite ({slots} now)."),
+            Good,
+        ),
+        Event::BodySpoiled { kind } => (
+            format!("You opened the {} up to study it. The fat is spoiled; it won't render.", name(kind)),
+            Normal,
+        ),
+        Event::LeavingsFull { id } => (
+            format!(
+                "You can't carry {} as well. You carry all the Leavings you can bear; drop one first.",
+                crate::names::leaving_name(world, id)
+            ),
+            Normal,
+        ),
+        Event::PushThroughAhead { .. } => (
+            "It fills the way. Step into it again to force your way through: it will tear at you (6–9) and the fear will stay (+15 dread).".into(),
+            Danger,
+        ),
+        Event::PushedThrough { kind, damage } => (
+            format!("You shove into the {} and through it. It tears at you as you pass ({damage}).", name(kind)),
+            Danger,
+        ),
+        Event::Flared { kind } => (
+            format!("The Vigil Candle flares white. The {} is driven back, reeling.", name(kind)),
+            Good,
+        ),
+        Event::FlareSpent => (
+            "The candle has flared once on this floor. It will not again until the next.".into(),
+            Normal,
+        ),
+        Event::NothingToFlare => (
+            "Nothing is near enough for the flare to drive back.".into(),
+            Normal,
+        ),
         Event::Undying { kind } => (
             format!("Your blow passes through the {}. It cannot die. Run.", name(kind)),
             Danger,
@@ -909,12 +962,11 @@ fn death_line(content: &Content, kind: KindId) -> String {
 pub fn underfoot(world: &World) -> Vec<String> {
     let here = world.player().pos;
     let floor = world.floor();
+    // Only the name: what a thing is for is learned by looking at it.
     let items = floor.items_at(here).map(|f| {
-        let def = world.content().item(f.item.kind);
         format!(
-            "Underfoot: {}. {} (g to pick up)",
-            item_phrase(world, f.item.kind, f.item.count),
-            def.description
+            "Underfoot: {} (g to pick up).",
+            item_phrase(world, f.item.kind, f.item.count)
         )
     });
     let leavings = floor
@@ -923,9 +975,8 @@ pub fn underfoot(world: &World) -> Vec<String> {
         .filter(|&&(at, _)| at == here)
         .map(|&(_, id)| {
             format!(
-                "Underfoot: {}. {} (g to pick up)",
-                crate::names::leaving_name(world, id),
-                crate::names::leaving_tell(world, id)
+                "Underfoot: {} (g to pick up).",
+                crate::names::leaving_name(world, id)
             )
         });
     items.chain(leavings).collect()

@@ -37,6 +37,11 @@ pub enum Command {
     },
     /// Take one boon from the waiting level-up draft. Costs no time.
     ChooseBoon(usize),
+    /// Settle a rite learned with no room: forget this one for it, or with
+    /// `None` let it go. Costs no time.
+    MakeRoom(Option<crate::rites::RiteId>),
+    /// Flare the Vigil Candle: drive the Following back, once per floor.
+    Flare,
     /// Shut the open doors beside you.
     CloseDoor,
     /// Walk toward unknown ground until something new is in view.

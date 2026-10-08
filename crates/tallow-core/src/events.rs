@@ -303,6 +303,47 @@ pub enum Event {
     RiteLearned {
         rite: RiteId,
     },
+    /// A rite was learned with every slot full: forget one, or let it go.
+    RiteOffered {
+        rite: RiteId,
+    },
+    /// Forgotten to make room for another.
+    RiteForgotten {
+        rite: RiteId,
+    },
+    /// An offered rite was let go.
+    RiteLetGo {
+        rite: RiteId,
+    },
+    /// A level brought room for another rite.
+    RiteSlotGained {
+        slots: u32,
+    },
+    /// A studied body is spoiled for rendering.
+    BodySpoiled {
+        kind: KindId,
+    },
+    /// You carry all the Leavings you can; this one stays where it lies.
+    LeavingsFull {
+        id: LeavingId,
+    },
+    /// Walking into the Following again will push through it, at a price.
+    PushThroughAhead {
+        at: Point,
+    },
+    /// You forced your way past it.
+    PushedThrough {
+        kind: KindId,
+        damage: u32,
+    },
+    /// The Vigil Candle flared and drove it back.
+    Flared {
+        kind: KindId,
+    },
+    /// The candle has flared already on this floor.
+    FlareSpent,
+    /// Nothing is close enough for the flare to drive back.
+    NothingToFlare,
     /// A rite couldn't be cast. Costs no time and no dread.
     RiteFailed {
         rite: RiteId,
