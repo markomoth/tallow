@@ -1,5 +1,5 @@
-//! The status sidebar: who you are, where you are, what you can see.
-//! While looking, it shows what's under the cursor instead.
+//! The status sidebar: where you are, how you are, what you can see, and
+//! the few keys that matter right now. Look draws its own card on the map.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -14,7 +14,7 @@ use tallow_core::{
 };
 
 use crate::app::Aim;
-use crate::names::{item_phrase, item_stats};
+use crate::names::item_phrase;
 
 use super::palette::{self, rgb};
 use crate::app::{App, Mode};
@@ -22,6 +22,9 @@ use crate::log::capitalize;
 
 const BAR_WIDTH: usize = 10;
 const MAX_IN_VIEW: usize = 3;
+const MAX_HINTS: usize = 4;
+/// Columns inside the sidebar's rule and padding.
+const SIDEBAR_INNER: usize = 23;
 
 pub struct Hud<'a> {
     app: &'a App,
@@ -47,7 +50,7 @@ fn stage_name(world: &World) -> &'static str {
     match world.stage() {
         tallow_core::Stage::Descent => biome_name(Biome::for_depth(world.depth())),
         tallow_core::Stage::Ascent(_) => "The Unravelling",
-        tallow_core::Stage::Church => "The Church of the Low Bell",
+        tallow_core::Stage::Church => "The Church",
     }
 }
 
@@ -115,11 +118,20 @@ impl Widget for Hud<'_> {
         let depth = world.depth();
 
         let mut lines = vec![
+            Line::styled(stage_name(world), text().add_modifier(Modifier::BOLD)),
             Line::styled(
-                "T A L L O W",
-                Style::new()
-                    .fg(palette::ACCENT)
-                    .add_modifier(Modifier::BOLD),
+                match world.stage() {
+                    tallow_core::Stage::Descent => {
+                        format!("floor {depth} of {MAX_DEPTH} · level {}", player.level)
+                    }
+                    tallow_core::Stage::Ascent(a) => format!(
+                        "ascent {a} of {} · level {}",
+                        tallow_core::throne::ASCENT_FLOORS,
+                        player.level
+                    ),
+                    tallow_core::Stage::Church => format!("level {}", player.level),
+                },
+                dim(),
             ),
             Line::default(),
             bar(
@@ -128,7 +140,8 @@ impl Widget for Hud<'_> {
                 player.max_health,
                 palette::HEALTH,
                 palette::HEALTH_EMPTY,
-            ),
+            )
+            .spans_with_max(player.max_health),
             bar(
                 "Candle",
                 player.candle.tallow(),
@@ -136,48 +149,33 @@ impl Widget for Hud<'_> {
                 palette::CANDLE,
                 palette::CANDLE_EMPTY,
             ),
-            bar(
-                "Dread ",
-                player.dread.value(),
-                100,
-                palette::DREAD,
-                palette::DREAD_EMPTY,
-            ),
-            bar(
-                "Load  ",
-                world.load() / 10,
-                LIGHT_LOAD / 10,
-                palette::LOAD,
-                palette::LOAD_EMPTY,
-            ),
-            conditions(world),
-            Line::styled(
-                match world.stage() {
-                    tallow_core::Stage::Descent => {
-                        format!("Floor {depth}/{MAX_DEPTH} · Level {}", player.level)
-                    }
-                    tallow_core::Stage::Ascent(a) => format!(
-                        "Ascent {a}/{} · Level {}",
-                        tallow_core::throne::ASCENT_FLOORS,
-                        player.level
-                    ),
-                    tallow_core::Stage::Church => format!("The Church · Level {}", player.level),
-                },
-                text(),
-            ),
-            Line::styled(stage_name(world), dim()),
-            pursuit(world),
-            Line::default(),
+            dread_bar(player.dread.value()),
         ];
+        lines.extend(mind_line(world));
+        lines.push(bar(
+            "Load  ",
+            world.load() / 10,
+            LIGHT_LOAD / 10,
+            palette::LOAD,
+            palette::LOAD_EMPTY,
+        ));
+        let conditions = conditions(world);
+        if !conditions.spans.is_empty() {
+            lines.push(conditions);
+        }
+        let pursuit = pursuit(world);
+        if !pursuit.spans.is_empty() {
+            lines.push(pursuit);
+        }
+        lines.push(Line::default());
         match self.app.mode() {
-            Mode::Look { cursor } => lines.extend(look_panel(world, cursor)),
             Mode::Target { aim, cursor } => {
                 lines.extend(target_panel(world, aim, cursor, self.app.aim_path().len()));
             }
+            Mode::Dead | Mode::Won => lines.extend(in_view(world)),
             Mode::Title(_)
             | Mode::Play
-            | Mode::Dead
-            | Mode::Won
+            | Mode::Look { .. }
             | Mode::Help
             | Mode::Journal(_)
             | Mode::Pack { .. }
@@ -189,13 +187,18 @@ impl Widget for Hud<'_> {
             | Mode::Rites
             | Mode::Leaving(_) => {
                 lines.extend(in_view(world));
-                lines.extend(keys());
+                lines.extend(hints(world));
             }
         }
 
+        let frayed = player.dread.band() >= DreadBand::Frayed;
         let block = Block::new()
             .borders(Borders::LEFT)
-            .border_style(Style::new().fg(palette::BORDER))
+            .border_style(Style::new().fg(if frayed {
+                palette::DREAD_RULE
+            } else {
+                palette::BORDER
+            }))
             .padding(Padding::horizontal(1));
         let inner = block.inner(area);
         block.render(area, buf);
@@ -211,6 +214,83 @@ impl Widget for Hud<'_> {
         )
         .render(footer, buf);
     }
+}
+
+/// Lets the health bar show its ceiling: "24/24".
+trait WithMax {
+    fn spans_with_max(self, max: u32) -> Self;
+}
+
+impl WithMax for Line<'static> {
+    fn spans_with_max(mut self, max: u32) -> Self {
+        if let Some(last) = self.spans.last_mut() {
+            last.content = format!("{}/{max}", last.content).into();
+        }
+        self
+    }
+}
+
+/// The dread bar: its cells deepen through the bands, and the empty track
+/// marks where uneasy (40) and frayed (70) begin.
+fn dread_bar(value: u32) -> Line<'static> {
+    const MARKS: [usize; 2] = [4, 7];
+    let filled = (value as usize * BAR_WIDTH).div_ceil(100).min(BAR_WIDTH);
+    let mut spans = vec![Span::styled("Dread  ", Style::new().fg(palette::DREAD))];
+    for i in 0..BAR_WIDTH {
+        let band = MARKS.iter().filter(|&&m| i >= m).count();
+        spans.push(if i < filled {
+            Span::styled("█", Style::new().fg(palette::DREAD_BANDS[band]))
+        } else if MARKS.contains(&i) {
+            Span::styled("╎", Style::new().fg(palette::DREAD_MARK))
+        } else {
+            Span::styled("·", Style::new().fg(palette::DREAD_EMPTY))
+        });
+    }
+    spans.push(Span::styled(format!(" {value}"), text()));
+    Line::from(spans)
+}
+
+/// What your dread is doing to you, named. A Nightmare's coming is told, but
+/// never when.
+fn mind_line(world: &World) -> Option<Line<'static>> {
+    let band = world.player().dread.band();
+    let (word, what, danger) = match band {
+        DreadBand::Calm => return None,
+        DreadBand::Uneasy => ("uneasy", "whispers", false),
+        DreadBand::Frayed if world.nightmare_coming() => ("frayed", "it is coming", true),
+        DreadBand::Frayed => ("frayed", "phantoms walk", false),
+        DreadBand::Manifest => ("hunted", "your fear walks", true),
+    };
+    Some(Line::from(vec![
+        Span::styled(
+            word,
+            Style::new()
+                .fg(palette::DREAD_BANDS[2])
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" · ", dim()),
+        Span::styled(
+            what,
+            if danger {
+                Style::new()
+                    .fg(palette::DANGER)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                dim()
+            },
+        ),
+    ]))
+}
+
+/// A section heading with a rule running to the edge.
+fn heading(name: &'static str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{name} "), dim()),
+        Span::styled(
+            "─".repeat(SIDEBAR_INNER.saturating_sub(name.len() + 1)),
+            Style::new().fg(palette::BORDER),
+        ),
+    ])
 }
 
 fn bar(label: &'static str, value: u32, full: u32, fill: Color, empty: Color) -> Line<'static> {
@@ -237,12 +317,6 @@ fn conditions(world: &World) -> Line<'static> {
         CandleState::Guttering => Some(("guttering!", palette::DANGER)),
         CandleState::Snuffed => Some(("snuffed", palette::TEXT_DIM)),
         CandleState::Out => Some(("no light", palette::DANGER)),
-    };
-    let mind = match player.dread.band() {
-        DreadBand::Calm => None,
-        DreadBand::Uneasy => Some("uneasy"),
-        DreadBand::Frayed => Some("frayed"),
-        DreadBand::Manifest => Some("hunted"),
     };
     let load = match world.burden() {
         Burden::Light => None,
@@ -272,12 +346,6 @@ fn conditions(world: &World) -> Line<'static> {
         }
         spans.push(Span::styled(word, Style::new().fg(color)));
     }
-    if let Some(word) = mind {
-        if !spans.is_empty() {
-            spans.push(Span::styled(" · ", dim()));
-        }
-        spans.push(Span::styled(word, Style::new().fg(palette::DREAD)));
-    }
     Line::from(spans)
 }
 
@@ -286,33 +354,61 @@ fn in_view(world: &World) -> Vec<Line<'static>> {
     if ids.is_empty() {
         return Vec::new();
     }
-    let mut lines = vec![Line::styled("─ in view ─", dim())];
+    let mut lines = vec![heading("in view")];
     for info in ids
         .iter()
         .filter_map(|&id| world.inspect(id))
         .take(MAX_IN_VIEW)
     {
         let def = world.content().monster(info.kind);
-        let mut spans = vec![
+        // What it's doing, on the right; how hurt it is, in its name's color.
+        let (state, color) = if info.winding_up.is_some() {
+            ("strikes!", palette::DANGER)
+        } else if info.compelled > 0 {
+            ("yours", palette::GOOD)
+        } else if info.terrified > 0 || info.mind == Mind::Fleeing {
+            ("fleeing", palette::TEXT_DIM)
+        } else if info.unseeing > 0 {
+            ("blind", palette::GOOD)
+        } else if matches!(info.mind, Mind::Hunting { .. }) {
+            ("hunting", palette::DANGER)
+        } else {
+            ("unaware", palette::TEXT_DIM)
+        };
+        let name_color = match wound_word(&info) {
+            None | Some("hurt") => palette::TEXT,
+            Some("wounded") => palette::ACCENT,
+            Some(_) => palette::DANGER,
+        };
+        let room = SIDEBAR_INNER.saturating_sub(2 + 1 + state.len());
+        let name: String = if def.name.chars().count() > room {
+            def.name
+                .chars()
+                .take(room.saturating_sub(1))
+                .collect::<String>()
+                + "…"
+        } else {
+            def.name.clone()
+        };
+        let pad = SIDEBAR_INNER.saturating_sub(2 + name.chars().count() + state.len());
+        lines.push(Line::from(vec![
             Span::styled(
                 format!("{} ", def.glyph),
                 Style::new().fg(rgb(def.color)).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(def.name.clone(), text()),
-        ];
-        if info.winding_up.is_some() {
-            spans.push(Span::styled(
-                " !",
+            Span::styled(name, Style::new().fg(name_color)),
+            Span::raw(" ".repeat(pad)),
+            Span::styled(
+                state,
                 Style::new()
-                    .fg(palette::DANGER)
-                    .add_modifier(Modifier::BOLD),
-            ));
-        } else if info.compelled > 0 {
-            spans.push(Span::styled(" (yours)", Style::new().fg(palette::GOOD)));
-        } else if let Some(state) = wound_word(&info) {
-            spans.push(Span::styled(format!(" ({state})"), dim()));
-        }
-        lines.push(Line::from(spans));
+                    .fg(color)
+                    .add_modifier(if info.winding_up.is_some() {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
+            ),
+        ]));
     }
     if ids.len() > MAX_IN_VIEW {
         lines.push(Line::styled(
@@ -324,28 +420,101 @@ fn in_view(world: &World) -> Vec<Line<'static>> {
     lines
 }
 
-fn keys() -> Vec<Line<'static>> {
-    let key = |k: &'static str, what: &'static str| {
-        Line::from(vec![
-            Span::styled(format!("{k:<11}"), text()),
+/// The few keys that matter right now, most pressing first. The full list
+/// is one key away.
+fn hints(world: &World) -> Vec<Line<'static>> {
+    let player = world.player();
+    let here = player.pos;
+    let floor = world.floor();
+    let hostile: Vec<MonsterInfo> = floor
+        .visible_monsters(here)
+        .iter()
+        .filter_map(|&id| world.inspect(id))
+        .filter(|i| !i.phantom && i.compelled == 0 && matches!(i.mind, Mind::Hunting { .. }))
+        .collect();
+    let beside = hostile
+        .iter()
+        .any(|i| (i.pos.x - here.x).abs().max((i.pos.y - here.y).abs()) == 1);
+
+    let mut hints: Vec<(&str, String)> = Vec::new();
+    if world.can_flare() && world.following_present() {
+        hints.push(("F", "flare: drive it back".into()));
+    }
+    if world.corpse_here().is_some() {
+        hints.push(("s", "study or render it".into()));
+    }
+    if floor.items_at(here).next().is_some() || floor.leavings().iter().any(|&(at, _)| at == here) {
+        hints.push(("g", "pick it up".into()));
+    }
+    match floor.map().tile(here) {
+        Tile::StairsDown if world.stage() == tallow_core::Stage::Descent => {
+            hints.push((">", "go down".into()));
+        }
+        Tile::StairsUp if player.vigil => hints.push(("<", "go up".into())),
+        _ => {}
+    }
+    if !hostile.is_empty() {
+        hints.push(("x", "look at it".into()));
+    }
+    if beside {
+        hints.push(("G", "guard and wait".into()));
+        hints.push(("S", "shove it back".into()));
+    }
+    let ready = world
+        .known_rites()
+        .iter()
+        .filter(|&&r| world.rite_recharge(r) == 0 && player.dread.value() >= world.rite_cost(r))
+        .count();
+    if ready > 0 {
+        hints.push((
+            "z",
+            if ready == 1 {
+                "1 rite ready".to_string()
+            } else {
+                format!("{ready} rites ready")
+            },
+        ));
+    }
+    match player.candle.state() {
+        CandleState::Lit | CandleState::Guttering if !player.vigil => {
+            hints.push(("c", "snuff the candle".into()));
+        }
+        CandleState::Snuffed => hints.push(("c", "light the candle".into())),
+        _ => {}
+    }
+    if hostile.is_empty() {
+        if player.health < player.max_health {
+            hints.push(("R", "rest until healed".into()));
+        }
+        hints.push(("o", "explore".into()));
+    }
+    hints.truncate(MAX_HINTS);
+
+    let mut lines = vec![heading("now")];
+    for (key, what) in hints {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{key:<3}"),
+                Style::new()
+                    .fg(palette::ACCENT)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(what, dim()),
-        ])
-    };
-    vec![
-        Line::styled("─ keys ─ (? for all)", dim()),
-        key("hjkl yubn", "move"),
-        key("HJKL o", "run, explore"),
-        key(". R", "wait, rest"),
-        key("g i", "take, pack"),
-        key("t f", "throw, fire"),
-        key("s z", "study, rites"),
-        key("c C >", "light,doors,go"),
-        key("x @ M", "look,self,notes"),
-        key("q", "save and quit"),
-    ]
+        ]));
+    }
+    lines.push(Line::from(vec![
+        Span::styled(
+            "?  ",
+            Style::new()
+                .fg(palette::ACCENT)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("every key", dim()),
+    ]));
+    lines
 }
 
-fn wound_word(info: &MonsterInfo) -> Option<&'static str> {
+pub(super) fn wound_word(info: &MonsterInfo) -> Option<&'static str> {
     let left = info.health * 4 / info.max_health.max(1);
     match left {
         _ if info.health == info.max_health => None,
@@ -354,254 +523,6 @@ fn wound_word(info: &MonsterInfo) -> Option<&'static str> {
         1 => Some("badly hurt"),
         0 => Some("near death"),
     }
-}
-
-fn look_panel(world: &World, cursor: Point) -> Vec<Line<'static>> {
-    let floor = world.floor();
-    let mut lines = vec![Line::styled("─ look ─", dim())];
-    let monster = floor.monster_at(cursor).and_then(|id| world.inspect(id));
-
-    if let Some(info) = monster.as_ref().filter(|info| info.phantom) {
-        let def = world.content().monster(info.kind);
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("{} ", def.glyph),
-                Style::new().fg(rgb(def.color)).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(capitalize(&def.name), text().add_modifier(Modifier::BOLD)),
-        ]));
-        lines.push(Line::styled(
-            "It casts no shadow in your light. It isn't really there, but if it reaches you your fear will make it hurt (1–2, or +5 dread).",
-            Style::new().fg(palette::DREAD),
-        ));
-    } else if let Some(info) = monster {
-        let def = world.content().monster(info.kind);
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("{} ", def.glyph),
-                Style::new().fg(rgb(def.color)).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(capitalize(&def.name), text().add_modifier(Modifier::BOLD)),
-        ]));
-        let mind = match info.mind {
-            _ if info.compelled > 0 => "bound to your will".to_string(),
-            _ if info.terrified > 0 => "fleeing your dread".to_string(),
-            _ if info.unseeing > 0 => "can't see you".to_string(),
-            Mind::Unaware => "unaware of you".to_string(),
-            Mind::Hunting { .. } => "hunting you".to_string(),
-            Mind::Fleeing => "fleeing".to_string(),
-        };
-        let health = wound_word(&info).unwrap_or("unhurt");
-        lines.push(Line::styled(
-            format!("{} · {mind}", capitalize(health)),
-            text(),
-        ));
-        let (lo, hi) = info.your_damage;
-        lines.push(Line::styled(
-            format!("You hit it   {}% · {lo}–{hi}", info.your_hit_chance),
-            text(),
-        ));
-        let (lo, hi) = info.its_damage;
-        lines.push(Line::styled(
-            format!("It hits you  {}% · {lo}–{hi}", info.its_hit_chance),
-            text(),
-        ));
-        if info.resists {
-            lines.push(Line::styled(
-                match def.faction {
-                    tallow_core::Faction::Swarm => "Half damage: blunt is wasted.",
-                    tallow_core::Faction::Remnant => "Half damage: blades only nick.",
-                    _ => "Half damage until light holds it.",
-                },
-                Style::new().fg(palette::DREAD),
-            ));
-        }
-        if info.in_the_dark {
-            lines.push(Line::styled(
-                "In the dark: you strike worse, it strikes harder.",
-                Style::new().fg(palette::DREAD),
-            ));
-        }
-        if info.flankers > 0 {
-            lines.push(Line::styled(
-                format!("Flanking you with its kin: +{} to hit.", info.flankers * 10),
-                Style::new().fg(palette::DANGER),
-            ));
-        }
-        if info.winding_up.is_some() {
-            lines.push(Line::styled(
-                if info.lunging {
-                    "It crouches to leap. Get off the red tile!"
-                } else {
-                    "Its blow is raised. Get off the red tile!"
-                },
-                Style::new()
-                    .fg(palette::DANGER)
-                    .add_modifier(Modifier::BOLD),
-            ));
-        }
-        if info.compelled > 0 {
-            lines.push(Line::styled(
-                format!("Compelled for {} more of its actions.", info.compelled),
-                Style::new().fg(palette::GOOD),
-            ));
-        }
-        if info.pinned > 0 {
-            lines.push(Line::styled(
-                format!("Can't move for {} actions.", info.pinned),
-                text(),
-            ));
-        }
-        if info.carries_dread {
-            lines.push(Line::styled("It carries some of your dread.", dim()));
-        }
-        for t in &info.known_traits {
-            lines.push(Line::styled(format!("Seen: {}", trait_line(t)), dim()));
-        }
-        // The numbers and warnings first: on a small screen the prose is
-        // what gets cut.
-        if def.boss {
-            lines.push(Line::styled(
-                "One of the great ones below. It resists Binding.",
-                Style::new().fg(palette::DANGER),
-            ));
-        }
-        lines.push(Line::styled(def.description.clone(), dim()));
-        lines.push(Line::styled(faction_line(def.faction), dim()));
-        if world.has_studied(info.kind) {
-            lines.push(Line::styled("You have studied its kind.", dim()));
-        }
-    } else if cursor == world.player().pos {
-        lines.push(Line::styled(
-            "You. Acolyte of the Low Bell, a candle in one hand.",
-            text(),
-        ));
-    } else if let Some(top) = floor
-        .items_at(cursor)
-        .last()
-        .filter(|_| floor.is_explored(cursor))
-    {
-        let count = floor.items_at(cursor).count();
-        let def = world.content().item(top.item.kind);
-        lines.push(Line::styled(
-            crate::log::capitalize(&item_phrase(world, top.item.kind, top.item.count)),
-            text().add_modifier(Modifier::BOLD),
-        ));
-        lines.push(Line::styled(def.description.clone(), dim()));
-        lines.extend(
-            item_stats(world, top.item.kind)
-                .into_iter()
-                .map(|s| Line::styled(s, text())),
-        );
-        if count > 1 {
-            lines.push(Line::styled(
-                format!("…and {} more things here.", count - 1),
-                dim(),
-            ));
-        }
-    } else if let Some(&(_, id)) = floor
-        .leavings()
-        .iter()
-        .find(|&&(at, _)| at == cursor && floor.is_explored(cursor))
-    {
-        let l = world.leaving(id);
-        lines.push(Line::styled(
-            capitalize(&crate::names::leaving_name(world, id)),
-            Style::new()
-                .fg(rgb(palette::tier_color(l.tier())))
-                .add_modifier(Modifier::BOLD),
-        ));
-        lines.push(Line::styled(
-            format!("A Leaving ({}).", crate::names::tier_name(l.tier())),
-            text(),
-        ));
-        lines.push(Line::styled(crate::names::leaving_tell(world, id), dim()));
-        if l.known {
-            lines.push(Line::styled(crate::names::leaving_rule(world, id), text()));
-        }
-    } else if let Some(a) = world
-        .anomaly_at(cursor)
-        .filter(|a| a.revealed && floor.is_explored(cursor))
-    {
-        let (name, what) = crate::names::anomaly_text(a.kind);
-        lines.push(Line::styled(
-            capitalize(name),
-            Style::new().fg(rgb(palette::ANOMALY_FG)),
-        ));
-        lines.push(Line::styled(what, text()));
-    } else if let Some(corpse) = floor
-        .corpse_at(cursor)
-        .filter(|_| floor.is_explored(cursor))
-    {
-        let def = world.content().monster(corpse.kind);
-        lines.push(Line::styled(
-            format!("The body of {}.", crate::log::with_article(&def.name)),
-            text().add_modifier(Modifier::BOLD),
-        ));
-        let state = match corpse.decay(world.turn()) {
-            tallow_core::Decay::Fresh => "Fresh.",
-            tallow_core::Decay::Swelling if def.health >= tallow_core::corpse::HATCH_HEALTH => {
-                "Swelling. Flies will hatch from it soon."
-            }
-            tallow_core::Decay::Swelling => "Rotting. It will soon be gone.",
-        };
-        lines.push(Line::styled(state, text()));
-        lines.push(Line::styled(
-            "Stand on it and press s to study or render it.",
-            dim(),
-        ));
-    } else if let Some(tallow) = floor
-        .tallow_at(cursor)
-        .filter(|_| floor.is_explored(cursor))
-    {
-        lines.push(Line::styled(
-            format!(
-                "Tallow, enough for about {} turns of light. Walk over it to take it.",
-                tallow.amount
-            ),
-            text(),
-        ));
-    } else if !floor.is_explored(cursor) {
-        lines.push(Line::styled("You don't know what is there.", dim()));
-    } else {
-        lines.push(Line::styled(tile_line(floor.map().tile(cursor)), text()));
-        if floor.is_burning(cursor) && floor.is_visible(cursor) {
-            lines.push(Line::styled(
-                "On fire! It burns whatever stands in it, the Swarm worst of all.",
-                Style::new().fg(palette::DANGER),
-            ));
-        }
-        if floor.has_oil(cursor) {
-            lines.push(Line::styled(
-                "Spilled lamp oil: slippery, and it burns fast.",
-                text(),
-            ));
-        }
-        if floor.is_seep(cursor) {
-            lines.push(Line::styled(
-                "The air here ripples like heat over a road. Something unseen is wrong with it: throw something through before you walk in.",
-                Style::new().fg(rgb(palette::ANOMALY_FG)),
-            ));
-        }
-        if floor.is_sanctified(cursor) {
-            lines.push(Line::styled(
-                "Holy ground. The Dreaming can't cross it; the Taken flinch.",
-                Style::new().fg(palette::GOOD),
-            ));
-        }
-        if floor.decoy().is_some_and(|d| d.at == cursor) {
-            lines.push(Line::styled(
-                "Your false flame. Creatures near it go to it.",
-                Style::new().fg(palette::GOOD),
-            ));
-        }
-        if !floor.is_visible(cursor) {
-            lines.push(Line::styled("(remembered, not in view)", dim()));
-        }
-    }
-    lines.push(Line::default());
-    lines.push(Line::styled("Tab next · Esc done", dim()));
-    lines
 }
 
 fn target_panel(world: &World, aim: Aim, cursor: Point, path_len: usize) -> Vec<Line<'static>> {
@@ -650,7 +571,7 @@ fn target_panel(world: &World, aim: Aim, cursor: Point, path_len: usize) -> Vec<
 }
 
 /// Who a faction is and whom it attacks on sight.
-fn faction_line(faction: tallow_core::Faction) -> String {
+pub(super) fn faction_line(faction: tallow_core::Faction) -> String {
     use tallow_core::Faction;
     let name = |f: Faction| match f {
         Faction::Dreaming => "the Dreaming",
@@ -677,7 +598,7 @@ fn faction_line(faction: tallow_core::Faction) -> String {
     format!("{} · {fights} {way}", capitalize(name(faction)))
 }
 
-fn trait_line(t: &Trait) -> String {
+pub(super) fn trait_line(t: &Trait) -> String {
     match *t {
         Trait::PackCourage => "flees when no packmate is near.".into(),
         Trait::Pleads => "speaks. It may still be someone.".into(),
@@ -735,7 +656,7 @@ fn trait_line(t: &Trait) -> String {
     }
 }
 
-fn tile_line(tile: Tile) -> &'static str {
+pub(super) fn tile_line(tile: Tile) -> &'static str {
     match tile {
         Tile::Floor => "Flagstones, worn smooth by centuries of feet.",
         Tile::Wall => "Old stone, sweating in the cold.",

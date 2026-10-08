@@ -1,10 +1,9 @@
 //! The pack screen: a list of what you carry, or one item opened up.
 
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Padding, Paragraph, Wrap};
 use tallow_core::item::{LIGHT_LOAD, MAX_LOAD};
 use tallow_core::{ItemClass, ItemId, World};
 
@@ -25,37 +24,15 @@ pub fn draw(
         None => list(world, purpose),
     };
     let title = match purpose {
-        PackPurpose::Browse => " Pack ",
-        PackPurpose::Throw => " Throw what? ",
+        PackPurpose::Browse => "Pack",
+        PackPurpose::Throw => "Throw what?",
     };
-    let width = area.width.min(64);
-    // Borders and padding take four columns; long lines wrap onto more rows.
-    let inner = usize::from(width.saturating_sub(4)).max(1);
-    let rows: usize = lines.iter().map(|l| l.width().max(1).div_ceil(inner)).sum();
-    let height = (rows as u16 + 2).min(area.height);
-    let [_, column, _] = Layout::horizontal([
-        Constraint::Fill(1),
-        Constraint::Length(width),
-        Constraint::Fill(1),
-    ])
-    .areas(area);
-    let [_, popup, _] = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(height),
-        Constraint::Fill(1),
-    ])
-    .areas(column);
-    frame.render_widget(Clear, popup);
-    frame.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: false }).block(
-            Block::bordered()
-                .title(title)
-                .border_style(Style::new().fg(palette::BORDER))
-                .padding(Padding::horizontal(1))
-                .style(Style::new().bg(palette::VOID)),
-        ),
-        popup,
-    );
+    let footer = if selected.is_some() {
+        ""
+    } else {
+        "letter choose · Esc close"
+    };
+    super::sheet::popup(frame, area, title, lines, 64, footer);
 }
 
 fn dim() -> Style {
@@ -145,8 +122,6 @@ fn list(world: &World, purpose: PackPurpose) -> Vec<Line<'static>> {
             ]));
         }
     }
-    lines.push(Line::default());
-    lines.push(Line::styled("letter: choose · Esc: close", dim()));
     lines
 }
 
@@ -243,5 +218,5 @@ pub fn draw_leaving(
         "a use · d drop · Esc back",
         Style::new().fg(palette::ACCENT),
     ));
-    super::sheet::popup(frame, area, "Leaving", lines, 64);
+    super::sheet::popup(frame, area, "Leaving", lines, 64, "");
 }

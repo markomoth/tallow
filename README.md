@@ -18,9 +18,9 @@ You go down with a candle. That candle is your light, and it is also your clock:
 There's no character creation. Press a key and you're in the crypt. Your build is whatever you end up doing: the weapon you keep using, the rites you choose to remember, how long you dare to walk in the dark.
 
 <div align="center">
-<img src="docs/screenshots/crypts.png" alt="Floor 1, the Crypts: the acolyte (@) fights a gnawer (r) in a candlelit room, with health, candle, dread and load bars on the right and the message log below" width="720">
+<img src="docs/screenshots/collegium.png" alt="Floor 4, the Collegium: the acolyte (@) stands by the stair down in a small candlelit room, the halls already explored drawn in cold blue; the sidebar shows health, candle, dread and load, and the keys that matter right now; the log below" width="720">
 <br>
-<sub>Floor 1, the Crypts. Your candle lights a small circle; everything you've already seen fades to blue.</sub>
+<sub>Floor 4, the Collegium. Your candle lights a small circle; everything you've already seen fades to blue. The sidebar suggests the keys that matter right now.</sub>
 </div>
 
 ## 🌑 Light and dark
@@ -78,12 +78,12 @@ Quitting mid-run saves it, and the next launch picks up where you left off. What
 | `g` · `i` | Pick up · pack |
 | `t` · `f` | Throw · fire a sling or crossbow |
 | `s` | Study or render the body underfoot |
-| `z` | Cast a rite |
+| `z` | Rites: ↑↓ to read one, a letter or Enter to cast |
 | `S` + direction | Shove a creature back |
 | `G` | Guard: wait braced and answer every miss |
 | `>` · `<` | Down the stairs · up, once you carry the Vigil Candle |
 | `F` | Flare the Vigil Candle (on the way back up) |
-| `x` | Look (Tab cycles through creatures) |
+| `x` | Look: a card beside the creature (Tab cycles through them) |
 | `@` · `M` · `?` | Your character · the journal · help |
 | `q` | Save and quit |
 

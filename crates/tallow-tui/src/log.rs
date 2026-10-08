@@ -31,20 +31,34 @@ pub struct Entry {
     pub text: String,
     pub tone: Tone,
     pub count: u32,
+    /// Which command it came from: the lines of one turn share a batch.
+    pub batch: u64,
 }
 
 #[derive(Debug, Default)]
 pub struct MessageLog {
     entries: VecDeque<Entry>,
+    batch: u64,
 }
 
 impl MessageLog {
+    /// Starts a new turn's worth of lines. What came before is now the past.
+    pub fn begin_turn(&mut self) {
+        self.batch += 1;
+    }
+
+    /// The current turn's batch.
+    pub fn batch(&self) -> u64 {
+        self.batch
+    }
+
     pub fn push(&mut self, text: impl Into<String>, tone: Tone) {
         let text = text.into();
         if let Some(last) = self.entries.back_mut()
             && last.text == text
         {
             last.count += 1;
+            last.batch = self.batch;
             return;
         }
         if self.entries.len() == CAPACITY {
@@ -54,6 +68,7 @@ impl MessageLog {
             text,
             tone,
             count: 1,
+            batch: self.batch,
         });
     }
 
@@ -425,17 +440,14 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             Danger,
         ),
 
-        Event::FirstSighting { kind } => {
-            let def = content.monster(kind);
-            (
-                format!(
-                    "{}. {}",
-                    capitalize(&with_article(&def.name)),
-                    def.description
-                ),
-                Normal,
-            )
-        }
+        // Only the name: what it is and what it does are learned by looking.
+        Event::FirstSighting { kind } => (
+            format!(
+                "{} comes into view. (x to look)",
+                capitalize(&with_article(name(kind)))
+            ),
+            Normal,
+        ),
         Event::Noticed { kind, seen: true } => (format!("The {} notices you.", name(kind)), Normal),
         Event::Noticed { seen: false, .. } => (
             "Something in the dark has noticed your light.".into(),
@@ -1149,15 +1161,28 @@ mod tests {
                 Entry {
                     text: "a".into(),
                     tone: Tone::Normal,
-                    count: 2
+                    count: 2,
+                    batch: 0,
                 },
                 Entry {
                     text: "b".into(),
                     tone: Tone::Normal,
-                    count: 1
+                    count: 1,
+                    batch: 0,
                 }
             ]
         );
+    }
+
+    #[test]
+    fn a_new_turn_starts_a_new_batch() {
+        let mut log = MessageLog::default();
+        log.push("old", Tone::Normal);
+        log.begin_turn();
+        log.push("new", Tone::Normal);
+        let batches: Vec<_> = log.entries().map(|e| e.batch).collect();
+        assert_eq!(batches, vec![0, 1]);
+        assert_eq!(log.batch(), 1);
     }
 
     #[test]
@@ -1182,7 +1207,7 @@ mod tests {
             ("You strike the gnawer (3).".to_string(), Tone::Normal)
         );
         let (sight, _) = narrate(&Event::FirstSighting { kind: gnawer }, &world).unwrap();
-        assert!(sight.starts_with("A gnawer. A rat"));
+        assert_eq!(sight, "A gnawer comes into view. (x to look)");
     }
 
     #[test]

@@ -168,6 +168,12 @@ impl World {
             .any(|(_, m)| m.kind == self.manifestation && !m.phantom)
     }
 
+    /// A Nightmare has been announced and is on its way. When it arrives is
+    /// not said: only that it is near.
+    pub fn nightmare_coming(&self) -> bool {
+        self.nightmare_at.is_some()
+    }
+
     /// Nightmares on this floor.
     pub fn nightmares(&self) -> Vec<crate::monster::MonsterId> {
         self.floor
@@ -686,12 +692,14 @@ mod tests {
             events.extend(world.apply(Command::Wait));
         }
         assert!(events.contains(&Event::NightmareComing));
+        assert!(world.nightmare_coming(), "the sidebar can say so");
         world.player.dread.set(60);
         assert!(
             world
                 .apply(Command::Wait)
                 .contains(&Event::NightmareTurnedAway)
         );
+        assert!(!world.nightmare_coming());
         for _ in 0..NIGHTMARE_WARNING + 2 {
             world.player.dread.set(60);
             world.apply(Command::Wait);

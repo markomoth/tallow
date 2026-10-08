@@ -1,22 +1,24 @@
 //! Screen layout: map on the left, status on the right, log along the bottom.
 
 mod hud;
+mod look;
 mod map;
 mod pack;
 mod palette;
 mod sheet;
 mod simple;
+mod text;
 mod title;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
-use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
-use tallow_core::{Cause, MAX_DEPTH, World};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
+use tallow_core::{Cause, DreadBand, MAX_DEPTH, World};
 
 use crate::app::{App, Mode};
-use crate::log::{MessageLog, Tone, with_article};
+use crate::log::{Tone, with_article};
 
 /// How many log lines the death screen replays.
 const LAST_MOMENTS: usize = 5;
@@ -82,22 +84,32 @@ fn draw_screen(frame: &mut Frame, app: &App, time: f32) {
         map_area,
     );
     frame.render_widget(hud::Hud::new(app), hud_area);
-    draw_log(frame, log_area, app.log());
+    draw_log(frame, log_area, app);
     match app.mode() {
         Mode::Dead => draw_death(frame, map_area, app),
         Mode::Won => draw_victory(frame, map_area, app),
-        Mode::Help => sheet::draw_help(frame, map_area),
-        Mode::Journal(page) => sheet::draw_journal(frame, map_area, app, page),
+        // Help and the journal take the whole screen, sidebar and all.
+        Mode::Help => {
+            frame.render_widget(Clear, area);
+            frame.render_widget(Block::new().style(Style::new().bg(palette::VOID)), area);
+            sheet::draw_help(frame, area);
+        }
+        Mode::Journal(page) => {
+            frame.render_widget(Clear, area);
+            frame.render_widget(Block::new().style(Style::new().bg(palette::VOID)), area);
+            sheet::draw_journal(frame, area, app, page);
+        }
         Mode::Pack { purpose, selected } => {
             pack::draw(frame, map_area, app.world(), purpose, selected)
         }
         Mode::Draft => sheet::draw_draft(frame, map_area, app.world()),
         Mode::Forget => sheet::draw_forget(frame, map_area, app.world()),
         Mode::Sheet => sheet::draw_sheet(frame, map_area, app.world()),
-        Mode::Rites => sheet::draw_rites(frame, map_area, app.world()),
+        Mode::Rites => sheet::draw_rites(frame, map_area, app.world(), app.rite_cursor()),
         Mode::Corpse => sheet::draw_corpse(frame, map_area, app.world()),
         Mode::Leaving(id) => pack::draw_leaving(frame, map_area, app.world(), id),
-        Mode::Title(_) | Mode::Play | Mode::Shove | Mode::Look { .. } | Mode::Target { .. } => {}
+        Mode::Look { cursor } => look::draw(frame, map_area, app.world(), cursor),
+        Mode::Title(_) | Mode::Play | Mode::Shove | Mode::Target { .. } => {}
     }
 }
 
@@ -147,34 +159,14 @@ fn draw_death(frame: &mut Frame, area: Rect, app: &App) {
     lines.extend([
         Line::default(),
         Line::styled(format!("seed {}", world.seed()), dim),
-        Line::styled("Enter  begin again        q  quit", text),
     ]);
-
-    let width = area.width.min(72);
-    let inner = usize::from(width.saturating_sub(4)).max(1);
-    let rows: usize = lines.iter().map(|l| l.width().max(1).div_ceil(inner)).sum();
-    let height = (rows as u16 + 2).min(area.height);
-    let [_, column, _] = Layout::horizontal([
-        Constraint::Fill(1),
-        Constraint::Length(width),
-        Constraint::Fill(1),
-    ])
-    .areas(area);
-    let [_, popup, _] = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(height),
-        Constraint::Fill(1),
-    ])
-    .areas(column);
-    frame.render_widget(Clear, popup);
-    frame.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-            Block::bordered()
-                .border_style(Style::new().fg(palette::BORDER))
-                .padding(Padding::horizontal(1))
-                .style(Style::new().bg(palette::VOID)),
-        ),
-        popup,
+    sheet::popup(
+        frame,
+        area,
+        "The end",
+        lines,
+        72,
+        "Enter begin again · q quit",
     );
 }
 
@@ -234,9 +226,8 @@ fn draw_victory(frame: &mut Frame, area: Rect, app: &App) {
             ),
             dim,
         ),
-        Line::styled("Enter  begin again        q  quit", text),
     ]);
-    sheet::popup(frame, area, "Home", lines, 72);
+    sheet::popup(frame, area, "Home", lines, 72, "Enter begin again · q quit");
 }
 
 fn cause_line(world: &World, cause: Cause) -> String {
@@ -259,27 +250,61 @@ fn cause_line(world: &World, cause: Cause) -> String {
     }
 }
 
-fn draw_log(frame: &mut Frame, area: Rect, log: &MessageLog) {
+fn draw_log(frame: &mut Frame, area: Rect, app: &App) {
+    let log = app.log();
+    let frayed = app.world().player().dread.band() >= DreadBand::Frayed;
+    let rule = if frayed {
+        Style::new().fg(palette::DREAD_RULE)
+    } else {
+        Style::new().fg(palette::BORDER)
+    };
     let block = Block::new()
         .borders(Borders::TOP)
-        .border_style(Style::new().fg(palette::BORDER));
+        .border_set(if frayed {
+            ratatui::symbols::border::Set {
+                horizontal_top: "╌",
+                ..ratatui::symbols::border::PLAIN
+            }
+        } else {
+            ratatui::symbols::border::PLAIN
+        })
+        .border_style(rule)
+        .title(Line::from(vec![
+            Span::styled(if frayed { "╌╌" } else { "──" }, rule),
+            Span::styled(
+                format!(" turn {} ", app.world().turn()),
+                Style::new().fg(palette::TEXT_DIM),
+            ),
+        ]));
     let inner = block.inner(area);
     let (rows, width) = (usize::from(inner.height), usize::from(inner.width));
 
-    // Newest entry at the bottom in full color; older ones fade. Long entries wrap.
+    // This turn's lines are bright and marked; older turns fade together.
+    // Long entries wrap, continuing under their own text.
+    let latest = log.batch();
     let mut lines: Vec<Line> = Vec::new();
-    for (age, entry) in log.entries().rev().enumerate() {
+    for entry in log.entries().rev() {
         if lines.len() >= rows {
             break;
         }
-        let color = tone_color(entry.tone, age == 0);
+        let now = entry.batch == latest;
+        let color = tone_color(entry.tone, now);
         let text = if entry.count > 1 {
             format!("{} (×{})", entry.text, entry.count)
         } else {
             entry.text.clone()
         };
-        for row in wrap(&text, width).into_iter().rev() {
-            lines.push(Line::styled(row, Style::new().fg(color)));
+        let line = Line::from(vec![
+            Span::styled(
+                if now { "› " } else { "  " },
+                Style::new()
+                    .fg(palette::ACCENT)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(text, Style::new().fg(color)),
+        ]);
+        for row in text::wrap_hanging(&line, width, 2).into_iter().rev() {
+            lines.push(row);
         }
     }
     lines.truncate(rows);
@@ -288,15 +313,15 @@ fn draw_log(frame: &mut Frame, area: Rect, log: &MessageLog) {
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-/// Log colors: each tone has a bright form for the newest line and a dim one after.
-fn tone_color(tone: Tone, newest: bool) -> ratatui::style::Color {
+/// Log colors: each tone has a bright form for this turn and a dim one after.
+fn tone_color(tone: Tone, now: bool) -> ratatui::style::Color {
     let bright = match tone {
         Tone::Normal => palette::TEXT,
         Tone::Dread => palette::DREAD,
         Tone::Danger => palette::DANGER,
         Tone::Good => palette::GOOD,
     };
-    if newest {
+    if now {
         bright
     } else if tone == Tone::Normal {
         palette::TEXT_DIM
@@ -308,41 +333,11 @@ fn tone_color(tone: Tone, newest: bool) -> ratatui::style::Color {
 fn dim(color: ratatui::style::Color) -> ratatui::style::Color {
     match color {
         ratatui::style::Color::Rgb(r, g, b) => {
-            let f = |c: u8| (u16::from(c) * 3 / 5) as u8;
+            let f = |c: u8| (u16::from(c) * 7 / 10) as u8;
             ratatui::style::Color::Rgb(f(r), f(g), f(b))
         }
         other => other,
     }
-}
-
-/// Greedy word wrap to `width` columns. Words longer than a line are split.
-fn wrap(text: &str, width: usize) -> Vec<String> {
-    let width = width.max(1);
-    let mut rows = Vec::new();
-    let mut row = String::new();
-    for word in text.split_whitespace() {
-        let mut word = word.to_string();
-        while word.chars().count() > width {
-            if !row.is_empty() {
-                rows.push(std::mem::take(&mut row));
-            }
-            let split: String = word.chars().take(width).collect();
-            word = word.chars().skip(width).collect();
-            rows.push(split);
-        }
-        let needed = row.chars().count() + usize::from(!row.is_empty()) + word.chars().count();
-        if needed > width && !row.is_empty() {
-            rows.push(std::mem::take(&mut row));
-        }
-        if !row.is_empty() {
-            row.push(' ');
-        }
-        row.push_str(&word);
-    }
-    if !row.is_empty() || rows.is_empty() {
-        rows.push(row);
-    }
-    rows
 }
 
 fn draw_too_small(frame: &mut Frame, area: Rect) {
@@ -420,12 +415,13 @@ mod tests {
             "the pallbearer wound up"
         );
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
-        assert!(screen.contains("─ in view ─"));
-        assert!(screen.contains("pallbearer !"));
+        assert!(screen.contains("in view ─"));
+        assert!(screen.contains("pallbearer   strikes!"));
         assert!(
-            screen.contains("A pallbearer. A big man"),
-            "introduced on first sight"
+            screen.contains("A pallbearer comes into view. (x to look)"),
+            "named on first sight; the rest is for Look"
         );
+        assert!(screen.contains("x  look at it"), "a hint for what to do");
         assert!(screen.contains("raises something heavy over you. Move!"));
     }
 
@@ -434,12 +430,14 @@ mod tests {
         let mut app = scene("gnawer");
         app.handle(Action::Look);
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
-        assert!(screen.contains("─ look ─"));
+        assert!(screen.contains("Gnawer"));
+        assert!(screen.contains("The Swarm"));
         assert!(
-            screen.contains("You hit it   70% · 2–3"),
+            screen.contains("You hit it     70%  2–3"),
             "halved: blunt on a swarm"
         );
-        assert!(screen.contains("It hits you  50% · 1–2"));
+        assert!(screen.contains("It hits you    50%  1–2"));
+        assert!(screen.contains("Tab next · Esc done"));
     }
 
     #[test]
@@ -456,7 +454,7 @@ mod tests {
         assert!(screen.contains("Your candle goes out."));
         assert!(screen.contains("Killed by a Taken parishioner on floor 1 of 12"));
         assert!(screen.contains("─ last moments ─"));
-        assert!(screen.contains("Enter  begin again"));
+        assert!(screen.contains("Enter begin again"));
         app.handle(Action::Confirm);
         assert!(app.wants_restart());
     }
@@ -465,9 +463,12 @@ mod tests {
     fn full_screen_shows_player_hud_and_log() {
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &App::new(7));
         assert!(screen.contains('@'));
-        assert!(screen.contains("T A L L O W"));
+        assert!(screen.contains("The Crypts"));
         assert!(screen.contains("floorboards"));
-        assert!(screen.contains("Floor 1/12 · Level 1"));
+        assert!(screen.contains("floor 1 of 12 · level 1"));
+        assert!(screen.contains("Health ██████████ 24/24"));
+        assert!(screen.contains("o  explore"));
+        assert!(screen.contains("?  every key"));
         assert!(screen.contains("seed 7"));
     }
 
@@ -503,7 +504,7 @@ mod tests {
         app.handle(Action::Descend);
 
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
-        assert!(screen.contains("Floor 2/12"));
+        assert!(screen.contains("floor 2 of 12"));
         assert!(screen.contains("The stair turns more times than it should."));
     }
 
@@ -584,7 +585,10 @@ mod tests {
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(screen.contains(" Rites "));
         assert!(screen.contains("Compel"));
-        assert!(screen.contains("costs 15 dread · range 6 · 12 actions"));
+        assert!(screen.contains("your mind holds 1 of 2"));
+        assert!(screen.contains("costs 15 dread"));
+        assert!(screen.contains("range 6"));
+        assert!(screen.contains("12 actions"));
     }
 
     #[test]
@@ -592,7 +596,7 @@ mod tests {
         let mut app = App::new(7);
         app.world_mut().dev_ascent(1);
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
-        assert!(screen.contains("Ascent 1/4"));
+        assert!(screen.contains("ascent 1 of 4"));
         assert!(screen.contains("The Following:"));
         app.world_mut().dev_ascent(5);
         let world = app.world_mut();
@@ -629,25 +633,59 @@ mod tests {
             );
         }
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
-        assert!(screen.contains("T A L L O W") && screen.contains('@'));
+        assert!(screen.contains("The Crypts") && screen.contains('@'));
     }
 
     #[test]
-    fn wrap_breaks_on_words_and_splits_long_ones() {
-        assert_eq!(wrap("one two three", 7), vec!["one two", "three"]);
-        assert_eq!(wrap("abcdefghij", 4), vec!["abcd", "efgh", "ij"]);
-        assert_eq!(wrap("", 5), vec![""]);
+    fn reading_through_the_rites_never_moves_the_window() {
+        let mut app = App::new(7);
+        for id in ["exorcise", "exchange"] {
+            let rite = app.world().content().rite_by_id(id).unwrap();
+            app.world_mut().teach_rite(rite);
+        }
+        app.handle(Action::Rites);
+        let top = |screen: &str| screen.lines().position(|l| l.contains(" Rites ")).unwrap();
+        let first = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        app.handle_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Down,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        ));
+        let second = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(second.contains("trade places"), "the second rite is shown");
+        assert_eq!(top(&first), top(&second));
     }
 
     #[test]
-    fn long_log_lines_wrap_instead_of_being_cut() {
+    fn the_look_card_holds_the_whole_description() {
         let mut app = scene("parishioner");
-        app.handle(Action::Wait);
+        app.handle(Action::Look);
         let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
         assert!(
             screen.contains("strikes without anger."),
             "the end of the description is on screen"
         );
+    }
+
+    #[test]
+    fn frayed_bruises_the_rules() {
+        let mut app = App::new(7);
+        app.world_mut().dev_set_dread(75);
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("frayed · phantoms walk"));
+        assert!(screen.contains("╌╌ turn 0"), "the log's rule breaks up");
+        assert!(!screen.contains("Nightmare in"), "never says when");
+
+        app.clear_floor_for_test();
+        for _ in 0..60 {
+            app.world_mut().dev_set_dread(75);
+            app.handle(Action::Wait);
+            if app.world().nightmare_coming() {
+                break;
+            }
+        }
+        assert!(app.world().nightmare_coming());
+        let screen = render(MIN_WIDTH, MIN_HEIGHT, &app);
+        assert!(screen.contains("frayed · it is coming"));
     }
 
     #[test]

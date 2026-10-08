@@ -64,8 +64,10 @@ pub fn tinted(base: Rgb, tint: [f32; 3]) -> Rgb {
     [0, 1, 2].map(|i| (f32::from(base[i]) * tint[i]).clamp(0.0, 255.0) as u8)
 }
 
-/// Remembered tiles, out of sight: a cold blue-grey.
+/// Remembered tiles, out of sight: a cold blue-grey. Faces (backgrounds)
+/// stay dark; glyphs keep enough light to read the shape of a room by.
 pub const MEMORY_TINT: [f32; 3] = [0.30, 0.34, 0.46];
+pub const MEMORY_FG_TINT: [f32; 3] = [0.66, 0.74, 0.98];
 pub const MEMORY_BG: Rgb = [11, 12, 16];
 
 pub const PLAYER: Color = Color::Rgb(255, 210, 128);
@@ -76,7 +78,19 @@ pub const HEALTH: Color = Color::Rgb(178, 64, 52);
 pub const HEALTH_EMPTY: Color = Color::Rgb(58, 30, 28);
 pub const DANGER: Color = Color::Rgb(232, 96, 72);
 pub const DREAD: Color = Color::Rgb(176, 140, 214);
-pub const DREAD_EMPTY: Color = Color::Rgb(44, 36, 56);
+pub const DREAD_EMPTY: Color = Color::Rgb(70, 58, 88);
+/// The dread bar's cells deepen through its bands: calm, uneasy, frayed.
+pub const DREAD_BANDS: [Color; 3] = [
+    Color::Rgb(112, 92, 140),
+    Color::Rgb(150, 118, 190),
+    Color::Rgb(196, 150, 240),
+];
+/// Where a band starts, on the empty part of the dread bar.
+pub const DREAD_MARK: Color = Color::Rgb(116, 94, 146);
+/// Rules and edges once you are frayed.
+pub const DREAD_RULE: Color = Color::Rgb(110, 84, 140);
+/// What the map's edges bruise toward when you are frayed.
+pub const DREAD_EDGE: Rgb = [70, 34, 96];
 pub const GOOD: Color = Color::Rgb(168, 196, 138);
 pub const CANDLE: Color = Color::Rgb(232, 176, 92);
 pub const CANDLE_EMPTY: Color = Color::Rgb(56, 44, 30);
@@ -89,9 +103,15 @@ pub const HOLY_BG: Rgb = [58, 52, 26];
 pub const AIM: Rgb = [70, 58, 34];
 
 pub const TEXT: Color = Color::Rgb(196, 186, 170);
-pub const TEXT_DIM: Color = Color::Rgb(110, 102, 92);
+pub const TEXT_DIM: Color = Color::Rgb(146, 136, 120);
 pub const ACCENT: Color = Color::Rgb(214, 160, 86);
 pub const BORDER: Color = Color::Rgb(70, 60, 52);
+/// Popups and the Look card: a frame a little warmer than the map's rules,
+/// on a ground a little lighter than the void.
+pub const FRAME: Color = Color::Rgb(110, 92, 70);
+pub const PANEL: Color = Color::Rgb(16, 14, 13);
+/// The selected row in a list.
+pub const SELECTED: Color = Color::Rgb(40, 32, 24);
 
 pub const fn rgb([r, g, b]: Rgb) -> Color {
     Color::Rgb(r, g, b)

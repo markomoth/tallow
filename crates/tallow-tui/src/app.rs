@@ -107,6 +107,8 @@ pub struct App {
     resumed: bool,
     /// The start menu is still up, under whatever screen it opened.
     on_title: bool,
+    /// The rite highlighted in the rite list.
+    rite_cursor: usize,
 }
 
 impl App {
@@ -131,6 +133,7 @@ impl App {
             simple: false,
             resumed: false,
             on_title: false,
+            rite_cursor: 0,
         }
     }
 
@@ -201,6 +204,12 @@ impl App {
 
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// The rite highlighted in the rite list.
+    pub fn rite_cursor(&self) -> usize {
+        self.rite_cursor
+            .min(self.world.known_rites().len().saturating_sub(1))
     }
 
     pub fn log(&self) -> &MessageLog {
@@ -520,16 +529,28 @@ impl App {
     }
 
     fn handle_rites_key(&mut self, key: KeyEvent) {
-        let KeyCode::Char(c) = key.code else {
-            if key.code == KeyCode::Esc {
+        let count = self.world.known_rites().len();
+        let index = match key.code {
+            KeyCode::Esc => {
                 self.mode = Mode::Play;
+                return;
             }
-            return;
+            KeyCode::Up => {
+                self.rite_cursor = (self.rite_cursor + count.max(1) - 1) % count.max(1);
+                return;
+            }
+            KeyCode::Down => {
+                self.rite_cursor = (self.rite_cursor + 1) % count.max(1);
+                return;
+            }
+            KeyCode::Enter => self.rite_cursor,
+            KeyCode::Char(c) => (c as u32).wrapping_sub('a' as u32) as usize,
+            _ => return,
         };
-        let index = (c as u32).wrapping_sub('a' as u32) as usize;
         let Some(&rite) = self.world.known_rites().get(index) else {
             return;
         };
+        self.rite_cursor = index;
         match self.world.content().rite(rite).effect.target() {
             RiteTarget::Myself => {
                 self.mode = Mode::Play;
@@ -617,6 +638,7 @@ impl App {
     /// Applies a command and writes what happened to the log.
     fn play(&mut self, command: Command) {
         self.commands.push(command);
+        self.log.begin_turn();
         let from = self.world.player().pos;
         for event in self.world.apply(command) {
             if let Some((text, tone)) = narrate(&event, &self.world) {

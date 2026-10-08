@@ -215,7 +215,7 @@ No attributes. No skill trees. No classes. Your build is what you do.
 - **Health:** the acolyte starts with 24 and regains 1 every 12 turns. The candle clock keeps resting honest.
 - **Telegraphs:** a raised heavy blow marks its target tile in pulsing red and always waits for your next action.
 - **Sight is symmetric:** anything in your line of sight can see your candle. Monsters in the dark can notice you before you see them; the log always says so ("Something in the dark has noticed your light.").
-- **First sight** of each creature kind prints its description, so you learn its trick before it matters.
+- **First sight** of each creature kind logs its name ("A pallbearer comes into view. (x to look)"). Its description, numbers and tricks are on the Look card, read by choice.
 - **Runs** are refused while anything hostile is in view.
 
 ### Character level
@@ -429,24 +429,32 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 ### Layout (minimum 100×30)
 
 ```
-┌──────────────────────────── map ─────────────────────────────┬──── status ────┐
-│                                                              │ Acolyte  Lv 4  │
-│                    ASCII map, truecolor,                     │ Health ████░░  │
-│                    candlelight falloff,                      │ Dread  ██░░░░  │
-│                    fog of war tinted blue-grey               │ Candle █████░  │
-│                                                              │ Burdened       │
-│                                                              │ ─ in view ─    │
-│                                                              │ T Parishioner  │
-│                                                              │ i Inkling      │
-├──────────────────────────── log ─────────────────────────────┴────────────────┤
-│ The candle gutters. Something in the stacks stops breathing.                  │
-└───────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────── map ───────────────────────────┬─ status (26) ──────────┐
+│                                                            │ The Collegium          │
+│                    ASCII map, truecolor,                   │ floor 4 of 12 · level 1│
+│                    candlelight falloff,                    │ Health ██████████ 24/24│
+│        ┌ P  Pallbearer ───── The Taken ┐                   │ Candle ███████░░░ 267  │
+│   P────┤ the Look card, beside its     │                   │ Dread  ████████·· 80   │
+│        │ target, never over it         │                   │ frayed · phantoms walk │
+│        └ Tab next · Esc done ──────────┘                   │ in view ────────────── │
+│                                                            │ P pallbearer   hunting │
+│                                                            │ now ────────────────── │
+│                                                            │ x  look at it          │
+├── turn 33 ─────────────────────────────── log ─────────────┴────────────────────────┤
+│   Something in the dark has noticed your light.                                     │
+│ › A pallbearer comes into view. (x to look)                                         │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+- **Status sidebar** (`render/hud.rs`): where you are, then health with its maximum, candle, and the dread bar, whose cells deepen through the bands and whose empty track marks 40 and 70. Under it, outside calm, the band and what it brings: *uneasy · whispers*, *frayed · phantoms walk*, *frayed · it is coming* once a Nightmare is announced (never when it will arrive), *hunted · your fear walks*. Then what each creature in view is doing (hunting, unaware, fleeing, yours, *strikes!*), its name colored by its wounds, and **now**: up to four keys that fit the moment (a body or item underfoot, stairs, a creature beside you, rites ready, the candle, explore), and `?` for every key.
+- **Look** (`render/look.rs`) draws a card on the map beside the cursor, joined to it by a line, flipping to the left near the edge: numbers first (hit chances and damage both ways), then warnings in red, then the description and faction.
+- **Log:** the lines of the latest command are bright and marked `›`; earlier turns fade together. The rule above it carries the turn. Wrapped lines hang under their text.
+- **Popups** (`sheet::popup`) share one frame: a warm border on a slightly lifted ground, the title in amber, the keys in the bottom border. Wrapped lines hang under their text (`render/text.rs`); what doesn't fit is counted ("▾ 7 more lines") instead of cut silently. Help and the journal take the whole screen. **Rites** are two panes: the list (↑↓ to read, a letter or Enter to cast) and the highlighted rite's numbers, words and anything in its way.
+- **Dread at the edges:** from frayed, the map's outer three columns bruise violet and the sidebar and log rules turn purple, the log's breaking up (`╌`); hunted, the bruise pulses. Simple mode drops the tint.
 - **Glyphs:** ASCII. `@` you, `#` wall, `.` floor, `+` door, `>` `<` stairs, `&` brazier, `,` tallow, letters for creatures, `!` tinctures, `?` texts, `*` Leavings, `~` water, `"` vestments, `/` melee weapons, `)` ranged weapons, `(` throwables and ammunition.
 - **Lighting:** per-tile light value blended into foreground and background. Warm amber falloff from the candle; braziers orange; holy light pale gold; darkness near-black.
 - **Flicker:** small per-frame jitter on candle light (visual only, never affects rules).
-- **Remembered tiles:** desaturated blue-grey.
+- **Remembered tiles:** desaturated blue-grey. Faces stay dark; glyphs keep enough light (walls about 3:1) to read a room's shape by.
 - **Truecolor** with automatic 256-color fallback.
 - **Simple mode** (`tallow --simple`): the 16 standard terminal colors on the terminal's own (possibly transparent) background, no flicker, pulse or shimmer, and a redraw only on input. The screen is drawn as usual, then each cell is mapped (`render/simple.rs`): dark and grey backgrounds become the terminal's own; backgrounds that carry meaning (a raised blow's red tiles, the aim line, holy ground) stay as plain dark colors; every foreground becomes its nearest standard color, dim ones dark grey.
 - **Animations:** short and skippable: projectile trails, fire spread, swarm movement.
@@ -463,7 +471,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `<` `>` | Stairs (`<` only works on the way back up, with the Vigil Candle) |
 | `g` | Pick up |
 | `i` | Pack: pick a letter, then `a` drink, `e` equip / take off, `t` throw, `d` drop |
-| `z` | Cast rite |
+| `z` | Rites: ↑↓ read, a letter or Enter casts |
 | `f` | Fire the readied sling or crossbow |
 | `t` | Throw (choose item, then target; Enter lets fly) |
 | `x` | Look (cursor; Tab cycles creatures, Esc leaves) |
@@ -623,6 +631,8 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 | M15 ✅ | Weapons | See Look halve your damage against the wrong faction; open a wound with a sickle, set a floor alight with a censer, hook something in with a boathook, shove it with a staff, render a cleaver kill for more | 2 h |
 
 | M16 ✅ | Monsters | Get flanked by flies and fight them from a doorway; dodge a gnawer's marked leap; be grabbed by a parishioner and shove it off; chase a folio that shoots and backs off; watch a Proctor run to mend and come back; guard and riposte | 3 h |
+
+| M17 ✅ | The screen | Read your health's maximum and the dread bands in the sidebar; follow the four keys it suggests; Look at a creature and read its card on the map; read a rite before casting it; see a turn's log lines lit together; see the edges bruise when frayed and hear that a Nightmare is coming without being told when | 5–6 h |
 
 **As built (M12), sim over 500 seeds** (the bot now walks dark below 150 tallow, lights up to fight, hunts and renders while under 350): 108 wins, the candle ran dry 4 times, 1.3 Manifestations per run, 0 softlocks. The bot sees every creature on the floor, so it hunts better than a person can; treat its numbers as an upper bound.
 

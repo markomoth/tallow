@@ -2,9 +2,9 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Modifier;
+use ratatui::style::{Color, Modifier};
 use ratatui::widgets::Widget;
-use tallow_core::{Direction, Floor, Light, Point, Rgb, Tile, World};
+use tallow_core::{Direction, DreadBand, Floor, Light, Point, Rgb, Tile, World};
 
 use super::palette::{self, rgb};
 
@@ -75,7 +75,7 @@ impl Widget for MapView<'_> {
                     };
                     (fg, shade(look.bg, light, flicker))
                 } else {
-                    (remember(look.fg), remember_bg(look.bg))
+                    (remember_fg(look.fg), remember_bg(look.bg))
                 };
 
                 let bg = if telegraphs.contains(&p) {
@@ -165,7 +165,7 @@ impl Widget for MapView<'_> {
                         let pulse = 0.8 + 0.2 * (self.time * 2.3).sin();
                         palette::WRITING_FG.map(|c| (f32::from(c) * pulse) as u8)
                     } else {
-                        remember(palette::WRITING_FG)
+                        remember_fg(palette::WRITING_FG)
                     };
                     cell.set_char('?').set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else if let Some(id) = leaving {
@@ -173,7 +173,7 @@ impl Widget for MapView<'_> {
                     let fg = if floor.is_visible(p) {
                         color
                     } else {
-                        remember(color)
+                        remember_fg(color)
                     };
                     cell.set_char('*').set_fg(rgb(fg)).set_bg(rgb(bg));
                     cell.modifier.insert(Modifier::BOLD);
@@ -200,14 +200,14 @@ impl Widget for MapView<'_> {
                     let fg = if floor.is_visible(p) {
                         shade(def.color, floor.light(p), global_flicker)
                     } else {
-                        remember(def.color)
+                        remember_fg(def.color)
                     };
                     cell.set_char(def.glyph).set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else if tallow.is_some() {
                     let fg = if floor.is_visible(p) {
                         shade(palette::TALLOW_FG, floor.light(p), global_flicker)
                     } else {
-                        remember(palette::TALLOW_FG)
+                        remember_fg(palette::TALLOW_FG)
                     };
                     cell.set_char(',').set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else if let Some(corpse) = corpse {
@@ -215,7 +215,7 @@ impl Widget for MapView<'_> {
                     let fg = if floor.is_visible(p) {
                         shade(base, floor.light(p), global_flicker)
                     } else {
-                        remember(base)
+                        remember_fg(base)
                     };
                     cell.set_char('%').set_fg(rgb(fg)).set_bg(rgb(bg));
                 } else {
@@ -226,7 +226,59 @@ impl Widget for MapView<'_> {
                 }
             }
         }
+        dread_edges(self.world, area, buf, self.time);
     }
+}
+
+/// How deep the bruise reaches in from the map's edges, and how strong each
+/// ring of it is.
+const EDGE_RINGS: [f32; 3] = [0.26, 0.13, 0.05];
+
+/// Frayed, the map's edges bruise violet; hunted, they pulse.
+fn dread_edges(world: &World, area: Rect, buf: &mut Buffer, time: f32) {
+    let band = world.player().dread.band();
+    if band < DreadBand::Frayed {
+        return;
+    }
+    let strength = if band == DreadBand::Manifest {
+        1.2 + 0.4 * (time * 2.2).sin()
+    } else {
+        1.0
+    };
+    for sy in 0..area.height {
+        for sx in 0..area.width {
+            let ring = sx
+                .min(sy)
+                .min(area.width - 1 - sx)
+                .min(area.height - 1 - sy);
+            let Some(&weight) = EDGE_RINGS.get(usize::from(ring)) else {
+                continue;
+            };
+            let Some(cell) = buf.cell_mut((area.x + sx, area.y + sy)) else {
+                continue;
+            };
+            let Color::Rgb(r, g, b) = cell.bg else {
+                continue;
+            };
+            let a = (weight * strength).min(1.0);
+            let mix = |from: u8, to: u8| (f32::from(from) * (1.0 - a) + f32::from(to) * a) as u8;
+            let [er, eg, eb] = palette::DREAD_EDGE;
+            cell.set_bg(Color::Rgb(mix(r, er), mix(g, eg), mix(b, eb)));
+        }
+    }
+}
+
+/// Where a map point is drawn inside `area`, if it is on screen.
+pub fn screen_pos(world: &World, area: Rect, p: Point) -> Option<(u16, u16)> {
+    let map = world.floor().map();
+    let focus = world.player().pos;
+    let origin = Point::new(
+        camera_origin(map.width(), area.width.into(), focus.x),
+        camera_origin(map.height(), area.height.into(), focus.y),
+    );
+    let (sx, sy) = (p.x - origin.x, p.y - origin.y);
+    (sx >= 0 && sy >= 0 && sx < i32::from(area.width) && sy < i32::from(area.height))
+        .then(|| (area.x + sx as u16, area.y + sy as u16))
 }
 
 struct Look {
@@ -345,6 +397,13 @@ fn remember(base: Rgb) -> Rgb {
     let [r, g, b] = base.map(f32::from);
     let luma = 0.30 * r + 0.59 * g + 0.11 * b;
     palette::MEMORY_TINT.map(|t| (luma * t).clamp(0.0, 255.0) as u8)
+}
+
+/// A remembered glyph: as cold as the rest, but light enough to read.
+fn remember_fg(base: Rgb) -> Rgb {
+    let [r, g, b] = base.map(f32::from);
+    let luma = 0.30 * r + 0.59 * g + 0.11 * b;
+    palette::MEMORY_FG_TINT.map(|t| (luma * t).clamp(0.0, 255.0) as u8)
 }
 
 fn remember_bg(base: Rgb) -> Rgb {
