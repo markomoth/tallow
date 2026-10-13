@@ -767,6 +767,10 @@ pub enum Event {
     Won,
     /// Auto-explore found nothing left to see. Costs no time.
     Explored,
+    /// A blow or a shove at a flier aloft in the light. Costs no time.
+    OutOfReach {
+        kind: KindId,
+    },
     /// A creature that sweeps heaves itself up after a blow: an opening.
     Recovering {
         kind: KindId,

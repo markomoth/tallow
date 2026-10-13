@@ -82,6 +82,34 @@ pub fn populate<R: Rng + ?Sized>(
     placed
 }
 
+/// A floor with fliers on it has stones lying near the stair: something
+/// to throw at what your blade can't reach (BUILD_GUIDE.md §9).
+pub fn place_missiles<R: Rng + ?Sized>(
+    rng: &mut R,
+    content: &Content,
+    map: &Map,
+    start: Point,
+    spawns: &[(KindId, Point)],
+) -> Option<(Point, crate::item::ItemKindId, u32)> {
+    let flies = |k: KindId| {
+        content
+            .monster(k)
+            .has(|t| matches!(t, crate::content::Trait::Flies { .. }))
+    };
+    if !spawns.iter().any(|&(k, _)| flies(k)) {
+        return None;
+    }
+    let dist = path::distances(map, start);
+    let near: Vec<Point> = map
+        .points()
+        .filter(|&p| map.tile(p) == Tile::Floor && dist.at(p).is_some_and(|d| (3..=8).contains(&d)))
+        .collect();
+    let &at = near.choose(rng)?;
+    let stone = content.item_by_id("stone").expect("stones exist");
+    let (lo, hi) = content.item(stone).stack;
+    Some((at, stone, rng.random_range(lo..=hi)))
+}
+
 /// The creatures that live at a depth.
 pub fn eligible(content: &Content, depth: u8) -> Vec<KindId> {
     let in_range: Vec<KindId> = content

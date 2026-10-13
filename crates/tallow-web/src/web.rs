@@ -60,6 +60,18 @@ impl Game {
 
     fn press(&mut self, key: KeyEvent) {
         self.app.handle_key(key);
+        self.settle();
+    }
+
+    /// An auto-explore takes its next step when one is due.
+    fn tick(&mut self, time: f32) {
+        if self.app.tick(time) {
+            self.settle();
+        }
+    }
+
+    /// After the run has moved on: a new run, the journal, the save.
+    fn settle(&mut self) {
         if self.app.wants_restart() {
             self.app = App::new(random_seed());
             self.app.set_journal(self.journal.clone());
@@ -116,6 +128,7 @@ fn run(font: &str) {
     let started = now();
     terminal.draw_web(move |frame| {
         let time = ((now() - started) / 1000.0) as f32;
+        game.borrow_mut().tick(time);
         render::draw(frame, &game.borrow().app, time);
     });
     set_state("ready");

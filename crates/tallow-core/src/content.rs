@@ -116,6 +116,9 @@ pub enum Trait {
     Lunges { bonus: u32 },
     /// Its hit holds you: you can't step away for a few turns.
     Grabs { turns: u32 },
+    /// On lit ground it is aloft, out of reach of anything held in the hand;
+    /// in the dark it settles, and `settled` more defense makes it hard to hit.
+    Flies { settled: i32 },
 }
 
 #[derive(Debug, Clone, Deserialize)]

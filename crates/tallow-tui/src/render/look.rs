@@ -230,11 +230,18 @@ fn card(world: &World, cursor: Point) -> Card {
                 Span::styled(mind.0, Style::new().fg(mind.1)),
             ]),
             Line::default(),
-            odds("You hit it", info.your_hit_chance, info.your_damage),
+            if info.aloft {
+                Line::from(vec![
+                    Span::styled(format!("{:<14}", "You hit it"), dim()),
+                    Span::styled("out of reach", warn().add_modifier(Modifier::BOLD)),
+                ])
+            } else {
+                odds("You hit it", info.your_hit_chance, info.your_damage)
+            },
             odds("It hits you", info.its_hit_chance, info.its_damage),
         ];
         let dread = Style::new().fg(palette::DREAD);
-        if info.resists {
+        if info.resists && !info.aloft {
             body.push(Line::styled(
                 match def.faction {
                     Faction::Swarm => "Half damage: blunt is wasted.",
@@ -247,6 +254,18 @@ fn card(world: &World, cursor: Point) -> Card {
         if info.in_the_dark {
             body.push(Line::styled(
                 "In the dark: you strike worse, it strikes harder.",
+                dread,
+            ));
+        }
+        if info.aloft {
+            body.push(Line::styled(
+                "Aloft in the light: your blade can't reach it. Throw or shoot.",
+                warn(),
+            ));
+        }
+        if let Some(settled) = info.settled {
+            body.push(Line::styled(
+                format!("Settled in the dark: it crawls, and +{settled} to its defense."),
                 dread,
             ));
         }

@@ -385,6 +385,7 @@ Target for v1: ~30 types. Each has one clear trick.
 | Crypts | Taken Parishioner | Taken | Slow, pleads; Exorcise frees them |
 | Crypts | Lantern-Eater | Dreaming | Won't cross brazier light; snuffs nearby light (M3) |
 | Crypts | Pallbearer | Taken | Raises a heavy blow at a marked tile; step aside |
+| Crypts and below | Tallow moth | Swarm | Flies in the light, out of a blade's reach; settles in the dark (M18) |
 | Crypts | **The Sexton** | Taken | Buries and raises corpses |
 | Collegium | Inkling | Dreaming | Blinds (radius drop) |
 | Collegium | Proctor | Remnant | Attacks any intruder, even nightmares |
@@ -419,6 +420,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | Leaps (M16) | Gnawer | Two tiles off in a straight line, it marks your tile (red) and leaps next action (+1). Step off. |
 | Scatters (M16) | Gnawer, maggot spawn | Flees from candlelight within 4; bold again in the dark. |
 | Grabs (M16) | Parishioner, risen husk | A hit holds you 2 turns: you can't step away (you can strike, cast, or shove it off). |
+| Flies (M18) | Tallow moth | On a lit tile it is aloft: no melee blow, reach strike, riposte or shove can touch it (a refused blow costs no time and says why). Thrown and fired things hit it as usual. On a dark tile it settles: +15 defense on top of the dark's −20, and it crawls at half speed (no swarm quickening), so you can walk away. Floors 2–10. A floor with moths always has stones lying 3–8 steps from the arrival stair. |
 | Volleys (M16) | Bound folio | Strikes from up to 5 tiles (1–3), once every 3 actions; keeps its distance. |
 | Mends (M16) | Proctor, fly herald | Below a third of its health it runs; out of sight or 6+ away it mends 1 an action; back at two thirds it returns. |
 
@@ -482,7 +484,7 @@ Every attack that hits for more than ~30% of your health must be telegraphed one
 | `S` + direction | Shove a creature a step back |
 | `G` | Guard: wait braced, answer every miss |
 | `R` | Rest until healed |
-| `o` | Auto-explore (stops when anything new is in view; skips fire, deep water, rotten boards, seep rooms) |
+| `o` | Auto-explore: the acolyte walks, five steps a second, until anything new is in view (skips fire, deep water, rotten boards, seep rooms). Any key stops it. |
 | `@` | Character sheet: skills, techniques, boons |
 | `M` | Journal (`J` is taken by running south) |
 | `?` | Help |
@@ -637,6 +639,8 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 
 | M17 ✅ | The screen | Read your health's maximum and the dread bands in the sidebar; follow the four keys it suggests; Look at a creature and read its card on the map; read a rite before casting it; see a turn's log lines lit together; see the edges bruise when frayed and hear that a Nightmare is coming without being told when | 5–6 h |
 
+| M18 ✅ | Moths and the walk | Watch auto-explore walk step by step and stop it with a key; meet a tallow moth and be refused a blow at it; bring it down with stones; snuff the candle and see it settle, crawl and get harder to hit | 2 h |
+
 **As built (M12), sim over 500 seeds** (the bot now walks dark below 150 tallow, lights up to fight, hunts and renders while under 350): 108 wins, the candle ran dry 4 times, 1.3 Manifestations per run, 0 softlocks. The bot sees every creature on the floor, so it hunts better than a person can; treat its numbers as an upper bound.
 
 **As built (M13), sim over 500 seeds:** 113 wins, the candle ran dry 8 times, 1.31 Manifestations per run, 6 deaths on the ascent (12 before), 0 softlocks. The bot casts no rites, so recharge and slots don't show in its numbers.
@@ -644,6 +648,8 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 **As built (M14), sim over 500 seeds** (the bot now also keeps its candle lit past 60 dread, as a player would to stop the dread climbing): 35 wins, the candle ran dry 61 times, 0.92 Manifestations per run, 0 softlocks. Killed by: Manifestation 122, lantern-eater 108, lidless thing 34, Sexton 34. The bot has no way to spend dread (it casts no rites), so it stays frayed far longer than a player would; at first, before it learned to light up, it won 1 run in 500. The Manifestation first snuffed every action and doubled twice; that killed in two of every three meetings (185 deaths), so it now snuffs once per 12 actions and sends one copy.
 
 **As built (M15), sim over 500 seeds:** 51 wins, 0 softlocks. Killed by: Manifestation 136, lantern-eater 71, lidless thing 45. The bot never changes weapons, so it fights the whole run with the starting candlestick: Candlelit at +2 took it to 97 wins, which made the first weapon too good to put down, so it is +1.
+
+**As built (M18), sim over 500 seeds** (the bot now picks up stones and knives, throws them at a moth above it, and with none goes dark to fight it): 42 wins, 0 softlocks. Killed by: Manifestation 139, tallow moth 42, lidless thing 33, bound folio 30. The first moth kept the Swarm's quickening and +25 defense in the dark; with no stones the bot fought it there at 5% and won 3 runs in 500. Settled, it now crawls at half speed and takes +15. The bot still stands and swings in the dark where a player would walk away, so treat its moth deaths as an upper bound.
 
 **As built (M16), sim over 500 seeds:** 76 wins, 0 softlocks. Killed by: Manifestation 123, bound folio 30, lidless thing 28, Provost 26. Lantern-eater deaths fell from 71 to 20: slowed in your light, they no longer catch you. The first folio shot every action at speed 15 and killed 78 bots; it now volleys once per 3 actions. The Provost first kept its post too, stood off and relocked the doors forever (two softlocks): bosses don't keep posts.
 

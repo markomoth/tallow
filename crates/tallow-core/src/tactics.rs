@@ -40,9 +40,12 @@ pub const GUARD_DEFENSE: i32 = 25;
 
 impl World {
     /// How fast a creature is where it stands: swarms quicken in the dark, the
-    /// Dreaming slow in the light.
+    /// Dreaming slow in the light, and a flier settled in the dark crawls.
     pub fn monster_speed(&self, m: &Monster) -> i32 {
         let def = self.content.monster(m.kind);
+        if self.flier_settles(m).is_some() && self.in_the_dark(m.pos) {
+            return (def.speed / 2) as i32;
+        }
         let speed = match def.faction {
             Faction::Swarm if self.in_the_dark(m.pos) => def.speed + SWARM_DARK_SPEED,
             Faction::Dreaming if !self.in_the_dark(m.pos) => {
@@ -51,6 +54,44 @@ impl World {
             _ => def.speed,
         };
         speed as i32
+    }
+
+    /// A flier on lit ground: out of reach of anything held in the hand.
+    /// Throw at it, shoot it, or take the light away.
+    pub fn aloft(&self, m: &Monster) -> bool {
+        !m.phantom && self.flier_settles(m).is_some() && !self.in_the_dark(m.pos)
+    }
+
+    /// How hard a creature is to hit where it stands: a flier settled in the
+    /// dark lies flat and still, and is much harder.
+    pub fn monster_defense(&self, m: &Monster) -> i32 {
+        let base = self.content.monster(m.kind).defense;
+        match self.flier_settles(m) {
+            Some(extra) if self.in_the_dark(m.pos) => base + extra,
+            _ => base,
+        }
+    }
+
+    /// What settling in the dark adds to a flier's defense; `None` if it
+    /// doesn't fly.
+    pub(crate) fn flier_settles(&self, m: &Monster) -> Option<i32> {
+        self.content
+            .monster(m.kind)
+            .traits
+            .iter()
+            .find_map(|t| match *t {
+                Trait::Flies { settled } => Some(settled),
+                _ => None,
+            })
+    }
+
+    /// A blow or a shove at a flier above you: refused, and free.
+    pub(crate) fn out_of_reach(&mut self, id: MonsterId) -> Vec<Event> {
+        let kind = self.floor.monsters[id].kind;
+        if let Some(settled) = self.flier_settles(&self.floor.monsters[id]) {
+            self.witness(kind, Trait::Flies { settled });
+        }
+        vec![Event::OutOfReach { kind }]
     }
 
     /// Other swarm creatures beside you, besides this one (at most `MAX_FLANKERS`).
@@ -299,6 +340,9 @@ impl World {
         if def.boss {
             return vec![Event::TooBigToShove { kind: m.kind }];
         }
+        if self.aloft(&m) {
+            return self.out_of_reach(id);
+        }
         let to = at + dir;
         let tile = self.map().tile(to);
         let open = tile.is_walkable()
@@ -394,6 +438,105 @@ mod tests {
         let lit = world.monster_speed(&m);
         world.apply(Command::ToggleCandle);
         assert_eq!(world.monster_speed(&m), lit + SWARM_DARK_SPEED as i32);
+    }
+
+    #[test]
+    fn a_moth_in_the_light_is_out_of_reach() {
+        let mut world = hall();
+        let id = world.spawn_monster(kind("tallow_moth"), at(&world, 1, 0));
+        let m = world.floor().monster(id).unwrap().clone();
+        assert!(world.aloft(&m));
+        let turn = world.turn();
+        let events = world.apply(Command::Move(crate::geom::Direction::E));
+        assert_eq!(events, vec![Event::OutOfReach { kind: m.kind }]);
+        assert_eq!(world.turn(), turn, "a refused blow costs nothing");
+        let events = world.apply(Command::Shove(crate::geom::Direction::E));
+        assert_eq!(events, vec![Event::OutOfReach { kind: m.kind }]);
+        assert!(world.inspect(id).unwrap().aloft);
+        assert!(
+            world
+                .inspect(id)
+                .unwrap()
+                .known_traits
+                .iter()
+                .any(|t| matches!(t, Trait::Flies { .. })),
+            "Look remembers why"
+        );
+    }
+
+    #[test]
+    fn in_the_dark_a_moth_settles_and_is_hard_to_hit() {
+        let mut world = hall();
+        let id = world.spawn_monster(kind("tallow_moth"), at(&world, 1, 0));
+        let lit = world.inspect(id).unwrap().your_hit_chance;
+        world.apply(Command::ToggleCandle);
+        let m = world.floor().monster(id).unwrap().clone();
+        assert!(!world.aloft(&m));
+        let info = world.inspect(id).unwrap();
+        let Some(settled) = info.settled else {
+            panic!("settled in the dark")
+        };
+        let expected = (lit as i32 - combat::DARK_ACCURACY - settled).max(5) as u32;
+        assert_eq!(info.your_hit_chance, expected);
+        let dir = world.player().pos.direction_to(m.pos);
+        let events = world.apply(Command::Move(dir));
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                Event::Attack {
+                    attacker: crate::events::Who::Player,
+                    ..
+                }
+            )),
+            "grounded, it can be struck: {events:?}"
+        );
+    }
+
+    #[test]
+    fn stones_bring_a_moth_down() {
+        let mut world = hall();
+        let id = world.spawn_monster(kind("tallow_moth"), at(&world, 3, 0));
+        world.floor.monsters[id].pinned = 99;
+        for _ in 0..60 {
+            let Some(m) = world.floor().monster(id) else {
+                break;
+            };
+            let target = m.pos;
+            world.dev_give("stone", 1);
+            let stone = world.player().inventory.last().unwrap().id;
+            world.apply(Command::Throw {
+                item: stone,
+                target,
+            });
+        }
+        assert!(world.floor().monster(id).is_none(), "thrown stones kill it");
+    }
+
+    #[test]
+    fn a_floor_with_moths_has_stones_near_the_stair() {
+        let content = Content::bundled();
+        let moth = kind("tallow_moth");
+        let stone = content.item_by_id("stone").unwrap();
+        let mut found = 0;
+        for seed in 0..60 {
+            let mut world = World::new(seed);
+            for depth in 2..=4 {
+                world.dev_skip_to(depth);
+                if world.floor().monsters().any(|(_, m)| m.kind == moth) {
+                    found += 1;
+                    let start = world.player().pos;
+                    assert!(
+                        world
+                            .floor
+                            .items
+                            .iter()
+                            .any(|it| it.item.kind == stone && it.at.chebyshev(start) <= 8),
+                        "seed {seed} depth {depth}: stones near the stair"
+                    );
+                }
+            }
+        }
+        assert!(found > 0, "moths turn up");
     }
 
     #[test]

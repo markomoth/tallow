@@ -128,8 +128,13 @@ fn run(terminal: &mut DefaultTerminal, seed: u64, options: &Options) -> Result<(
             app.set_journal(journal.clone());
         }
         let time = started.elapsed().as_secs_f32();
+        app.tick(time);
         terminal.draw(|frame| render::draw(frame, &app, time))?;
-        if event::poll(frame)?
+        // An auto-explore wakes the loop for its next step.
+        let wait = app
+            .wake_in(started.elapsed().as_secs_f32())
+            .map_or(frame, |s| frame.min(Duration::from_secs_f32(s)));
+        if event::poll(wait)?
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
             && let Some(key) = from_crossterm(key)

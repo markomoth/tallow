@@ -415,7 +415,7 @@ impl World {
         let (akind, apos, thrall) = (a.kind, a.pos, a.compelled > 0);
         let (dkind, dpos) = (d.kind, d.pos);
         let adef = self.content.monster(akind);
-        let chance = combat::hit_chance(adef.accuracy, self.content.monster(dkind).defense);
+        let chance = combat::hit_chance(adef.accuracy, self.monster_defense(d));
         let damage = combat::roll_attack(&mut self.combat_rng, chance, adef.damage);
         if self.floor.is_visible(apos) || self.floor.is_visible(dpos) {
             events.push(Event::Attack {
@@ -457,7 +457,13 @@ impl World {
             }
             _ => 0,
         };
-        let chance = if self.player.guarding { 100 } else { riposte() };
+        let chance = if self.aloft(&self.floor.monsters[id]) {
+            0
+        } else if self.player.guarding {
+            100
+        } else {
+            riposte()
+        };
         if damage.is_none() && chance > 0 && self.combat_rng.random_range(0..100) < chance {
             events.push(Event::Riposte { kind });
             self.player_attack(id, 0, events);

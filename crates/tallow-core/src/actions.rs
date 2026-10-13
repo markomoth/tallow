@@ -50,6 +50,9 @@ pub enum Command {
     CloseDoor,
     /// Walk toward unknown ground until something new is in view.
     Explore,
+    /// One step of `Explore`; `World::explore_halts` says whether to take
+    /// another.
+    ExploreStep,
     /// Study the body underfoot.
     Study,
     /// Render the body underfoot into tallow.

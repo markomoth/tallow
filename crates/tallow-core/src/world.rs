@@ -120,6 +120,10 @@ pub struct MonsterInfo {
     pub its_damage: (u32, u32),
     /// It stands where no light reaches: you strike worse, it strikes harder.
     pub in_the_dark: bool,
+    /// A flier on lit ground: nothing in your hand can reach it.
+    pub aloft: bool,
+    /// A flier settled in the dark: this much harder to hit.
+    pub settled: Option<i32>,
     /// Tricks you have seen this kind of creature use this run.
     pub known_traits: Vec<Trait>,
     /// A raised blow or a crouch to leap: the tile it will come down on.
@@ -357,6 +361,7 @@ impl World {
         let seep = layout.seep.map(|room| {
             spawn::fill_seep(&mut rng, content, &layout.map, room, layout.start, depth)
         });
+        let missiles = spawn::place_missiles(&mut rng, content, &layout.map, layout.start, &spawns);
         // Nothing worth having lies inside a seep room but its Leaving.
         let outside = |at: Point| match layout.seep {
             Some(room) => spawn::outside_room(&layout.map, room, at),
@@ -366,6 +371,7 @@ impl World {
             tallow.into_iter().map(|(at, n)| (outside(at), n)).collect();
         let items: Vec<_> = items
             .into_iter()
+            .chain(missiles)
             .map(|(at, k, n)| (outside(at), k, n))
             .collect();
         let writing = writing.filter(|&(_, front)| outside(front) == front);
@@ -606,8 +612,12 @@ impl World {
             resists: self.resists_wielded(m),
             your_hit_chance: combat::hit_chance(
                 self.player_accuracy() - self.dark_penalty(m.pos),
-                def.defense,
+                self.monster_defense(m),
             ),
+            aloft: self.aloft(m),
+            settled: self
+                .flier_settles(m)
+                .filter(|_| !self.aloft(m) && !m.phantom),
             its_hit_chance: combat::hit_chance(self.monster_strength(m).0, self.player_defense()),
             its_damage: self.monster_strength(m).1,
             in_the_dark: self.in_the_dark(m.pos),
@@ -679,6 +689,7 @@ impl World {
             Command::Study => self.study(),
             Command::CloseDoor => self.close_doors(),
             Command::Explore => self.explore(),
+            Command::ExploreStep => self.explore_step(),
             Command::UseLeaving(id) => self.use_leaving(id),
             Command::DropLeaving(id) => self.drop_leaving(id),
             Command::Render => self.render(),
@@ -714,6 +725,9 @@ impl World {
         }) {
             return self.push_through(id);
         } else if let Some(id) = self.floor.monster_at(target) {
+            if self.aloft(&self.floor.monsters[id]) {
+                return self.out_of_reach(id);
+            }
             self.player_attack(id, 0, &mut events);
         } else if let Some((id, bonus)) = self.reach_target(dir) {
             self.player_attack(id, bonus, &mut events);
@@ -851,10 +865,10 @@ impl World {
         let between = self.player.pos + dir;
         let far = between + dir;
         let open = self.map().is_walkable(between) && self.floor.monster_at(between).is_none();
-        let id = self
-            .floor
-            .monster_at(far)
-            .filter(|&id| self.floor.is_visible(far) && self.floor.monsters[id].compelled == 0)?;
+        let id = self.floor.monster_at(far).filter(|&id| {
+            let m = &self.floor.monsters[id];
+            self.floor.is_visible(far) && m.compelled == 0 && !self.aloft(m)
+        })?;
         open.then_some((id, accuracy))
     }
 
@@ -870,7 +884,7 @@ impl World {
         let def = self.content.monster(kind);
         let at = monster.pos;
         let accuracy = self.player_accuracy() + bonus - self.dark_penalty(at);
-        let chance = combat::hit_chance(accuracy, def.defense);
+        let chance = combat::hit_chance(accuracy, self.monster_defense(monster));
         if self.in_the_dark(at) {
             self.shift_dread(crate::dread::DARK_BLOW, events);
         }

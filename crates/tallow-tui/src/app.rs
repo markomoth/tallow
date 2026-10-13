@@ -11,6 +11,21 @@ use crate::save::Save;
 /// How far a Shift+direction moves a cursor.
 const CURSOR_JUMP: i32 = 5;
 
+/// Seconds between the steps of an auto-explore: five a second, so you
+/// watch the acolyte walk.
+pub const EXPLORE_STEP: f32 = 0.2;
+
+/// Safety stop for one auto-explore.
+const MAX_EXPLORE_STEPS: u32 = 300;
+
+/// An auto-explore underway.
+#[derive(Debug, Clone, Copy)]
+struct Walk {
+    steps: u32,
+    /// When the next step is due; set by the first tick.
+    due: Option<f32>,
+}
+
 /// What the pack screen is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackPurpose {
@@ -108,6 +123,8 @@ pub struct App {
     on_title: bool,
     /// The rite highlighted in the rite list.
     rite_cursor: usize,
+    /// An auto-explore taking its steps.
+    walk: Option<Walk>,
 }
 
 impl App {
@@ -133,6 +150,7 @@ impl App {
             resumed: false,
             on_title: false,
             rite_cursor: 0,
+            walk: None,
         }
     }
 
@@ -239,9 +257,62 @@ impl App {
         }
     }
 
+    /// An auto-explore is walking.
+    pub fn exploring(&self) -> bool {
+        self.walk.is_some()
+    }
+
+    /// Seconds until the app wants another tick, if it is waiting on one.
+    pub fn wake_in(&self, time: f32) -> Option<f32> {
+        let walk = self.walk?;
+        Some(walk.due.map_or(0.0, |due| (due - time).max(0.0)))
+    }
+
+    /// Lets time pass: an auto-explore takes its next step when one is due.
+    /// True if anything changed.
+    pub fn tick(&mut self, time: f32) -> bool {
+        let Some(walk) = self.walk.as_mut() else {
+            return false;
+        };
+        if self.mode != Mode::Play {
+            self.walk = None;
+            return false;
+        }
+        let due = *walk.due.get_or_insert(time + EXPLORE_STEP);
+        if time < due {
+            return false;
+        }
+        walk.steps += 1;
+        // Due again a step from now: a late frame doesn't bunch up steps.
+        walk.due = Some(time + EXPLORE_STEP);
+        let steps = walk.steps;
+        if !self.explore_step() || steps >= MAX_EXPLORE_STEPS {
+            self.walk = None;
+        }
+        true
+    }
+
+    /// Takes one step of auto-explore. True if the walk goes on.
+    fn explore_step(&mut self) -> bool {
+        let from = self.world.player().pos;
+        let events = self.apply(Command::ExploreStep, false);
+        let halts = self.world.explore_halts(&events);
+        // Where the walk ends, say what's underfoot.
+        if halts && self.world.player().pos != from && self.world.death().is_none() {
+            for line in underfoot(&self.world) {
+                self.log.push(line, Tone::Normal);
+            }
+        }
+        !halts && self.mode == Mode::Play
+    }
+
     /// Handles a raw key. The pack screen reads letters; everything else goes
     /// through the key bindings.
     pub fn handle_key(&mut self, key: KeyEvent) {
+        // Any key stops an auto-explore, and does nothing else.
+        if self.walk.take().is_some() {
+            return;
+        }
         match self.mode {
             Mode::Title(choice) => self.handle_title_key(key, choice),
             Mode::Pack { purpose, selected } => self.handle_pack_key(key, purpose, selected),
@@ -384,7 +455,16 @@ impl App {
             Action::Rest => Command::Rest,
             Action::PickUp => Command::PickUp,
             Action::CloseDoor => Command::CloseDoor,
-            Action::Explore => Command::Explore,
+            Action::Explore => {
+                // The first step at once; the rest as time passes (`tick`).
+                if self.explore_step() {
+                    self.walk = Some(Walk {
+                        steps: 1,
+                        due: None,
+                    });
+                }
+                return;
+            }
             Action::Help => {
                 self.mode = Mode::Help;
                 return;
@@ -636,16 +716,23 @@ impl App {
 
     /// Applies a command and writes what happened to the log.
     fn play(&mut self, command: Command) {
+        self.apply(command, true);
+    }
+
+    /// Gives the world a command and logs what happened. `underfoot_too`: say
+    /// what lies where you stepped.
+    fn apply(&mut self, command: Command, underfoot_too: bool) -> Vec<Event> {
         self.commands.push(command);
         self.log.begin_turn();
         let from = self.world.player().pos;
-        for event in self.world.apply(command) {
-            if let Some((text, tone)) = narrate(&event, &self.world) {
+        let events = self.world.apply(command);
+        for event in &events {
+            if let Some((text, tone)) = narrate(event, &self.world) {
                 self.log.push(text, tone);
             }
         }
         // Stepping onto something says what it is.
-        if self.world.player().pos != from && self.world.death().is_none() {
+        if underfoot_too && self.world.player().pos != from && self.world.death().is_none() {
             for line in underfoot(&self.world) {
                 self.log.push(line, Tone::Normal);
             }
@@ -661,6 +748,7 @@ impl App {
         } else if matches!(self.mode, Mode::Draft | Mode::Forget) {
             self.mode = Mode::Play;
         }
+        events
     }
 
     /// Moves a cursor for a movement action, or `None` if it isn't one.
@@ -747,6 +835,42 @@ mod tests {
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn explore_walks_a_step_at_a_time() {
+        let mut app = App::new(11);
+        app.clear_floor_for_test();
+        app.handle(Action::Explore);
+        assert!(app.exploring(), "one step, then it keeps walking");
+        let turn = app.world().turn();
+        // Not yet due: nothing happens.
+        app.tick(1.0);
+        app.tick(1.0 + EXPLORE_STEP / 2.0);
+        assert_eq!(app.world().turn(), turn);
+        app.tick(1.0 + EXPLORE_STEP);
+        assert_eq!(app.world().turn(), turn + 1, "one step when due");
+        assert!((app.wake_in(1.0 + EXPLORE_STEP).unwrap() - EXPLORE_STEP).abs() < 1e-6);
+        // A key stops it, and does nothing else.
+        app.handle_key(key('l'));
+        assert!(!app.exploring());
+        assert_eq!(app.world().turn(), turn + 1);
+        assert_eq!(app.wake_in(9.0), None);
+    }
+
+    #[test]
+    fn explore_stops_by_itself() {
+        let mut app = App::new(11);
+        app.clear_floor_for_test();
+        app.handle(Action::Explore);
+        let mut time = 0.0;
+        while app.exploring() {
+            time += EXPLORE_STEP;
+            app.tick(time);
+            app.clear_floor_for_test();
+            assert!(time < 1000.0, "the walk ends");
+        }
+        assert!(app.world().turn() > 1);
     }
 
     #[test]

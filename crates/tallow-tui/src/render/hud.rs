@@ -187,7 +187,7 @@ impl Widget for Hud<'_> {
             | Mode::Rites
             | Mode::Leaving(_) => {
                 lines.extend(in_view(world));
-                lines.extend(hints(world));
+                lines.extend(hints(world, self.app.exploring()));
             }
         }
 
@@ -421,8 +421,15 @@ fn in_view(world: &World) -> Vec<Line<'static>> {
 }
 
 /// The few keys that matter right now, most pressing first. The full list
-/// is one key away.
-fn hints(world: &World) -> Vec<Line<'static>> {
+/// is one key away. While exploring, only how to stop.
+fn hints(world: &World, exploring: bool) -> Vec<Line<'static>> {
+    if exploring {
+        return vec![
+            heading("now"),
+            Line::styled("Exploring.", dim()),
+            Line::styled("Any key stops.", dim()),
+        ];
+    }
     let player = world.player();
     let here = player.pos;
     let floor = world.floor();
@@ -455,6 +462,9 @@ fn hints(world: &World) -> Vec<Line<'static>> {
     }
     if !hostile.is_empty() {
         hints.push(("x", "look at it".into()));
+    }
+    if hostile.iter().any(|i| i.aloft) {
+        hints.push(("t", "throw: it flies".into()));
     }
     if beside {
         hints.push(("G", "guard and wait".into()));
@@ -649,6 +659,9 @@ pub(super) fn trait_line(t: &Trait) -> String {
         Trait::Feeds { dread } => format!("each blow it lands adds {dread} dread."),
         Trait::Snuffs { range, cooldown } => format!(
             "puts out your candle when it comes within {range} tiles; not again for {cooldown} of its actions."
+        ),
+        Trait::Flies { settled } => format!(
+            "flies while light is on it: nothing in your hand reaches it. In the dark it settles: it crawls at half speed, +{settled} defense."
         ),
         Trait::Doubles { max, .. } => {
             format!("sends false copies of itself at you, up to {max} at a time.")

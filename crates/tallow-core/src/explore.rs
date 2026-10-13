@@ -1,5 +1,6 @@
 //! Auto-explore (`o`): walk toward the nearest unknown ground until
 //! something new comes into view or anything happens (BUILD_GUIDE.md §1).
+//! The app takes it one step at a time, a few a second, so the walk is seen.
 
 use std::collections::VecDeque;
 
@@ -13,42 +14,51 @@ use crate::world::{World, is_routine};
 const MAX_EXPLORE_STEPS: u32 = 300;
 
 impl World {
+    /// The whole walk at once, for the bot and the tests.
     pub(crate) fn explore(&mut self) -> Vec<Event> {
-        if !self.hostiles_in_view().is_empty() {
-            return vec![Event::RunRefused];
-        }
         let mut events = Vec::new();
-        for steps in 0..MAX_EXPLORE_STEPS {
-            let Some(dir) = self.explore_step() else {
-                if steps == 0 {
-                    events.push(Event::Explored);
-                }
-                break;
-            };
-            let step = self.player_step(dir);
-            let stop = step
-                .iter()
-                .any(|e| !is_routine(e) && !matches!(e, Event::DoorOpened { .. }))
-                || step.iter().any(|e| {
-                    matches!(
-                        e,
-                        Event::Spotted { .. }
-                            | Event::SpottedTallow { .. }
-                            | Event::SpottedItem { .. }
-                            | Event::SpottedLeaving { .. }
-                            | Event::SeepSpotted
-                    )
-                });
+        for _ in 0..MAX_EXPLORE_STEPS {
+            let step = self.explore_step();
+            let halt = self.explore_halts(&step);
             events.extend(step);
-            if stop || self.death.is_some() || !self.hostiles_in_view().is_empty() {
+            if halt {
                 break;
             }
         }
         events
     }
 
+    /// One step of the walk. The app repeats it, so you watch the acolyte
+    /// walk instead of arriving.
+    pub(crate) fn explore_step(&mut self) -> Vec<Event> {
+        if !self.hostiles_in_view().is_empty() {
+            return vec![Event::RunRefused];
+        }
+        match self.explore_direction() {
+            Some(dir) => self.player_step(dir),
+            None => vec![Event::Explored],
+        }
+    }
+
+    /// Whether a walk should stop after a step that gave `events`: anything
+    /// out of the ordinary, anything new in view, or company.
+    pub fn explore_halts(&self, events: &[Event]) -> bool {
+        events.iter().any(|e| {
+            (!is_routine(e) && !matches!(e, Event::DoorOpened { .. }))
+                || matches!(
+                    e,
+                    Event::Spotted { .. }
+                        | Event::SpottedTallow { .. }
+                        | Event::SpottedItem { .. }
+                        | Event::SpottedLeaving { .. }
+                        | Event::SeepSpotted
+                )
+        }) || self.death.is_some()
+            || !self.hostiles_in_view().is_empty()
+    }
+
     /// The first step toward the nearest known, safe tile beside unknown ground.
-    fn explore_step(&self) -> Option<Direction> {
+    fn explore_direction(&self) -> Option<Direction> {
         let here = self.player.pos;
         let map = self.map();
         let safe = |p: Point| {

@@ -6,7 +6,8 @@
 
 use tallow_core::map::path;
 use tallow_core::{
-    Cause, Command, Direction, Event, ItemClass, MAX_DEPTH, Map, Phase, Point, Stage, Tile, World,
+    Cause, Command, Direction, Event, ItemClass, MAX_DEPTH, Map, Phase, Point, Stage, Tile, Trait,
+    World,
 };
 
 /// A run that takes this many commands without ending is stuck.
@@ -20,7 +21,7 @@ struct Report {
     wins: u32,
     softlocks: Vec<(u64, String)>,
     deaths_by_floor: [u32; MAX_DEPTH as usize + 1],
-    deaths_on_ascent: [u32; 5],
+    deaths_on_ascent: [u32; 6],
     turns: u64,
     levels: u32,
     bosses: u32,
@@ -335,11 +336,30 @@ fn choose(world: &World) -> Command {
     });
     let tallow = player.candle.tallow();
     let lit = player.candle.is_lit();
+    // A flier beside it: stones if it has any, else the dark to bring it down.
+    let flier_beside = hostile_beside
+        .and_then(|(_, id)| floor.monster(id))
+        .filter(|m| {
+            world
+                .content()
+                .monster(m.kind)
+                .has(|t| matches!(t, Trait::Flies { .. }))
+        });
+    let missile = player.inventory.iter().find(|it| missile(world, it.kind));
+    if let (Some(m), Some(missile)) = (flier_beside, missile)
+        && world.aloft(m)
+    {
+        return Command::Throw {
+            item: missile.id,
+            target: m.pos,
+        };
+    }
     if !player.vigil && tallow > 0 {
-        let want_lit = danger
-            || hostile_beside.is_some()
-            || tallow >= SNUFF_BELOW
-            || player.dread.value() >= FEAR_LIGHT;
+        let want_lit = !(flier_beside.is_some() && missile.is_none())
+            && (danger
+                || hostile_beside.is_some()
+                || tallow >= SNUFF_BELOW
+                || player.dread.value() >= FEAR_LIGHT);
         if want_lit != lit {
             return Command::ToggleCandle;
         }
@@ -444,6 +464,18 @@ fn rendering_refused(world: &World) -> bool {
 }
 
 /// Where the bot wants to be next.
+/// It keeps this many stones or knives about it, for fliers.
+const MISSILES_WANTED: u32 = 6;
+
+/// Something it throws at fliers: stones, knives, bolts; not flasks or bells.
+fn missile(world: &World, kind: tallow_core::ItemKindId) -> bool {
+    world
+        .content()
+        .item(kind)
+        .thrown
+        .is_some_and(|t| !t.breaks && t.noise.is_none())
+}
+
 fn goal(world: &World) -> Option<Point> {
     let floor = world.floor();
     match world.stage() {
@@ -481,12 +513,31 @@ fn goal(world: &World) -> Option<Point> {
                 .filter(|t| light && floor.is_explored(t.at) && t.at != here)
                 .map(|t| t.at);
             let short = world.player().candle.tallow() < RENDER_BELOW;
+            // Something to throw at fliers, as a player would pick up.
+            let carried: u32 = world
+                .player()
+                .inventory
+                .iter()
+                .filter(|it| missile(world, it.kind))
+                .map(|it| it.count)
+                .sum();
+            let missiles = floor
+                .items()
+                .iter()
+                .filter(|f| {
+                    carried < MISSILES_WANTED
+                        && light
+                        && floor.is_explored(f.at)
+                        && missile(world, f.item.kind)
+                })
+                .map(|f| f.at);
             let bodies = floor
                 .corpses()
                 .iter()
                 .filter(|c| short && light && floor.is_explored(c.at) && c.at != here)
                 .map(|c| c.at);
             tallow
+                .chain(missiles)
                 .chain(bodies)
                 .filter_map(|at| dist.at(at).filter(|&d| d <= 25).map(|d| (d, at)))
                 .min()

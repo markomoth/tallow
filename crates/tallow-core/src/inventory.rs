@@ -492,7 +492,8 @@ impl World {
         let kind = self.floor.monsters[id].kind;
         let def = self.content.monster(kind);
         let at = self.floor.monsters[id].pos;
-        let chance = combat::hit_chance(shot.accuracy - self.dark_penalty(at), def.defense);
+        let defense = self.monster_defense(&self.floor.monsters[id]);
+        let chance = combat::hit_chance(shot.accuracy - self.dark_penalty(at), defense);
         let hit = self.combat_rng.random_range(0..100) < chance;
         let damage = match (hit, shot.holy) {
             (false, _) => None,

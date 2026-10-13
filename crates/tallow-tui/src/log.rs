@@ -1068,6 +1068,13 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             Normal,
         ),
         Event::Explored => ("There is nothing more here you can reach safely.".into(), Normal),
+        Event::OutOfReach { kind } => (
+            format!(
+                "The {} beats above your reach. Throw something (t), shoot (f), or take the light away.",
+                name(kind)
+            ),
+            Normal,
+        ),
         Event::NoGoingBack => ("Down is behind you now. The way is up.".into(), Normal),
         Event::Won => (
             "You set the Vigil Candle on the altar. Its light fills the church.".into(),
