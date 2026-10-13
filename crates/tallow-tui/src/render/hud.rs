@@ -555,6 +555,16 @@ fn target_panel(world: &World, aim: Aim, cursor: Point, path_len: usize) -> Vec<
         let def = world.content().monster(info.kind);
         lines.push(Line::styled(format!("At the {}.", def.name), text()));
     }
+    let close = world
+        .floor()
+        .monster_at(cursor)
+        .map_or(0, |id| world.point_blank(id));
+    if close > 0 && !matches!(aim, Aim::Rite(_)) {
+        lines.push(Line::styled(
+            format!("Too close to aim: -{close} to hit."),
+            Style::new().fg(palette::DANGER),
+        ));
+    }
     if let Aim::Rite(rite) = aim {
         lines.push(Line::styled(crate::names::rite_numbers(world, rite), dim()));
         if let Err(why) = world.rite_check(rite, cursor) {

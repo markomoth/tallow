@@ -271,6 +271,11 @@ pub enum Event {
         kind: ItemKindId,
     },
     /// A projectile reached a creature. `damage` is `None` on a miss.
+    /// A stone, bolt or knife that struck home is spent: cracked, splintered,
+    /// or lost in the creature.
+    MissileSpent {
+        kind: ItemKindId,
+    },
     ProjectileHit {
         item: ItemKindId,
         target: KindId,

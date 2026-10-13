@@ -14,8 +14,11 @@ cargo fmt --all                            # format before committing
 cargo run -p tallow-core --example floor -- <seed> <depth>   # print a generated floor as ASCII
 cargo run -- --seed 7                      # replay a specific dungeon
 cargo run -- --simple                      # 16 standard colors, terminal background, no animation
-cargo run --release -p tallow-sim -- 500   # whole-run bot: softlocks, unreachable stairs, where runs end
-SIM_TRACE=17 cargo run --release -p tallow-sim   # the last commands of one seed's run
+cargo run --release -p tallow-sim -- 500   # whole-run bot (the `mixed` style): softlocks, unreachable stairs, where runs end
+cargo run --release -p tallow-sim -- 500 all      # every play style side by side: one trick alone should rarely win
+cargo run --release -p tallow-sim -- 500 ablate   # `mixed` with one answer taken away each
+cargo run --release -p tallow-sim -- 500 rites    # one style's full report (styles in tallow-sim/src/bot.rs)
+SIM_TRACE=17 SIM_STYLE=rites cargo run --release -p tallow-sim   # the last commands of one seed's run
 cargo run -p tallow-core --example route -- <seed> <depth> <x> <y> <stop>   # vi keys from the arrival stair to within <stop> of a tile
 cargo run -- --seed 54 --dev-depth 4 --dev-rites --dev-kit   # testing aids: start deeper, know every rite, past the slot limit (with 60 dread to pay for them), flasks + handbell
 cargo run -- --seed 261 --dev-depth 3 --dev-level 6 --dev-near-stairs   # stand near a floor's boss, levelled up
@@ -31,7 +34,7 @@ cargo clippy -p tallow-web --target wasm32-unknown-unknown   # lint the browser 
 - `crates/tallow-core` — pure game logic. `World::apply(Command) -> Vec<Event>`.
 - `crates/tallow-tui` — a library (app, screens, log, key bindings, saves in `save.rs`, the journal in `journal.rs`) and the `tallow` terminal binary (`main.rs`, the only place crossterm is used; behind the default `terminal` feature).
 - `crates/tallow-web` — the browser build: the same library drawn on a WebGL canvas by Ratzilla, saves in localStorage (`src/web.rs`), and its host page (`index.html`, designed under `.impeccable/`; see `PRODUCT.md`). Built with `trunk`; `.github/workflows/web.yml` pushes it to itch.io with butler on each version tag (repo secret `BUTLER_API_KEY`).
-- `crates/tallow-sim` — the headless bot (`tallow-sim`).
+- `crates/tallow-sim` — the headless bots (`tallow-sim`): `bot.rs` holds one brain steered by a `Style` (mixed, classic, starter, light, dark, rites, missiles, armoury, and the `mixed` ablations); `main.rs` runs seeds in parallel and reports.
 - `assets/` — RON content embedded with `include_str!` (`monsters.ron`, `items.ron`, `skills.ron`, `rites.ron`, `leavings.ron`). Loaded and cross-checked by `content.rs`.
 
 Core modules: `map/` (tiles, `generate`, `fov` symmetric shadowcasting, `light`, `path`, `prefab`), `floor.rs` (sight, memory, light per floor), `world.rs` (commands, running, stairs), `rng.rs` (per-floor and per-system seeded streams), `monster.rs` + `ai.rs` (monsters and their decisions), `combat.rs`, `time.rs` (energy scheduler), `spawn.rs`, `candle.rs`, `dread.rs`, `nightmare.rs` (per-turn candle/dread, whispers, phantoms, Manifestation). `item.rs` (item types, burden, tincture lore) + `inventory.rs` (pack, equipment, drinking, throwing, firing, projectile paths). `skills.rs` (skill defs, ranks, techniques), `boons.rs` (boon types, weighted draft), `progress.rs` (training, Insight, levels, boon triggers). `rites.rs` (rite defs, potency and cost, casting, rite timers) + `corpse.rs` (bodies: study, render, rot, reading texts). Thralls, foes, faction aggression, holy ground and the False Flame live in `ai.rs`. `environment.rs` (fire, oil, noise and bells, doors, braziers, faction hostility). `leavings.rs` (Leavings: rules, generation, waking and prices; seep-room anomalies and probing). `explore.rs` (auto-explore). `throne.rs` (the throne room, Beelzebub's three phases, the Vigil Candle, the ascent and the Following, the church and victory). `abilities.rs` (creature tricks: chants, songs, drags, bursts, summoning, raising bodies, the Provost's locks, choruses). `tactics.rs` (faction ways, light/dark changes, leaps, grabs, volleys, mending; your shove and guard).

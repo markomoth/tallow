@@ -721,7 +721,8 @@ mod tests {
             .monsters()
             .find(|(_, m)| m.kind == world.manifestation)
             .unwrap();
-        assert_eq!(m.max_health, 18 + 2 * crate::world::GROWN_HEALTH);
+        let base = world.content().monster(world.manifestation).health;
+        assert_eq!(m.max_health, base + 2 * crate::world::GROWN_HEALTH);
         world.floor.monsters[id].pos = Point::new(4, 1);
         world.apply(Command::ToggleCandle);
         world.apply(Command::ToggleCandle);

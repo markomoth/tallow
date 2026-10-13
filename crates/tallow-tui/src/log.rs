@@ -405,6 +405,7 @@ pub fn narrate(event: &Event, world: &World) -> Option<(String, Tone)> {
             }
         }
         Event::Shattered { kind, .. } => (format!("The {} shatters.", thing(kind, 1)), Normal),
+        Event::MissileSpent { kind } => (format!("The {} is spent.", thing(kind, 1)), Normal),
         Event::BurdenChanged { burden } => match burden {
             Burden::Light => ("Your load feels manageable again.".into(), Good),
             Burden::Burdened => ("You are burdened. Every step takes longer.".into(), Danger),

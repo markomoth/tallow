@@ -142,7 +142,7 @@ Two linked resources, both always on screen.
 - **Whispers** (Uneasy and up) are flavor only, in violet. They never hint at real threats.
 - **Phantoms** (Frayed) take the shape of creatures you've met. They hunt you and come apart when they reach you or are struck. **They bite** (M14): one that reaches you costs 1–2 health or +5 dread (even odds), but never your last health. Look says plainly that they aren't there and what they can do; they also shimmer very slightly.
 - **Nightmares** (M14): every 50 turns spent frayed or worse, a Nightmare is announced in the log, and 5 turns later it arrives out of sight, hunting you. At most 2 at once; none while your Manifestation walks, and none in the church. Calm down before it arrives (below 70) and it turns away; fall to calm (below 40) and any on the floor come apart. They are made of your fear: they always know where you are, open shut doors (a Seal holds them), feed your dread with every blow, and leave grave-wax when killed. By depth: the **mare** (`N`, floors 1–5, 10 health, fast, +5 dread a hit), the **lidless thing** (`L`, 5–8, 14 health, blinds), the **pale weight** (`W`, 9–12, 22 health, a marked heavy blow 9–12).
-- **The Manifestation** (`M`, 18 health, a little faster than you) always knows where you are. While it lives, dread stays at 100. **It is worse** (M14): coming within 2 it puts your candle out (then not for 12 of its actions, so you can relight), it sends a false copy of itself at you (one at a time; the copy bites like any phantom), and each time it comes back in a run it has grown: +6 health, +5 accuracy and +1 damage per earlier Manifestation.
+- **The Manifestation** (`M`, 26 health, 3–5 damage, a little faster than you) always knows where you are. While it lives, the dark adds no dread and no Nightmare comes, but rites still spend dread as usual. **It is worse** (M14): coming within 2 it puts your candle out (then not for 12 of its actions, so you can relight), it sends a false copy of itself at you (one at a time; the copy bites like any phantom), and each time it comes back in a run it has grown: +6 health, +5 accuracy and +1 damage per earlier Manifestation.
 - **Rest** (`R`) waits until healed. It stops for anything that happens and won't start with company in view.
 
 The key tension: **travel in the dark, fight in the light.** The dark saves tallow and gathers the dread rites are bought with, but in it you strike worse and they strike harder. Light lets you fight, but it is seen from afar and draws things to you.
@@ -248,7 +248,7 @@ Target for v1: 16 rites (4 per school). No damage-only spells. Every rite change
 - **Recharge** (M13): each rite needs time to come back after a cast (`recharge` in `rites.ron`: Exchange 20 turns, Beckon 25, Kneel and Unsee 30, Shroud, Leech, Exorcise and Seal 40, False Flame, Hush and Banish 50, Borrowed Eyes, Transference, Turncoat and Sanctify 60, Compel 80). Casting it sooner is refused (free); the list shows the turns left. This ends spending dread for its own sake.
 - **Learning:** texts (`?`) teach a random unknown rite of their school; studying bodies teaches their kind's rites. Floor 1 always has a text. Rites last the run only.
 - **Slots** (M13): you can hold 2 rites, and one more at levels 4, 7 and 10. Learning one with every slot full offers it: pick a known rite to forget for it (free), or let it go (6 Insight). A forgotten rite can be learned again later. Which rites you keep is the build.
-- **Bosses** resist Binding (durations ÷ 3) and can't be freed by Exorcise (it burns them instead). Your Manifestation ignores Compel, Unsee and Transference.
+- **Bosses** resist Binding (durations ÷ 3) and can't be freed by Exorcise (it burns them instead). Relentless creatures (your Manifestation, the Nightmares, and a few others in `monsters.ron`) ignore Compel, Unsee, Transference, Turncoat and Beckon.
 
 | Rite | School | Dread | Range | Effect (1.0×) |
 |---|---|---|---|---|
@@ -268,7 +268,7 @@ Target for v1: 16 rites (4 per school). No damage-only spells. Every rite change
 | Exchange | Communion | 8 | 6 | You and it trade places. |
 | Hush | Veil | 4 | self | 25 turns: your fights make no noise. |
 | Seal | Warding | 6 | 5 | A door shuts and holds for 40 turns; nothing but you can open it (opening breaks the seal). It still burns. |
-| Banish | Warding | 10 | 6 | A creature of the Dreaming goes far away on this floor (25+ steps, out of sight) and forgets you. Not on bosses. |
+| Banish | Warding | 10 | 6 | A creature of the Dreaming goes far away on this floor (25+ steps, out of sight) and forgets you. Not on bosses. A Relentless one (your Manifestation, a Nightmare) hunts you again at once: it buys distance, not an end. |
 
 All 16 v1 rites exist as of M7.
 
@@ -293,7 +293,8 @@ All 16 v1 rites exist as of M7.
 
 - `t` picks something throwable from the pack, then a target. `f` shoots the readied sling or crossbow.
 - The target cursor starts on the nearest creature; the shaded line is exactly where the projectile will fly (it stops at walls, range, and the first creature you can see).
-- Hand range is 7; a sling reaches 8, a crossbow 10. Stones and bolts land where they stop and can be picked up again.
+- Hand range is 7; a sling reaches 8, a crossbow 10. Stones and bolts land where they stop and can be picked up again, except that a third of the stones, bolts and knives that strike home are **spent** (cracked, splintered, lost in the creature; the log says so). Missiles are a supply to spend, not a whole way of fighting.
+- **Too close to aim:** throwing or shooting at a creature beside you costs 30 accuracy (the aim panel says so). Not a flier beating above you in the light: that is what stones are for.
 - **Holy water** shatters on landing: it burns the Dreaming (5–9), makes the Taken flinch (1–3), and does nothing to vermin.
 - Projectiles pass straight through phantoms, which come apart.
 
@@ -304,7 +305,7 @@ All 16 v1 rites exist as of M7.
 | Melee | Sickle, cleaver, censer-on-chain, iron candlestick, boathook, verger's staff. Each has one **quirk** (M15, `quirk` in `items.ron`, shown in the pack): iron candlestick **Candlelit** +1 damage while your candle burns; sickle **Bleeds** (a hit opens a wound, 1 a turn for 4 of its actions); cleaver **Butchers** (what it kills renders half again as much); verger's staff **Shoves** (a hit drives it a step back, into fire or water if that's what's there); censer **Kindles** (its best roll sets the ground under the creature alight); boathook **Hooks** (a hit at the end of the pole hauls it in; beside you it's held an action). Bosses can't be shoved or hooked. |
 | Ranged | Sling (stones also probe anomalies, see §8), crossbow |
 | Throwables | Throwing knives, holy water (also leaves the ground holy for 20 turns), fire flask (bursts into flame in a cross where it breaks, never on your own tile), lamp oil (spills oil around where it breaks), handbell (rings where it lands, can be picked up again); later smoke pot, chalk (draws a ward line) |
-| Vestments | Cassock, gambeson, sexton's leathers, choir mail (heavy) |
+| Vestments | Cassock (3 defense), gambeson (9), sexton's leathers (12), choir mail (18, heavy) |
 | Tinctures | Mending (+health), steadying (−dread), seeing (reveals the floor around you) |
 | Texts | Hymnal page (Warding), heretic's note (Binding), anatomist's notes (Communion), lecture fragment (Veil). Read with `a` in the pack: 3 quiet turns, then a rite. Used up. |
 | Tools | Handbell (ring it with `a`, or throw it), later crowbar (pry, break), incense |
@@ -652,6 +653,28 @@ Each milestone ends with something you can play. Mark a milestone ✅ in the tab
 **As built (M18), sim over 500 seeds** (the bot now picks up stones and knives, throws them at a moth above it, and with none goes dark to fight it): 42 wins, 0 softlocks. Killed by: Manifestation 139, tallow moth 42, lidless thing 33, bound folio 30. The first moth kept the Swarm's quickening and +25 defense in the dark; with no stones the bot fought it there at 5% and won 3 runs in 500. Settled, it now crawls at half speed and takes +15. The bot still stands and swings in the dark where a player would walk away, so treat its moth deaths as an upper bound.
 
 **As built (M16), sim over 500 seeds:** 76 wins, 0 softlocks. Killed by: Manifestation 123, bound folio 30, lidless thing 28, Provost 26. Lantern-eater deaths fell from 71 to 20: slowed in your light, they no longer catch you. The first folio shot every action at speed 15 and killed 78 bots; it now volleys once per 3 actions. The Provost first kept its post too, stood off and relocked the doors forever (two softlocks): bosses don't keep posts.
+
+**Balance by playstyle (after M18), sim over 500 seeds.** `tallow-sim` now plays styles (`cargo run --release -p tallow-sim -- 500 all`): `mixed` uses everything where it fits (dark to travel and lit to fight, gear and weapon swaps, missiles at fliers, the Dreaming and heavy hitters, rites, tinctures, guard); each other style leans on one answer. The rule: **one trick alone should almost never win; the mix should win clearly more.** All styles explore floors and still know where the stairs are, so read the numbers as relative.
+
+| Style | Won | Beelzebub fell | Mostly killed by |
+|---|---|---|---|
+| mixed | 45% | 69% | the Following, Manifestation, tallow moth |
+| classic (old bot: candlestick, light managed, stones at fliers) | 9% | 12% | Manifestation |
+| missiles (sling, crossbow, knives, flasks at everything) | 9% | 21% | Manifestation |
+| rites (casts whatever it can, walks dark for dread) | 5% | 11% | Manifestation |
+| armoury (best weapon and vestment found) | 4% | 7% | Manifestation, tallow moth |
+| starter (the iron candlestick only) | 2% | 4% | Manifestation, tallow moth |
+| light (never dark, renders everything) | 0% | 0% | tallow moth |
+| dark (never lit) | 0% | 0% | Manifestation, gnawer, mare |
+
+And `mixed` with one answer taken away (`-- 500 ablate`): no rites 10%, always lit 26%, no missiles 31%, no tinctures 35%, no gear 37%, never Banish 41%, never lit 0%. Every answer counts, rites and the dark most; no single rite is required.
+
+What changed to get there (before, on 300 seeds: missiles alone won 20%, starter 5%, mixed 37%; found gear made no difference):
+- **Missiles:** too close to aim (−30 at a creature beside you, not a flier aloft), and a third of stones, bolts and knives that strike home are spent. The sling had made ranged a whole playstyle: 90 stones a run, picked up again after every fight.
+- **The Manifestation** 18 → 26 health, 2–4 → 3–5 damage. It is the threat that asks for more than a weapon: Banish, holy water, a lit tile, the stairs. Without rites the sim's runs now end on it about half the time. 30 health took nothing more from the one-trick styles, only from the mix.
+- **Vestments** gambeson 6 → 9, sexton's leathers 8 → 12, choir mail 12 → 18. Before, wearing them changed nothing in the sim; now gear is worth 8 points to the mix and still not a strategy alone.
+- Tried and dropped: a weaker sling (no effect on missile-only runs, hurt the mix); dread from the dark at +1 per 3 turns (hit only the rite style, which hoards dread); Manifestations growing +10 health each return (no effect).
+- Walking dark saves so much tallow that a bot that does it carried 1,800 by floor 9 and was overloaded. A player won't hoard lumps, but tallow is loose for anyone who travels dark.
 
 Total: roughly 40–55 hours of build + playtest time.
 

@@ -19,6 +19,10 @@ use crate::world::World;
 
 /// How far a hand can throw.
 pub const THROW_RANGE: i32 = 7;
+/// Accuracy lost throwing or shooting at a creature beside you.
+pub const POINT_BLANK: i32 = 30;
+/// Percent of stones, bolts and knives that are spent when they strike home.
+pub const SPENT_ON_HIT: u32 = 33;
 /// Distinct kinds of thing the pack can hold (one letter each).
 pub const PACK_SLOTS: usize = 26;
 
@@ -483,17 +487,43 @@ impl World {
             return;
         };
         if let Some(id) = self.floor.monster_at(end) {
-            self.strike(shot, id, events);
+            let hit = self.strike(shot, id, events);
+            // Stones crack and bolts splinter: some that strike home are spent.
+            if hit
+                && !shot.breaks
+                && shot.noise.is_none()
+                && self.combat_rng.random_range(0..100) < SPENT_ON_HIT
+            {
+                events.push(Event::MissileSpent { kind: shot.item });
+                return;
+            }
         }
         self.land(shot, projectile, end, events);
     }
 
-    fn strike(&mut self, shot: Shot, id: MonsterId, events: &mut Vec<Event>) {
+    /// Too close to aim: what a creature beside you costs a throw or a shot.
+    /// Not a flier beating above you, which is what stones are for.
+    pub fn point_blank(&self, id: MonsterId) -> i32 {
+        let Some(m) = self.floor.monsters.get(id) else {
+            return 0;
+        };
+        if m.pos.chebyshev(self.player.pos) <= 1 && !self.aloft(m) {
+            POINT_BLANK
+        } else {
+            0
+        }
+    }
+
+    /// Rolls a projectile against a creature. Whether it struck.
+    fn strike(&mut self, shot: Shot, id: MonsterId, events: &mut Vec<Event>) -> bool {
         let kind = self.floor.monsters[id].kind;
         let def = self.content.monster(kind);
         let at = self.floor.monsters[id].pos;
         let defense = self.monster_defense(&self.floor.monsters[id]);
-        let chance = combat::hit_chance(shot.accuracy - self.dark_penalty(at), defense);
+        let chance = combat::hit_chance(
+            shot.accuracy - self.dark_penalty(at) - self.point_blank(id),
+            defense,
+        );
         let hit = self.combat_rng.random_range(0..100) < chance;
         let damage = match (hit, shot.holy) {
             (false, _) => None,
@@ -519,7 +549,7 @@ impl World {
             damage,
         });
         self.wake(id);
-        let Some(damage) = damage else { return };
+        let Some(damage) = damage else { return false };
         let health_before = self.floor.monsters[id].health;
         self.train(Skill::Missiles, damage.min(health_before), events);
         self.trigger(Trigger::MissileHit, events);
@@ -535,6 +565,7 @@ impl World {
             self.floor.monsters[id].pinned = actions;
             events.push(Event::Pinned { kind });
         }
+        true
     }
 
     fn land(&mut self, shot: Shot, projectile: Item, at: Point, events: &mut Vec<Event>) {
@@ -880,6 +911,7 @@ mod world_tests {
         );
 
         let mut hit = false;
+        let mut spent = false;
         for _ in 0..20 {
             let events = world.apply(Command::Throw {
                 item: knives,
@@ -898,6 +930,9 @@ mod world_tests {
                 )
             }) {
                 hit = true;
+                spent = events
+                    .iter()
+                    .any(|e| matches!(e, Event::MissileSpent { .. }));
                 break;
             }
             if world.inventory_item(knives).is_none() || world.death().is_some() {
@@ -906,9 +941,65 @@ mod world_tests {
         }
         assert!(hit, "a 95% throw lands within a few tries");
         assert!(
-            world.floor().items_at(target).count() > 0
+            spent
+                || world.floor().items_at(target).count() > 0
                 || world.floor().monster_at(target).is_none()
         );
+    }
+
+    #[test]
+    fn aiming_at_something_beside_you_is_harder() {
+        let mut world = hall();
+        let near = world.spawn_monster(monster("parishioner"), Point::new(2, 1));
+        let far = world.spawn_monster(monster("parishioner"), Point::new(5, 1));
+        assert_eq!(world.point_blank(near), super::POINT_BLANK);
+        assert_eq!(world.point_blank(far), 0);
+
+        // A moth beating above you in the light is what stones are for.
+        let mut world = hall();
+        let moth = world.spawn_monster(monster("tallow_moth"), Point::new(2, 1));
+        assert!(world.aloft(&world.floor().monsters[moth]));
+        assert_eq!(world.point_blank(moth), 0);
+    }
+
+    #[test]
+    fn some_missiles_that_strike_home_are_spent() {
+        let mut world = hall();
+        let stones = give(&mut world, item("stone"), 60);
+        let target = Point::new(6, 1);
+        let id = world.spawn_monster(monster("pallbearer"), target);
+        let (mut hits, mut spent) = (0, 0);
+        for _ in 0..60 {
+            if world.death().is_some() || world.inventory_item(stones).is_none() {
+                break;
+            }
+            // Keep it standing where it is, whole.
+            world.floor.monsters[id].pos = target;
+            world.floor.monsters[id].health = 20;
+            let events = world.apply(Command::Throw {
+                item: stones,
+                target,
+            });
+            world.player.health = world.player.max_health;
+            hits += events
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e,
+                        Event::ProjectileHit {
+                            damage: Some(_),
+                            ..
+                        }
+                    )
+                })
+                .count();
+            spent += events
+                .iter()
+                .filter(|e| matches!(e, Event::MissileSpent { .. }))
+                .count();
+        }
+        assert!(hits > 20, "most throws land ({hits})");
+        assert!(spent > 0 && spent < hits, "{spent} of {hits} spent");
     }
 
     #[test]
