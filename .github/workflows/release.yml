@@ -1,5 +1,6 @@
 # Builds Tallow for Linux, Windows and macOS and attaches the binaries to a
-# GitHub Release. Runs when a version tag is pushed:
+# GitHub Release, with that version's section of CHANGELOG.md as its notes.
+# Runs when a version tag is pushed (the tag fails without a changelog section):
 #
 #   git tag v0.1.0 && git push origin v0.1.0
 name: Release
@@ -16,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check the changelog has this version
+        run: .github/changelog-section.sh "$GITHUB_REF_NAME" > /dev/null
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --locked
 
@@ -80,8 +83,16 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Release notes from CHANGELOG.md
+        run: |
+          {
+            echo "## 📜 What's new"
+            .github/changelog-section.sh "$GITHUB_REF_NAME"
+            echo
+            cat .github/release-notes.md
+          } > notes.md
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          body_path: .github/release-notes.md
+          body_path: notes.md
           generate_release_notes: true

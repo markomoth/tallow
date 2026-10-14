@@ -56,6 +56,7 @@ Frontend: `app.rs` (modes: title, play, look, pack, target, draft, sheet, corpse
 - Work milestone by milestone (`BUILD_GUIDE.md` §13). A milestone is done when its "Done when you can…" line is true in the real binary, tests pass, and clippy is clean. Then mark it ✅ in the guide.
 - Every new system gets unit tests in its module. Map generation gets connectivity tests.
 - Commit at the end of each milestone, or at a stable point inside one.
+- Add what a change adds, changes or fixes to `CHANGELOG.md` under `[Unreleased]`, in brief player-facing bullets. Before tagging a release, rename that heading to the version and date; the release workflow attaches the section to the GitHub release and refuses a tag without one.
 
 ## Checking the real binary
 
