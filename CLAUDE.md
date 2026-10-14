@@ -33,7 +33,7 @@ cargo clippy -p tallow-web --target wasm32-unknown-unknown   # lint the browser 
 
 - `crates/tallow-core` — pure game logic. `World::apply(Command) -> Vec<Event>`.
 - `crates/tallow-tui` — a library (app, screens, log, key bindings, saves in `save.rs`, the journal in `journal.rs`) and the `tallow` terminal binary (`main.rs`, the only place crossterm is used; behind the default `terminal` feature).
-- `crates/tallow-web` — the browser build: the same library drawn on a WebGL canvas by Ratzilla, saves in localStorage (`src/web.rs`), and its host page (`index.html`, designed under `.impeccable/`; see `PRODUCT.md`). Built with `trunk`; `.github/workflows/web.yml` pushes it to itch.io with butler on each version tag (repo secret `BUTLER_API_KEY`).
+- `crates/tallow-web` — the browser build: the same library drawn on a WebGL canvas by Ratzilla, saves in localStorage (`src/web.rs`), and its host page (`index.html`, designed under `.impeccable/`; see `PRODUCT.md`). Built with `trunk`; `.github/workflows/web.yml` pushes it to itch.io with butler on each version tag (repo secret `BUTLER_API_KEY`); `.github/workflows/itch-downloads.yml` puts each release's Windows, macOS and Linux builds on the same itch page as downloads.
 - `crates/tallow-sim` — the headless bots (`tallow-sim`): `bot.rs` holds one brain steered by a `Style` (mixed, classic, starter, light, dark, rites, missiles, armoury, and the `mixed` ablations); `main.rs` runs seeds in parallel and reports.
 - `assets/` — RON content embedded with `include_str!` (`monsters.ron`, `items.ron`, `skills.ron`, `rites.ron`, `leavings.ron`). Loaded and cross-checked by `content.rs`.
 

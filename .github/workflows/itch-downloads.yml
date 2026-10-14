@@ -1,0 +1,56 @@
+# Puts a release's Windows, macOS and Linux builds on the itch.io page as
+# downloads, beside the browser version. Runs when the Release workflow
+# finishes for a version tag, or by hand for an existing tag:
+#
+#   gh workflow run itch-downloads.yml -f tag=v0.3.0
+#
+# itch.io tags each upload's platform from its channel name (windows, mac,
+# linux). Needs the repo secret BUTLER_API_KEY, like web.yml.
+name: itch.io downloads
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag whose release builds to upload, e.g. v0.3.0"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  ITCH_PROJECT: markomoth/tallow-a-dark-fantasy-roguelike
+
+jobs:
+  itch:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      # A tag push runs Release with the tag as its branch.
+      TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download the release builds
+        run: |
+          mkdir dist && cd dist
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'tallow-*'
+          for f in *.tar.gz; do tar xzf "$f"; done
+          for f in *.zip; do unzip -q "$f"; done
+          ls -l
+      - name: Install butler
+        run: |
+          curl -sSfL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler && chmod +x butler/butler
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          # The static Linux build runs on any distribution, so it is the one itch offers.
+          push() { butler/butler push "dist/tallow-$TAG-$1" "$ITCH_PROJECT:$2" --userversion "$TAG"; }
+          push windows-x86_64 windows
+          push macos-arm64 mac-apple-silicon
+          push macos-x86_64 mac-intel
+          push linux-x86_64-static linux
