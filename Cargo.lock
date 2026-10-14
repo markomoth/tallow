@@ -1543,7 +1543,7 @@ dependencies = [
 
 [[package]]
 name = "tallow-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rand 0.10.3",
  "rand_pcg",
@@ -1554,14 +1554,14 @@ dependencies = [
 
 [[package]]
 name = "tallow-sim"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "tallow-core",
 ]
 
 [[package]]
 name = "tallow-tui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "directories",
@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "tallow-web"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",

@@ -4,11 +4,12 @@ What changed in each release of Tallow. Each version's section is attached to it
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-14
+
 ### Added
 
 - 🌐 Tallow in the browser: the same game on a canvas, saved in your browser, published to itch.io on each version tag.
 - 🦋 The tallow moth: it flies over lit ground, out of reach of anything held in the hand. Throw at it, or put your light out so it settles. Floors with moths have stones near the stair.
-- Auto-explore now walks one step at a time, five a second, and any key stops it.
 - Too close to aim: throwing or firing at a creature beside you is −30 to hit, shown in the aim panel.
 - Stones, bolts and knives are sometimes spent when they hit (one time in three).
 
@@ -20,6 +21,7 @@ What changed in each release of Tallow. Each version's section is attached to it
 
 ### Fixed
 
+- Auto-explore no longer crosses the floor in one jump: it walks a step at a time, five a second, and any key stops it.
 - The build guide now matches the code on the Manifestation: dread isn't held at 100 while it lives, and Banish only buys distance from it.
 
 ## [0.2.0] - 2026-10-08
@@ -50,6 +52,7 @@ The first release: a whole run, from the Undercroft down to Beelzebub's throne a
 - **Bosses:** the Sexton, the Provost, the Drowned Choir, Beelzebub's three phases, the Vigil Candle and the ascent with the Following behind you.
 - **Around the game:** saves, a journal that lasts across runs, help, auto-explore, a start menu, `--simple` for plain terminals, and downloads for Linux, Windows and macOS.
 
-[Unreleased]: https://github.com/markomoth/tallow/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/markomoth/tallow/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/markomoth/tallow/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/markomoth/tallow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/markomoth/tallow/commits/v0.1.0
