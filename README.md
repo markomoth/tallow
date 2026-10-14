@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🕯️ Tallow
+# Tallow
 
 **A dark-academia roguelike for the terminal.**
 *Something under the church has taken the candle.*
@@ -11,94 +11,94 @@
 
 ---
 
-Something is wrong with the Church of the Low Bell. The clergy dream the same dream and stop waking. Under the floorboards behind the altar there is a passage, and it keeps going down.
+All is not well at the Church of the Low Bell. The clergy dream one dream between them, and one by one they stop waking. Behind the altar a passage runs under the floorboards, and it does not stop going down.
 
-You go down with a candle. That candle is your light, and it is also your clock: every turn it burns, and the tallow to feed it doesn't lie around waiting for you. You get it from what you kill. 🩸
+You are the acolyte sent after them, and you go with a candle. It is your light and it is your clock. Every turn it burns lower, and no one has left tallow lying about for you down there. What you need you take from the things you kill.
 
-There's no character creation. Press a key and you're in the crypt. Your build is whatever you end up doing: the weapon you keep using, the rites you choose to remember, how long you dare to walk in the dark.
+There is no character to make. Press a key and you stand in the crypt. Who you become is decided on the way down: the weapon you keep returning to, the rites you choose to remember, how long you dare to walk without a light.
 
 <div align="center">
 <img src="docs/screenshots/collegium.png" alt="Floor 4, the Collegium: the acolyte (@) stands by the stair down in a small candlelit room, the halls already explored drawn in cold blue; the sidebar shows health, candle, dread and load, and the keys that matter right now; the log below" width="720">
 <br>
-<sub>Floor 4, the Collegium. Your candle lights a small circle; everything you've already seen fades to blue. The sidebar suggests the keys that matter right now.</sub>
+<sub>Floor 4, the Collegium. The candle lights a small circle; what you have already seen fades to cold blue. The sidebar offers the keys that matter in the moment.</sub>
 </div>
 
-## 🌑 Light and dark
+## Light and dark
 
-Every decision in Tallow comes back to one question: **light the candle, or don't?**
+Every choice below the church returns to one question: **do you light the candle, or not?**
 
-- 🕯️ **Light** lets you see and fight well, but it burns tallow, and things see it from far off. Burn it long enough on one floor and something new comes looking for you.
-- 🌘 **Darkness** saves tallow and lets you slip past things. It is also where **dread** gathers, and dread is what you pay for rites. But in the dark you strike worse, they strike harder, and some things only show themselves there.
-- 😨 **Dread** is power with a cost. Hold a lot and your rites grow stronger. Hold too much and you start seeing things that aren't there, then **Nightmares** come for you, and at the very top your fear takes your face and walks.
+- **Light** lets you see and fight well. It also burns tallow, and it is seen from far off. Keep it burning long on one floor and something new comes to find out why.
+- **Darkness** spares the candle and lets you pass unnoticed. It is also where **dread** gathers. In the dark your blows go wide, theirs land harder, and some things show themselves only there.
+- **Dread** is what rites are paid in, and the more you hold, the stronger they are. Hold too much and you see things that are not there. Then the **Nightmares** come for you, and at the very top your fear puts on a body and walks after you.
 
-## ⚔️ What you'll run into
+## What waits below
 
-- **Four factions that hate each other as much as they hate you.** Swarms flank you and quicken in the dark. The Taken were people once, and hold back in your light. The Remnant guard their posts. The Dreaming are barely there until light pins them down.
-- **Weapons with personality.** A sickle leaves wounds that keep bleeding. A censer spills coals. A boathook hauls things in. A verger's staff shoves them into whatever is behind them. And no weapon works on everything.
-- **Bodies are a choice.** Study one to learn its kind's secrets (and maybe a rite), or render it down for tallow. You can't do both.
-- **Rites, not spells.** Sixteen of them, none of which just do damage: bind a creature to your will, swap places with it, seal a door, send your dread into something else. Your mind only holds a few at once.
-- **Leavings.** Strange objects where reality broke, each with its own rule and its own price. Carry two at most.
-- **Twelve floors down, four back up.** At the bottom waits the one who took the candle. Getting out with it is the hard part. 🪰
+- **Four factions that hate one another nearly as much as they hate you.** Swarms flank you and quicken in the dark. The Taken were people once, and hang back from your light. The Remnant keep their posts. The Dreaming are scarcely there until light pins them down.
+- **Weapons with a temper.** A sickle leaves wounds that keep bleeding. A censer spills coals. A boathook hauls things in. A verger's staff shoves them into whatever stands behind. No weapon answers everything, and something overhead will stay just out of your reach.
+- **Bodies are a choice.** Study one to learn its kind's secrets, perhaps a rite among them, or render it down for tallow. You cannot do both.
+- **Rites, learned from texts and the dead.** Sixteen of them, and none simply deals harm: bind a creature to your will, trade places with it, seal a door, push your dread into something else. Your mind holds only a few at once.
+- **Leavings.** Objects found where the world has worn thin, each with its own rule and its own price. You can carry two.
+- **Twelve floors down, four back up.** At the bottom sits the one who took the candle. Taking it back is the easy part. Climbing out with it is not.
 
-## ▶️ Play
+## How to begin
 
-### 🕯️ In your browser
+### In your browser
 
-Play it on **[itch.io](https://markomoth.itch.io/tallow-a-dark-fantasy-roguelike)**. It's the same game, played with the keyboard. Your run and your journal are kept in that browser.
+Play it on **[itch.io](https://markomoth.itch.io/tallow-a-dark-fantasy-roguelike)**. It is the same game, played with the keyboard, and your run and journal are kept in that browser.
 
-### 📦 Download
+### Download
 
-Grab the latest build for Linux, Windows or macOS from **[Releases](https://github.com/markomoth/tallow/releases/latest)**, unpack it, and run `tallow` in a terminal that's at least **100×30**. The release page explains the one-time "unverified app" warning on macOS and Windows.
+Take the latest build for Linux, Windows or macOS from **[Releases](https://github.com/markomoth/tallow/releases/latest)**, unpack it, and run `tallow` in a terminal at least **100×30**. The release page explains the one-time "unverified app" warning on macOS and Windows. What changed in each version is in the [changelog](CHANGELOG.md).
 
-### 🦀 Or build it yourself
+### Build it yourself
 
-You'll need [Rust](https://rustup.rs):
+You will need [Rust](https://rustup.rs):
 
 ```sh
 cargo run --release
 ```
 
-A few useful flags:
+Two flags worth knowing:
 
 ```sh
-cargo run --release -- --seed 42   # play (or replay) a particular dungeon
+cargo run --release -- --seed 42   # walk (or walk again) a particular dungeon
 cargo run --release -- --simple    # plain colors, your terminal's own background, no animation
 ```
 
-`--simple` is for terminals without truecolor, light themes, transparent backgrounds, screen readers or recordings. It uses only the 16 standard colors, leaves the background to your terminal, and only redraws when you press a key.
+`--simple` suits terminals without truecolor, light themes, transparent backgrounds, screen readers and recordings. It keeps to the 16 standard colors, leaves the background to your terminal, and redraws only when you press a key.
 
-Quitting mid-run saves it, and the next launch picks up where you left off. Whatever you learn across runs goes into your **journal** 📖.
+Quitting mid-run saves it, and the next launch picks up where you left off. What you learn about the creatures, rites and Leavings stays in your **journal** from one run to the next.
 
-## ⌨️ Keys
+## Keys
 
 | Key | What it does |
 |---|---|
 | arrows · `hjkl` · numpad | Move (walk into things to fight, open, ring, light) |
 | `yubn` | Move diagonally |
 | Shift + direction | Run |
-| `o` | Auto-explore |
+| `o` | Explore on your own until something needs you |
 | `.` · `R` | Wait a turn · rest until healed |
-| `c` · `C` | Snuff or light your candle · shut doors beside you |
-| `g` · `i` | Pick up · pack |
+| `c` · `C` | Snuff or light the candle · shut the doors beside you |
+| `g` · `i` | Pick up · open your pack |
 | `t` · `f` | Throw · fire a sling or crossbow |
 | `s` | Study or render the body underfoot |
 | `z` | Rites: ↑↓ to read one, a letter or Enter to cast |
 | `S` + direction | Shove a creature back |
 | `G` | Guard: wait braced and answer every miss |
 | `>` · `<` | Down the stairs · up, once you carry the Vigil Candle |
-| `F` | Flare the Vigil Candle (on the way back up) |
-| `x` | Look: a card beside the creature (Tab cycles through them) |
-| `@` · `M` · `?` | Your character · the journal · help |
+| `F` | Flare the Vigil Candle on the way back up |
+| `x` | Look: a card beside the creature (Tab moves between them) |
+| `@` · `M` · `?` | Your acolyte · the journal · help |
 | `q` | Save and quit |
 
-## 🛠️ For the curious
+## The workings
 
-Tallow is written in Rust with [ratatui](https://ratatui.rs). The game itself is a pure, deterministic library (`tallow-core`): the same seed and the same keypresses always play out the same way. That's also how saves work, and it's how `tallow-sim`, a headless bot, can play hundreds of runs to look for softlocks and check the balance.
+Tallow is written in Rust with [ratatui](https://ratatui.rs). The game itself is a pure, deterministic library (`tallow-core`): the same seed and the same keypresses always play out the same way. That is how saves work, and how `tallow-sim`, a set of headless bots, plays hundreds of runs in different styles to hunt for softlocks and keep any one way of playing from winning alone.
 
-The design document and the milestone log live in [`BUILD_GUIDE.md`](BUILD_GUIDE.md).
+The design document and the record of each milestone are in [`BUILD_GUIDE.md`](BUILD_GUIDE.md).
 
 ```sh
-cargo test --workspace                     # all the tests
-cargo run --release -p tallow-sim -- 500   # watch a bot play 500 runs
+cargo test --workspace                     # every test
+cargo run --release -p tallow-sim -- 500   # a bot plays 500 runs
 cd crates/tallow-web && trunk serve        # the browser version, at localhost:8080
 ```
